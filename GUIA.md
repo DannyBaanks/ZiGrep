@@ -10,8 +10,8 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 44/44 tests passed
-zig build oracle                      # oráculo diferencial puro Zig (19/19 tests passed)
+zig build test --summary all          # 49/49 tests passed
+zig build oracle                      # oráculo diferencial puro Zig (25/25 tests passed)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -177,8 +177,8 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 44/44 tests passed
-zig build oracle                 # 19/19 differential oracle tests passed
+zig build test --summary all     # 49/49 tests passed
+zig build oracle                 # 25/25 differential oracle tests passed
 ```
 
 ---
@@ -221,3 +221,10 @@ Un patrón sin metacaracteres usa el kernel literal rápido de siempre. `-F` fue
 - Motor: NFA -> DFA perezoso por hilo (`src/regex.zig`), lineal, sin backtracking. Si el patrón
   tiene un literal obligatorio (>=3 bytes) se usa como prefiltro y el DFA solo mira esas líneas.
 - Oráculo: `analysis/regex_oracle.py` compara conteos por archivo contra `grep -E` y `rg`.
+
+## Operaciones Estándar Grupo 1 (-v, -L, stdin, -m NUM / --max-count) (2026-11-08)
+
+1. `-v, --invert-match`: Muestra o cuenta las líneas que **no** coinciden con el patrón.
+2. `-L, --files-without-match`: Lista únicamente los archivos que **no** contienen coincidencias.
+3. `stdin`: Lectura por tubería o descriptor estándar cuando no se especifican rutas o cuando la ruta es `"-"` (`cat log.txt | zigrep error` o `zigrep error -`).
+4. `-m NUM, --max-count=NUM`: Detiene la búsqueda tras `NUM` coincidencias por archivo. Se desambigua automáticamente con la navegación 2D Befunge: si el valor es numérico (`-m 5`), actúa como `--max-count`; si contiene vectores Befunge (`-m v^`), navega por el espacio vectorial 2D. También se puede usar explícitamente `--max-count=NUM` y `--nav=SPEC`.

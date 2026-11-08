@@ -168,6 +168,46 @@ const cases = [_]TestCase{
         .expected_exit = 1,
         .check_output = true,
     },
+    .{
+        .name = "invert-match -v 'const'",
+        .zigrep_args = &.{ "-v", "const", "src/root.zig" },
+        .grep_args = &.{ "-rnIF", "-v", "const", "src/root.zig" },
+        .rg_args = &.{ "-n", "-F", "-v", "const", "src/root.zig" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        .name = "files-without-match -L 'Searcher'",
+        .zigrep_args = &.{ "-L", "Searcher", "src" },
+        .grep_args = &.{ "-rIFL", "Searcher", "src" },
+        .rg_args = &.{ "--files-without-match", "-F", "Searcher", "src" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        .name = "max-count -m 1 'Searcher'",
+        .zigrep_args = &.{ "-m", "1", "Searcher", "src/search.zig" },
+        .grep_args = &.{ "-rnIF", "-m", "1", "Searcher", "src/search.zig" },
+        .rg_args = &.{ "-n", "-F", "-m", "1", "Searcher", "src/search.zig" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        .name = "max-count --max-count=2 'Searcher'",
+        .zigrep_args = &.{ "--max-count=2", "Searcher", "src/search.zig" },
+        .grep_args = &.{ "-rnIF", "--max-count=2", "Searcher", "src/search.zig" },
+        .rg_args = &.{ "-n", "-F", "--max-count=2", "Searcher", "src/search.zig" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        .name = "invert-match with max-count -v -m 2",
+        .zigrep_args = &.{ "-v", "-m", "2", "pub", "src/root.zig" },
+        .grep_args = &.{ "-rnIF", "-v", "-m", "2", "pub", "src/root.zig" },
+        .rg_args = &.{ "-n", "-F", "-v", "-m", "2", "pub", "src/root.zig" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
 };
 
 fn runCmd(arena: Allocator, io: anytype, argv: []const []const u8) !struct { code: u8, stdout: []const u8 } {
@@ -295,8 +335,25 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
+    // Stdin pipeline differential test (pipe -> zigrep vs pipe -> grep -n)
+    {
+        const test_name = "stdin pipeline (pipe -> zigrep)";
+        const cmd_z = try std.fmt.allocPrint(arena, "printf 'alpha\\nbeta\\ngamma\\n' | {s} 'beta'", .{exe});
+        const cmd_g = "printf 'alpha\\nbeta\\ngamma\\n' | grep -n 'beta'";
+        const z_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_z }) catch null;
+        const g_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_g }) catch null;
+        if (z_res != null and g_res != null and z_res.?.code == 0 and g_res.?.code == 0 and std.mem.eql(u8, z_res.?.stdout, g_res.?.stdout)) {
+            passed += 1;
+            common.printOut("  [PASS] {s:<42} (exit 0, lines 1)\n", .{test_name});
+        } else {
+            failed += 1;
+            common.printOut("  [FAIL] {s:<42} reason=STDIN_MISMATCH\n", .{test_name});
+        }
+    }
+
+    const total_tests = cases.len + 1;
     common.printOut("\n-------------------------------------------------------------------------------\n", .{});
-    common.printOut("Results: {d} PASSED, {d} FAILED (total {d})\n", .{ passed, failed, cases.len });
+    common.printOut("Results: {d} PASSED, {d} FAILED (total {d})\n", .{ passed, failed, total_tests });
     common.printOut("-------------------------------------------------------------------------------\n", .{});
 
     if (failed > 0) {

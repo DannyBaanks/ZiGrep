@@ -31,18 +31,28 @@ const usage =
     \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
     \\
     \\usage: zgrep [OPTIONS] PATTERN [PATH...]
+    \\       zgrep [OPTIONS] [-e PATTERN...] [PATH...]
+    \\       cat FILE | zgrep [OPTIONS] PATTERN
     \\
     \\options:
     \\  -F                fixed-string pattern(s); without it PATTERN is a regex
     \\  -E                extended regex (the default; kept for grep compat)
     \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
-    \\  -i                ignore case (ASCII + Latin-1 Unicode)
-    \\  -w                match whole words only
+    \\  -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
+    \\  -v, --invert-match
+    \\                    select non-matching lines
+    \\  -w, --word-regexp match whole words only
     \\  -r                recurse into directories (always on; kept for grep compat)
     \\  -n                print line numbers (always on; kept for grep compat)
-    \\  -c                print only a count of matching lines per file
-    \\  -l                print only the names of files with matches
-    \\  -q                quiet: no output, exit status only
+    \\  -c, --count       print only a count of matching lines per file
+    \\  -l, --files-with-matches
+    \\                    print only the names of files with matches
+    \\  -L, --files-without-match
+    \\                    print only the names of files without matches
+    \\  -q, --quiet, --silent
+    \\                    quiet: no output, exit status only
+    \\  -m, --max-count=NUM
+    \\                    stop after NUM matching lines per file
     \\  -H                print the file name with each result
     \\  -h                do not print the file name with each result
     \\  -a                treat binary files as text
@@ -76,6 +86,7 @@ const usage =
     \\not supported (reported as an error): \\b, back-references, lookaround.
     \\a plain string with no metacharacters takes the fast literal path.
     \\patterns containing a newline are rejected.
+    \\when no PATH is given or when PATH is '-', standard input is read.
     \\
     \\exit status: 0 match found, 1 no match, 2 error
     \\
@@ -92,6 +103,8 @@ pub const Options = struct {
     binary: bool = false,
     kamikaze: bool = true,
     sort: bool = false,
+    invert_match: bool = false,
+    max_count: ?usize = null,
     nav_plan: nav.NavPlan = .{},
     no_ignore: bool = false,
     no_default_ignore: bool = false,
@@ -143,6 +156,7 @@ const Ctx = struct {
     mode: Mode,
     show_path: bool,
     binary: bool,
+    scan_config: scan.ScanConfig,
     gpa: Allocator,
     window: usize,
     next: std.atomic.Value(usize) = .init(0),
@@ -161,6 +175,7 @@ fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
         ctx.show_path,
         ctx.mode,
         ctx.binary,
+        ctx.scan_config,
         &slot.buf,
         scratch,
     );
@@ -169,7 +184,8 @@ fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     slot.lines = res.lines;
     slot.bytes = res.bytes;
     slot.err = res.err;
-    if (res.matched) ctx.found.store(true, .release);
+    const is_hit = if (ctx.mode == .files_without_match) !res.matched else res.matched;
+    if (is_hit) ctx.found.store(true, .release);
     slot.ready.store(true, .release);
 }
 
@@ -353,6 +369,32 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 };
             } else if (std.mem.eql(u8, body, "ignore-case")) {
                 opts.ignore_case = true;
+            } else if (std.mem.eql(u8, body, "invert-match")) {
+                opts.invert_match = true;
+            } else if (std.mem.eql(u8, body, "files-without-match")) {
+                opts.mode = .files_without_match;
+            } else if (std.mem.eql(u8, body, "files-with-matches")) {
+                opts.mode = .files;
+            } else if (std.mem.eql(u8, body, "count")) {
+                opts.mode = .count;
+            } else if (std.mem.eql(u8, body, "quiet") or std.mem.eql(u8, body, "silent")) {
+                opts.mode = .quiet;
+            } else if (std.mem.startsWith(u8, body, "max-count=")) {
+                const v = body["max-count=".len..];
+                opts.max_count = parseCount(v) orelse {
+                    opts.fail = .{ .what = "bad value for --max-count", .arg = v };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-count")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_count = parseCount(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-count", .arg = args[i] };
+                    return error.Usage;
+                };
             } else if (std.mem.eql(u8, body, "word-regexp")) {
                 opts.word = true;
             } else if (std.mem.eql(u8, body, "fixed-strings")) {
@@ -425,6 +467,7 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 'r', 'n', 'I', 'E', 'G' => {},
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
+                'v' => opts.invert_match = true,
                 'w' => opts.word = true,
                 'm' => {
                     const rest = chars[ci + 1 ..];
@@ -436,10 +479,14 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                         }
                         break :blk args[i];
                     };
-                    opts.nav_plan = nav.NavPlan.parse(value) catch {
-                        opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = value };
-                        return error.Usage;
-                    };
+                    if (parseCount(value)) |mc| {
+                        opts.max_count = mc;
+                    } else {
+                        opts.nav_plan = nav.NavPlan.parse(value) catch {
+                            opts.fail = .{ .what = "invalid Befunge navigation spec or max-count number", .arg = value };
+                            return error.Usage;
+                        };
+                    }
                     ci = chars.len;
                 },
                 'k' => {
@@ -448,6 +495,7 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 },
                 'c' => opts.mode = .count,
                 'l' => opts.mode = .files,
+                'L' => opts.mode = .files_without_match,
                 'q' => opts.mode = .quiet,
                 'H' => opts.show_path = true,
                 'h' => opts.show_path = false,
@@ -546,16 +594,6 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         }
     }
-    if (operands.len == 0) {
-        std.debug.print("{s}zgrep: no path\n", .{usage});
-        std.process.exit(2);
-    }
-
-    const show_path: bool = if (opts.show_path) |v|
-        v
-    else
-        !(operands.len == 1 and isRegularFile(operands[0]));
-
     const t0 = nowMonotonicNs();
 
     const searcher = search.build(gpa, pattern_list, .{
@@ -573,6 +611,89 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         },
     };
+
+    const is_stdin = operands.len == 0 or (operands.len == 1 and std.mem.eql(u8, operands[0], "-"));
+    if (is_stdin) {
+        var stdin_buf: std.ArrayList(u8) = .empty;
+        defer stdin_buf.deinit(gpa);
+        var chunk: [64 * 1024]u8 = undefined;
+        while (true) {
+            const rr = linux.read(linux.STDIN_FILENO, &chunk, chunk.len);
+            const e = linux.errno(rr);
+            if (e == .INTR) continue;
+            if (e != .SUCCESS or rr == 0) break;
+            try stdin_buf.appendSlice(gpa, chunk[0..rr]);
+        }
+
+        const scan_cfg = scan.ScanConfig{
+            .invert = opts.invert_match,
+            .max_count = opts.max_count,
+        };
+        const path_label = "(standard input)";
+        const show_p = opts.show_path orelse false;
+
+        const data = stdin_buf.items;
+        const probe = @min(data.len, scan.binary_probe_bytes);
+        const utf16_bom = scan.isUtf16Bom(data);
+        const is_bin = !opts.binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+        if (is_bin) {
+            if (opts.mode == .lines) {
+                std.debug.print("Binary file (standard input) matches\n", .{});
+            }
+            std.process.exit(0);
+        }
+
+        var utf8_data: ?[]u8 = null;
+        defer if (utf8_data) |u| gpa.free(u);
+        const search_data = if (utf16_bom) |bom| blk: {
+            if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
+                utf8_data = decoded;
+                break :blk decoded;
+            } else |_| break :blk data;
+        } else data;
+
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+
+        const br = scan.scanBuffer(gpa, search_data, &searcher, path_label, show_p, opts.mode, scan_cfg, &out) catch {
+            std.process.exit(2);
+        };
+
+        if (opts.mode == .count) {
+            if (show_p) {
+                try out.appendSlice(gpa, path_label);
+                try out.append(gpa, ':');
+            }
+            var num_buf: [24]u8 = undefined;
+            const s = std.fmt.bufPrint(&num_buf, "{d}\n", .{br.lines}) catch unreachable;
+            try out.appendSlice(gpa, s);
+        } else if (opts.mode == .files and br.matched) {
+            try out.appendSlice(gpa, path_label);
+            try out.append(gpa, '\n');
+        } else if (opts.mode == .files_without_match and !br.matched) {
+            try out.appendSlice(gpa, path_label);
+            try out.append(gpa, '\n');
+        }
+
+        if (out.items.len > 0 and opts.mode != .quiet) {
+            var off: usize = 0;
+            while (off < out.items.len) {
+                const r = linux.write(linux.STDOUT_FILENO, out.items.ptr + off, out.items.len - off);
+                const e = linux.errno(r);
+                if (e == .INTR) continue;
+                if (e != .SUCCESS or r == 0) break;
+                off += r;
+            }
+        }
+
+        const is_hit = if (opts.mode == .files_without_match) !br.matched else br.matched;
+        std.process.exit(if (is_hit) 0 else 1);
+    }
+
+    const show_path: bool = if (opts.show_path) |v|
+        v
+    else
+        !(operands.len == 1 and isRegularFile(operands[0]));
     const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
     const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads) else cpu_count;
 
@@ -629,6 +750,11 @@ pub fn main(init: std.process.Init) !void {
             }
         }
 
+        const scan_cfg = scan.ScanConfig{
+            .invert = opts.invert_match,
+            .max_count = opts.max_count,
+        };
+
         const matched = kamikaze.runKamikazePipeline(
             gpa,
             &searcher,
@@ -638,6 +764,7 @@ pub fn main(init: std.process.Init) !void {
             opts.mode,
             opts.binary,
             show_path,
+            scan_cfg,
             worker_count,
             &k_stats,
         ) catch |err| {
@@ -742,6 +869,10 @@ pub fn main(init: std.process.Init) !void {
         .mode = opts.mode,
         .show_path = show_path,
         .binary = opts.binary,
+        .scan_config = .{
+            .invert = opts.invert_match,
+            .max_count = opts.max_count,
+        },
         .gpa = gpa,
         .window = window,
     };
@@ -838,7 +969,8 @@ pub fn main(init: std.process.Init) !void {
         } else if (s.done) {
             stats_files += 1;
             stats_bytes += s.bytes;
-            if (s.matched) {
+            const is_hit = if (ctx.mode == .files_without_match) !s.matched else s.matched;
+            if (is_hit) {
                 stats_matched_files += 1;
                 stats_matched_lines += s.lines;
             }
@@ -1026,4 +1158,44 @@ test "parseArgs: -i -w -e collect patterns and keep every positional as a path" 
     try std.testing.expectEqualStrings("bar", o.patterns[1]);
     try std.testing.expectEqual(@as(usize, 2), p.operands.len);
     try std.testing.expectEqualStrings("dir1", p.operands[0]);
+}
+
+test "parseArgs: -v, -L, -m NUM, --max-count=NUM" {
+    {
+        const a = [_][:0]const u8{ "zgrep", "-v", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.invert_match);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "--invert-match", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.invert_match);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "-L", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expectEqual(Mode.files_without_match, o.mode);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "--files-without-match", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expectEqual(Mode.files_without_match, o.mode);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "-m", "5", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expectEqual(@as(?usize, 5), o.max_count);
+        try std.testing.expectEqual(@as(usize, 0), o.nav_plan.len);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "--max-count=42", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(&a, &o);
+        try std.testing.expectEqual(@as(?usize, 42), o.max_count);
+    }
 }

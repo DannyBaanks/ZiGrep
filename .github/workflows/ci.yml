@@ -34,8 +34,8 @@ jobs:
       - name: Build zigrep (ReleaseFast)
         run: zig build -Doptimize=ReleaseFast
 
-      - name: Run unit tests (44/44)
+      - name: Run unit tests (49/49)
         run: zig build test --summary all
 
-      - name: Run pure Zig differential oracle (19/19 tests vs GNU grep & ripgrep)
+      - name: Run pure Zig differential oracle (25/25 tests vs GNU grep & ripgrep)
         run: zig build oracle

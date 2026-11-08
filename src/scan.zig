@@ -21,8 +21,15 @@ pub const Mode = enum {
     count,
     /// `path` for files with at least one match.
     files,
+    /// `path` for files with NO matches (-L behaviour).
+    files_without_match,
     /// No output at all; exit status only.
     quiet,
+};
+
+pub const ScanConfig = struct {
+    invert: bool = false,
+    max_count: ?usize = null,
 };
 
 /// NUL probe window used to decide a file is binary, aligned with GNU grep's
@@ -116,13 +123,44 @@ pub fn scanBuffer(
     path: []const u8,
     show_path: bool,
     mode: Mode,
+    config: ScanConfig,
     out: *std.ArrayList(u8),
 ) Allocator.Error!BufferResult {
     var res: BufferResult = .{};
 
-    // Early-exit optimization for files (-l) and quiet (-q) modes:
+    if (config.max_count != null and config.max_count.? == 0) {
+        return res;
+    }
+
+    // Inverted matching: select lines that DO NOT contain the pattern
+    if (config.invert) {
+        var line_start: usize = 0;
+        var line_no: usize = 1;
+        while (line_start < data.len) {
+            const line_end = std.mem.findScalarPos(u8, data, line_start, '\n') orelse data.len;
+            const line_slice = data[line_start..line_end];
+            const has_match = (searcher.find(line_slice, 0) != null);
+            if (!has_match) {
+                res.matched = true;
+                res.lines += 1;
+                if (mode == .quiet or mode == .files) return res;
+                if (mode == .lines) {
+                    try emitLine(out, gpa, path, show_path, line_no, line_slice);
+                }
+                if (config.max_count) |mc| {
+                    if (res.lines >= mc) break;
+                }
+            }
+            if (line_end >= data.len) break;
+            line_start = line_end + 1;
+            line_no += 1;
+        }
+        return res;
+    }
+
+    // Early-exit optimization for files (-l, -L) and quiet (-q) modes:
     // Once any match is found, we don't need to scan remaining lines.
-    if (mode == .quiet or mode == .files) {
+    if (config.max_count == null and (mode == .quiet or mode == .files or mode == .files_without_match)) {
         if (searcher.find(data, 0) != null) {
             res.matched = true;
             res.lines = 1;
@@ -152,6 +190,9 @@ pub fn scanBuffer(
         if (mode == .lines) {
             try emitLine(out, gpa, path, show_path, line_no, data[line_start..line_end]);
         }
+        if (config.max_count) |mc| {
+            if (res.lines >= mc) break;
+        }
 
         if (line_end >= data.len) break;
         // Skip the remainder of this line: grep reports a line once.
@@ -176,6 +217,7 @@ pub fn scanFile(
     show_path: bool,
     mode: Mode,
     binary: bool,
+    config: ScanConfig,
     out: *std.ArrayList(u8),
     scratch: ?[]u8,
 ) FileScan {
@@ -225,7 +267,7 @@ pub fn scanFile(
                 if (utf16_bom) |bom| {
                     if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
                         defer gpa.free(decoded);
-                        const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, out) catch {
+                        const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
                             res.err = .NOMEM;
                             return res;
                         };
@@ -234,7 +276,7 @@ pub fn scanFile(
                         res.bytes = data.len;
                     } else |_| {}
                 } else {
-                    const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
+                    const br = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
                         res.err = .NOMEM;
                         return res;
                     };
@@ -318,7 +360,7 @@ pub fn scanFile(
         if (utf16_bom) |bom| {
             if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
                 defer gpa.free(decoded);
-                const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, out) catch {
+                const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
                     res.err = .NOMEM;
                     return res;
                 };
@@ -327,7 +369,7 @@ pub fn scanFile(
                 res.bytes = data.len;
             } else |_| {}
         } else {
-            const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
+            const br = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
                 res.err = .NOMEM;
                 return res;
             };
@@ -344,7 +386,7 @@ pub fn scanFile(
     return res;
 }
 
-/// Emits the once-per-file part of `-c` and `-l`.
+/// Emits the once-per-file part of `-c`, `-l`, and `-L`.
 /// Returns null on success or the errno if the buffer could not grow.
 fn emitOncePerFile(
     out: *std.ArrayList(u8),
@@ -362,6 +404,9 @@ fn emitOncePerFile(
         appendDecimal(out, gpa, res.lines) catch return .NOMEM;
         out.append(gpa, '\n') catch return .NOMEM;
     } else if (mode == .files and res.matched) {
+        out.appendSlice(gpa, path) catch return .NOMEM;
+        out.append(gpa, '\n') catch return .NOMEM;
+    } else if (mode == .files_without_match and !res.matched) {
         out.appendSlice(gpa, path) catch return .NOMEM;
         out.append(gpa, '\n') catch return .NOMEM;
     }
@@ -386,10 +431,11 @@ fn readFully(fd: i32, buf: []u8) ?linux.E {
 // Tests: known ground truth for line tracking and emission format.
 // ---------------------------------------------------------------------------
 
-fn run(
+fn runWithConfig(
     data: []const u8,
     needle: []const u8,
     mode: Mode,
+    config: ScanConfig,
     path: []const u8,
     show_path: bool,
 ) ![]u8 {
@@ -397,8 +443,18 @@ fn run(
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(gpa);
     const searcher = Searcher.init(needle, .auto);
-    _ = try scanBuffer(gpa, data, &searcher, path, show_path, mode, &out);
+    _ = try scanBuffer(gpa, data, &searcher, path, show_path, mode, config, &out);
     return out.toOwnedSlice(gpa);
+}
+
+fn run(
+    data: []const u8,
+    needle: []const u8,
+    mode: Mode,
+    path: []const u8,
+    show_path: bool,
+) ![]u8 {
+    return runWithConfig(data, needle, mode, .{}, path, show_path);
 }
 
 test "scanBuffer: line numbers and content" {
@@ -462,6 +518,37 @@ test "scanBuffer: line cursor survives long gaps between matches" {
     const got = try run(data.items, "MARKER", .lines, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("42:MARKER\n500:MARKER\n", got);
+}
+
+test "scanBuffer: invert-match (-v)" {
+    const data = "apple\nbanana\ncherry\napricot\n";
+    const got = try runWithConfig(data, "ap", .lines, .{ .invert = true }, "f", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings("2:banana\n3:cherry\n", got);
+}
+
+test "scanBuffer: max-count (-m)" {
+    const data = "hit 1\nhit 2\nhit 3\nhit 4\n";
+    const got = try runWithConfig(data, "hit", .lines, .{ .max_count = 2 }, "f", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings("1:hit 1\n2:hit 2\n", got);
+}
+
+test "scanBuffer: invert-match with max-count (-v -m)" {
+    const data = "apple\nbanana\ncherry\ndate\n";
+    const got = try runWithConfig(data, "apple", .lines, .{ .invert = true, .max_count = 2 }, "f", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings("2:banana\n3:cherry\n", got);
+}
+
+test "scanFile: files-without-match (-L)" {
+    const gpa = std.testing.allocator;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+    const searcher = Searcher.init("non_existent_token_xyz", .auto);
+    const res = scanFile(gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null);
+    try std.testing.expect(!res.matched);
+    try std.testing.expectEqualStrings("src/root.zig\n", out.items);
 }
 
 test "utf16: BOM detection and LE decoding" {

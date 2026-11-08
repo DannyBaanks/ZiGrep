@@ -98,10 +98,10 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (44/44)
+# Run all unit tests (49/49)
 zig build test --summary all
 
-# Run pure Zig differential oracle against GNU grep & ripgrep (19/19)
+# Run pure Zig differential oracle against GNU grep & ripgrep (25/25)
 zig build oracle
 ```
 
@@ -115,18 +115,28 @@ Binaries are installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
 zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
 
 usage: zgrep [OPTIONS] PATTERN [PATH...]
+       zgrep [OPTIONS] [-e PATTERN...] [PATH...]
+       cat FILE | zgrep [OPTIONS] PATTERN
 
 options:
   -F                fixed-string pattern(s); without it PATTERN is a regex
   -E                extended regex (the default; kept for grep compat)
   -e PATTERN        search for PATTERN; repeat for several (any may match)
-  -i                ignore case (ASCII + Latin-1 Unicode)
-  -w                match whole words only
+  -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
+  -v, --invert-match
+                    select non-matching lines
+  -w, --word-regexp match whole words only
   -r                recurse into directories (always on; kept for grep compat)
   -n                print line numbers (always on; kept for grep compat)
-  -c                print only a count of matching lines per file
-  -l                print only the names of files with matches
-  -q                quiet: no output, exit status only
+  -c, --count       print only a count of matching lines per file
+  -l, --files-with-matches
+                    print only the names of files with matches
+  -L, --files-without-match
+                    print only the names of files without matches
+  -q, --quiet, --silent
+                    quiet: no output, exit status only
+  -m, --max-count=NUM
+                    stop after NUM matching lines per file
   -H                print the file name with each result
   -h                do not print the file name with each result
   -a                treat binary files as text
@@ -162,8 +172,8 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 44/44 tests covering memory allocators, VFS streams, AST parsing, regex compilation, Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, and SIMD shifts.
-* **Differential Oracle (`zig build oracle`)**: 19 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling and trampoline modes).
+* **Unit Tests**: 49/49 tests covering memory allocators, VFS streams, AST parsing, regex compilation, Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), and SIMD shifts.
+* **Differential Oracle (`zig build oracle`)**: 25 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input).
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 

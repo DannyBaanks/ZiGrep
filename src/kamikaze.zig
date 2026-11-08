@@ -218,6 +218,7 @@ pub const KamikazeContext = struct {
     mode: Mode,
     binary: bool,
     show_path: bool,
+    scan_config: scan.ScanConfig = .{},
     found: *std.atomic.Value(bool),
     stats: *KamikazeStats,
     out_mutex: SpinLock = .{},
@@ -374,13 +375,15 @@ fn scanBatch(
             ctx.show_path,
             ctx.mode,
             ctx.binary,
+            ctx.scan_config,
             local_out,
             scratch,
         );
 
         local_files += 1;
         local_bytes += res.bytes;
-        if (res.matched) {
+        const is_hit = if (ctx.mode == .files_without_match) !res.matched else res.matched;
+        if (is_hit) {
             local_matched_files += 1;
             local_matched_lines += res.lines;
             ctx.found.store(true, .release);
@@ -453,6 +456,7 @@ fn tryQuickSingleDirScan(
     mode: Mode,
     binary: bool,
     show_path: bool,
+    scan_config: scan.ScanConfig,
     stats: *KamikazeStats,
 ) ?bool {
     const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
@@ -519,13 +523,15 @@ fn tryQuickSingleDirScan(
             show_path,
             mode,
             binary,
+            scan_config,
             &local_out,
             scratch,
         );
 
         stats.files_scanned += 1;
         stats.bytes_scanned += res.bytes;
-        if (res.matched) {
+        const is_hit = if (mode == .files_without_match) !res.matched else res.matched;
+        if (is_hit) {
             stats.matched_files += 1;
             stats.matched_lines += res.lines;
             matched_any = true;
@@ -550,6 +556,7 @@ pub fn runKamikazePipeline(
     mode: Mode,
     binary: bool,
     show_path: bool,
+    scan_config: scan.ScanConfig,
     threads_count: usize,
     stats: *KamikazeStats,
 ) !bool {
@@ -560,7 +567,7 @@ pub fn runKamikazePipeline(
         if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
             const m = stx.mode & linux.S.IFMT;
             if (m == linux.S.IFDIR) {
-                if (tryQuickSingleDirScan(gpa, searcher, root, filter_engine, mode, binary, show_path, stats)) |matched| {
+                if (tryQuickSingleDirScan(gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, stats)) |matched| {
                     return matched;
                 }
             }
@@ -582,6 +589,7 @@ pub fn runKamikazePipeline(
         .mode = mode,
         .binary = binary,
         .show_path = show_path,
+        .scan_config = scan_config,
         .found = &found,
         .stats = stats,
     };
