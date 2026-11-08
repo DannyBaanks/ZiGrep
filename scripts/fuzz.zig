@@ -54,6 +54,7 @@ const SwarmConfig = struct {
     selected_adversary: u8 = 0, // 0 = all, 1..4 = specific
     cli_rate: u32 = 100, // 1 in N CLI ops runs full external subprocess
     master_seed: u64 = 0,
+    knob: u8 = 3, // 1: Gentle, 2: Flags, 3: Grammar, 4: ReDoS, 5: Chaos
     exe_path: []const u8 = "zig-out/bin/zigrep",
 };
 
@@ -135,9 +136,43 @@ const corpus_words = [_][]const u8{
     "alpha", "omega", "zenith", "nadír", "über", "añejo", "こんにちは",
 };
 
-fn mutateRegex(arena: Allocator, rand: std.Random) ![]const u8 {
+fn mutateRegex(arena: Allocator, rand: std.Random, knob: u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
-    const mode = rand.uintLessThan(u8, 6);
+
+    if (knob == 1) {
+        // Knob 1 (Gentle): Valid words, simple alternations
+        if (rand.boolean()) {
+            try out.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+        } else {
+            try out.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+            try out.append(arena, '|');
+            try out.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+        }
+        return out.items;
+    }
+
+    if (knob == 2) {
+        // Knob 2 (Standard): Words with character classes & anchors
+        if (rand.boolean()) {
+            try out.append(arena, '^');
+            try out.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+        } else {
+            try out.appendSlice(arena, "[a-z]+_");
+            try out.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+        }
+        return out.items;
+    }
+
+    if (knob == 4) {
+        // Knob 4 (ReDoS / Catastrophic Backtracking)
+        const sub = corpus_words[rand.uintLessThan(usize, corpus_words.len)];
+        const s = try std.fmt.allocPrint(arena, "({s}+)+$|({s}*)*", .{ sub, sub });
+        try out.appendSlice(arena, s);
+        return out.items;
+    }
+
+    // Knob 3 or 5: Grammar stress / Chaos
+    const mode = if (knob == 5) rand.uintLessThan(u8, 6) else rand.uintLessThan(u8, 5);
 
     switch (mode) {
         0 => {
@@ -211,12 +246,12 @@ fn mutateRegex(arena: Allocator, rand: std.Random) ![]const u8 {
     return out.items;
 }
 
-fn runAdversary1(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64) void {
+fn runAdversary1(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64, knob: u8) void {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
 
-    const pat = mutateRegex(arena, rand) catch return;
+    const pat = mutateRegex(arena, rand, knob) catch return;
 
     const icase = rand.boolean();
     const word = rand.boolean();
@@ -415,7 +450,19 @@ const boundary_sizes = [_]usize{
     0, 1, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128, 511, 512, 4095, 4096, 65535, 65536,
 };
 
-fn generateToxicPayload(arena: Allocator, rand: std.Random) ![]const u8 {
+fn generateToxicPayload(arena: Allocator, rand: std.Random, knob: u8) ![]const u8 {
+    if (knob == 1) {
+        // Clean multi-line text
+        var buf: std.ArrayList(u8) = .empty;
+        const lines = rand.uintLessThan(usize, 20) + 1;
+        var l: usize = 0;
+        while (l < lines) : (l += 1) {
+            try buf.appendSlice(arena, corpus_words[rand.uintLessThan(usize, corpus_words.len)]);
+            try buf.append(arena, '\n');
+        }
+        return buf.items;
+    }
+
     const kind = rand.uintLessThan(u8, 6);
     switch (kind) {
         0 => {
@@ -476,12 +523,12 @@ fn generateToxicPayload(arena: Allocator, rand: std.Random) ![]const u8 {
     }
 }
 
-fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64) void {
+fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64, knob: u8) void {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
 
-    const payload = generateToxicPayload(arena, rand) catch return;
+    const payload = generateToxicPayload(arena, rand, knob) catch return;
     const pat = corpus_words[rand.uintLessThan(usize, corpus_words.len)];
 
     const searcher = search.build(arena, &.{pat}, .{
@@ -654,9 +701,9 @@ fn swarmWorker(ctx: *const WorkerContext) void {
             @as(u8, @intCast(rand.uintLessThan(u8, 4) + 1));
 
         switch (adv) {
-            1 => runAdversary1(ctx.gpa, ctx.stats, rand, seed),
+            1 => runAdversary1(ctx.gpa, ctx.stats, rand, seed, ctx.cfg.knob),
             2 => runAdversary2(ctx.gpa, ctx.stats, rand, seed, ctx.cfg, ctx.io),
-            3 => runAdversary3(ctx.gpa, ctx.stats, rand, seed),
+            3 => runAdversary3(ctx.gpa, ctx.stats, rand, seed, ctx.cfg.knob),
             4 => runAdversary4(ctx.gpa, ctx.stats, rand, seed),
             else => {},
         }
@@ -693,6 +740,11 @@ pub fn main(init: std.process.Init) !void {
                 cfg.selected_adversary = 0;
             } else if (std.fmt.parseInt(u8, val, 10)) |adv| {
                 if (adv >= 1 and adv <= 4) cfg.selected_adversary = adv;
+            } else |_| {}
+        } else if (std.mem.startsWith(u8, arg, "--knob=")) {
+            const val = arg["--knob=".len..];
+            if (std.fmt.parseInt(u8, val, 10)) |k| {
+                if (k >= 1 and k <= 5) cfg.knob = k;
             } else |_| {}
         } else if (std.mem.startsWith(u8, arg, "--cli-rate=")) {
             const val = arg["--cli-rate=".len..];
@@ -734,6 +786,7 @@ pub fn main(init: std.process.Init) !void {
         \\========================================================================================
         \\  Target Operations : {d} ops
         \\  Active Workers    : {d} parallel threads
+        \\  Entropy Knob      : Level {d} (1=Gentle, 2=Flags, 3=Grammar, 4=ReDoS, 5=Chaos)
         \\  Adversaries Active: {s}
         \\  Master PRNG Seed  : 0x{x}
         \\  Subprocess Rate   : 1 in {d} CLI permutations
@@ -742,6 +795,7 @@ pub fn main(init: std.process.Init) !void {
     , .{
         cfg.target_ops,
         cfg.threads,
+        cfg.knob,
         if (cfg.selected_adversary == 0) "All 4 Adversaries (Grammar, CLI, Payloads, Oracle)" else "Specialized Adversary Mode",
         cfg.master_seed,
         cfg.cli_rate,
