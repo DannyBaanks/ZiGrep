@@ -5,8 +5,27 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 
 ## El comando de Windows
 
+**Instalar (una sola vez, sin permisos de administrador):**
+
 ```powershell
-.\zig-out\bin\zigrep.exe -l -F Searcher src
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
+```
+
+**Regla de oro:** no ejecutes `irm ... | iex` sobre un texto que no hayas
+leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
+`SHA256SUMS.txt` publicado en la release y **aborta sin instalar nada** si no
+coincide. Si prefieres revisarlo antes, descárgalo y léelo:
+
+```powershell
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 -OutFile install.ps1
+Get-Content install.ps1
+.\install.ps1
+```
+
+**Usarlo (después de reiniciar la terminal):**
+
+```powershell
+zigrep -l -F Searcher src
 ```
 
 Salida real:
@@ -20,6 +39,42 @@ src\search.zig
 
 `-l` lista los archivos con coincidencias; quítalo para mostrar las líneas.
 
+### Qué hace el instalador (y cómo leer su salida)
+
+| Salida | Significado | Qué hacer |
+|---|---|---|
+| `OK  checksum matches (<sha256>)` | El `.zip` coincide con el `SHA256SUMS.txt` de la release | Nada: la instalación es segura |
+| `ERR Checksum mismatch!` + `expected/actual` | El fichero descargado **no** coincide con el hash publicado | **No instalar.** Puede ser un proxy que reescribe el archivo o un release corrupto. Descarga el `.zip` a mano desde la página de la release y compara los hashes |
+| `OK  installed 2 executable(s) into <dir>` | `zigrep.exe` y `zgrep.exe` copiados | Ninguno |
+| `OK  added <dir> to the user PATH` | El directorio se añadió al `PATH` **de usuario** (sin admin) | Reinicia la terminal: el `PATH` ya está actualizado, pero las shells abiertas conservan el valor antiguo |
+| `OK  <dir> is already in the user PATH` | Ya estaba instalado | Ninguno |
+| `WARN  No published checksum for ...; continuing without verification` | La release no tiene `SHA256SUMS.txt` (o no se pudo descargar) | Instala, pero **no confíes en la integridad**: descarga el `.zip` y verifícalo a mano |
+| `ERR  Could not download the prebuilt binary: ...` | No hay red o no existe el asset para tu arquitectura | Si tienes Zig 0.16+, el instalador compila desde fuente; si no, descarga el `.zip` a mano desde https://github.com/DannyBaanks/ZiGrep/releases |
+| `ERR  Unsupported architecture: ...` | Ni `AMD64` ni `ARM64` (p. ej. Windows en ARM emulado o x86 de 32 bits) | Compila desde fuente: `zig build -Doptimize=ReleaseFast` |
+
+Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
+
+| Asset | Plataforma |
+|---|---|
+| `zigrep-linux-x86_64.tar.gz` | Linux x86_64 (estático, stripped) |
+| `zigrep-linux-aarch64.tar.gz` | Linux ARM64 (estático, stripped) |
+| `zigrep-windows-x86_64.zip` | Windows x86_64 (`.exe` nativo) |
+| `SHA256SUMS.txt` | Hashes de los tres archivos |
+
+### Trampas del instalador
+
+* **`irm | iex` no pide confirmación**: se ejecuta al instante. Revisa el
+  fichero antes si no te fías de la fuente.
+* **El `PATH` solo cambia para las terminales nuevas**: la sesión actual sí
+  queda actualizada (el instalador la modifica en memoria), pero cualquier
+  terminal ya abierta necesita un reinicio.
+* **`zgrep --version` escribe en `stderr`**, no en `stdout`. En PowerShell eso
+  aparece como un `RemoteException` rojo aunque todo haya ido bien. Es
+  cosmético: el valor (`zgrep 0.2.0`) es correcto.
+* **No hay versión ARM64 de Windows todavía**: el instalador detecta `ARM64` y
+  pide `zigrep-windows-aarch64.zip`, que todavía no se publica. En ese caso
+  compila desde fuente.
+
 ---
 
 ## 1. Compilar
@@ -27,7 +82,7 @@ src\search.zig
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 52/52 tests passed (native Windows)
+zig build test --summary all          # 54/54 tests passed (native Windows)
 zig build oracle                      # oráculo diferencial puro Zig (25/25 en native Windows)
 ```
 
@@ -278,7 +333,7 @@ Build Summary: 7/7 steps succeeded
 Salida:
 
 ```text
-Build Summary: 3/3 steps succeeded; 52/52 tests passed
+Build Summary: 3/3 steps succeeded; 54/54 tests passed
 test success
 ```
 
@@ -341,3 +396,109 @@ NOT_DEMONSTRATED hasta que el CI publique el resultado.
 
 Trampas: `--sort` hace determinista el orden; la CLI muestra separadores
 nativos (`\`) pero el oráculo normaliza separadores y CRLF al comparar.
+
+---
+
+## 9. Release 0.2.0, fuzzer en Windows y el bug delenjambre de hilos
+
+### Qué trae la 0.2.0
+
+| | |
+|---|---|
+| Versión | `0.2.0` (`zgrep --version` → `zgrep 0.2.0`) |
+| Port Windows | Nativo, sin WSL ni runtime de C. `src/uring.zig` es ahora una fachada portable y el motor `io_uring` real vive en `src/uring_linux.zig` (Linux-only) |
+| Installer Windows | `install.ps1`, instalable con `irm ... | iex`, verifica SHA-256 y actualiza el `PATH` de usuario |
+| Release | `zigrep-linux-x86_64.tar.gz`, `zigrep-linux-aarch64.tar.gz`, `zigrep-windows-x86_64.zip` y `SHA256SUMS.txt` |
+
+### Fuzzer en Windows (portado en esta rama)
+
+El fuzzer de upstream (`scripts/fuzz.zig`) usaba syscalls de Linux. En esta
+rama está portado a la API de E/S de Zig, que es portable. En Windows:
+
+```powershell
+.\zig-out\bin\fuzz.exe 3000 --seed=12345 --threads=8
+```
+
+Salida real (recorte):
+
+```text
+  Total Executions Completed : 3001 ops
+  Wall Clock Elapsed Time    : 1.01 seconds
+  Average Swarm Throughput   : 2967 ops/sec
+  - Total Anomalies Detected       : 0
+  - Process Crashes (SIGSEGV/ABRT) : 0
+  - Invalid Exit Codes (> 2)       : 0
+```
+
+El fuzzer tri-way (ZiGrep vs ripgrep vs GNU grep, `scripts/tri_fuzz.py`) también
+está portado: las rutas absolutas de Linux se sustituyeron por
+`Path(__file__).resolve().parent.parent` y el nombre del ejecutable se elige
+según `os.name`.
+
+```powershell
+py scripts/tri_fuzz.py 250 5
+```
+
+Salida real (recorte):
+
+```text
+  Total Permutations Tested : 250
+  ZiGrep Crashes (SIGSEGV)   : 0
+  ZiGrep Timeouts (>1.5s)    : 0
+  Anomalous Discrepancies    : 0
+```
+
+Ojo: el tri-way compara **códigos de salida, crashes y timeouts**, no el
+contenido de la salida. El contenido lo compara el oráculo diferencial.
+
+### El bug que encontró el fuzzer (y que el barrido cuantificó)
+
+Un número absurdo de hilos (`-j 18446744073709551615`, `--threads=...` o la
+variable de entorno `ZIGREP_THREADS`) llegaba al bucle de creación de hilos y
+lo convertía en un ciclo infinito de crear-y-terminar: el equipo se quedaba
+al 100% de CPU y el proceso no respondía ni a `taskkill /F`.
+
+El barrido con timeout (`scripts/hunt_hang.py`, que sí pone un límite de 3 s
+a cada invocación, cosa que el fuzzer original no hacía) cuantificó el problema
+sobre el binario **anterior al fix**:
+
+```text
+phase 2 done: 452 hangs
+phase 3 done: 452 hangs
+==============================================================
+  HANGING COMBINATIONS: 452
+    -j 999999 filter build.zig
+    -k -j 999999 searcher build.zig
+    ...
+```
+
+Todas las combinaciones colgantes eran de la forma `-j <número enorme>`. El
+ detonante es **un único fichero** (`build.zig`): con un directorio, el camino
+rápido de un solo directorio resuelve antes de llegar al enjambre.
+
+Arreglo aplicado en esta rama:
+
+* La CLI rechaza cualquier cuenta por encima de **1024** con código de salida 2
+  y un mensaje explícito.
+* `kamikaze.zig` recorta el tamaño del enjambre a 1024 como segunda línea de
+  defensa, para cualquier otro llamador.
+* Dos tests de regresión cubren el límite (el valor 1024 sigue siendo válido).
+
+Comprobación del fix (mismo binario, mismo argumento):
+
+```powershell
+.\zig-out\bin\zigrep.exe -j 18446744073709551615 needle src
+```
+
+Salida real:
+
+```text
+zgrep: thread count out of range (max 1024): '18446744073709551615'
+try 'zgrep --help' for usage
+```
+
+Código de salida: **2** (antes: cuelgue indefinido).
+
+Trampas: el mensaje va a `stderr`; en PowerShell sale en rojo como
+`RemoteException` aunque el comportamiento sea el correcto. Usa
+`$LASTEXITCODE` para comprobarlo.

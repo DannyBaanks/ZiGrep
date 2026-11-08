@@ -101,7 +101,7 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 
 ## ⚡ Quick Install (Zero Dependencies, Direct to `$PATH`)
 
-Install `zigrep` and `zgrep` immediately on Linux with a single command:
+### Linux / macOS
 
 ```sh
 curl -sSfL https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.sh | bash
@@ -111,6 +111,31 @@ curl -sSfL https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.sh 
 * **Auto-detects Architecture**: Instant download of stripped native binaries for `x86_64` (272 KB) and `aarch64` (1.2 MB).
 * **Instant `$PATH` Integration**: Automatically symlinks both `zigrep` and `zgrep` into `~/.local/bin` (or `/usr/local/bin` if root), ready for immediate invocation by human developers, shell scripts, and AI coding agents.
 * **Offline / Source Fallback**: If offline or building from source, automatically clones and builds using `zig 0.16.0+`.
+
+### Windows (native, no WSL required)
+
+```powershell
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
+```
+
+* **Native `.exe`, no WSL and no C runtime**: a real Windows build that uses the Win32 API directly.
+* **SHA-256 verified**: the installer downloads the release `SHA256SUMS.txt` and refuses to install if the checksum does not match.
+* **No admin rights required**: installs to `%LOCALAPPDATA%\Programs\ZiGrep` and appends it to the **user** `PATH` (the current session is updated too, so `zigrep` works immediately).
+* **Pinned version**: `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex` installs the latest release; use `install.ps1 -Version 0.2.0` for a specific one.
+* **Manual download**: the prebuilt archive is also attached to every GitHub Release as `zigrep-windows-x86_64.zip` (it contains `zigrep.exe`, `zgrep.exe` and `install.ps1`).
+
+> Restart your terminal after the installer finishes so the new `PATH` entry is picked up by the shell.
+
+### Release artifacts
+
+Every release ships the same four artifacts, so a build can be audited on any platform:
+
+| Artifact | Platform |
+|---|---|
+| `zigrep-linux-x86_64.tar.gz` | Linux x86_64 (static, stripped) |
+| `zigrep-linux-aarch64.tar.gz` | Linux ARM64 (static, stripped) |
+| `zigrep-windows-x86_64.zip` | Windows x86_64 (native `.exe`) |
+| `SHA256SUMS.txt` | Checksums for all three archives |
 
 ---
 
@@ -127,7 +152,7 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (52/52 on native Windows, Zig 0.16.0)
+# Run all unit tests (54/54 on native Windows, Zig 0.16.0)
 zig build test --summary all
 
 # Run pure Zig differential oracle against GNU grep & ripgrep (25/25 on native Windows)
@@ -225,7 +250,7 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 52/52 tests on native Windows (Zig 0.16.0), covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
+* **Unit Tests**: 54/54 tests on native Windows (Zig 0.16.0), covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
 * **Differential Oracle (`zig build oracle`)**: 25/25 automated multi-way verification checks on native Windows against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and the `--uring` batched engine, which falls back to the synchronous workers where io_uring is unavailable). The POSIX-only piped-stdin case is skipped on Windows, so Linux runs 26 checks.
 * **Native Windows job**: builds ReleaseFast, runs the same unit tests and differential oracle, then smoke-tests Unicode/space-containing paths and `.gitignore` filtering.
 * **Adversarial Entropic Fuzzer Swarm (`zig build fuzz`)**: A parallel multi-core stress testing swarm featuring 4 specialized adversaries:
@@ -233,6 +258,9 @@ Every commit is tested via GitHub Actions CI in pure Zig:
   2. **The Chaos CLI Permutator**: Generates combinatorial, conflicting, and edge-case CLI flags (`-v`, `-c`, `-l`, `-L`, `-q`, extreme numeric counts, Befunge navigation specs) running against an isolated dummy sandbox sink.
   3. **The Toxic Payload Injector**: Generates degenerate buffers (SIMD boundary alignments at 15/16/31/32/64 bytes, truncated UTF-16 BOMs with odd byte lengths, 1 MB single lines, and NUL floods).
   4. **The Differential Oracle Auditor**: Enforces mathematical invariants across search modes (invert match partition: `matches(P) + matches(-v P) == total_lines`, quiet mode exit code equivalence, line count invariants, and BMH vs memchr equivalence).
+* **Windows fuzzing results (native, this branch)**: the swarm was ported to Windows and executed locally on Windows 11 build 26200 with Zig 0.16.0. Runs of 3,001 operations (all adversaries, entropy knob 3) reported **0 anomalies, 0 crashes, 0 invalid exit codes, 0 invariant violations**. The tri-way differential fuzzer (`scripts/tri_fuzz.py`, ZiGrep vs ripgrep vs GNU grep) was run at entropy knobs 3, 4 (ReDoS bait) and 5 (chaos) for 40-250 permutations each: **0 crashes, 0 timeouts, 0 anomalous discrepancies** for all three engines. Note that the tri-way fuzzer compares exit codes / crashes / timeouts; **content** parity is what the differential oracle above verifies.
+* **Windows-specific adversarial probe (`scripts/adversarial_windows.py`)**: a targeted probe builds a hostile tree (Unicode + spaces in directory and file names, deep nesting, > 260-character paths, CRLF files, UTF-16 BOM files, NUL-containing binaries, `.gitignore`, symlinks, empty directories) and compares ZiGrep against GNU grep case by case across the `ScanConfig` surface (`-v`, `-m`, `-L`, `-c`, `-q`) and the Windows path surfaces.
+* **Bug found by the Windows fuzzing and fixed in this branch**: an absurd worker count (`-j 18446744073709551615`, `--threads=...`, or the `ZIGREP_THREADS` environment variable) reached the thread-spawn loop and turned it into an endless create-and-exit cycle that pinned the machine at 100% CPU. The CLI now rejects any count above **1024** with exit code 2 and a clear message (`thread count out of range (max 1024)`), and `kamikaze.zig` clamps the pool defensively as a second line of defence. Two regression tests cover the boundary.
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 
