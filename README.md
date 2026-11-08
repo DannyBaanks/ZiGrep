@@ -1,4 +1,4 @@
-# zigrep ⚡
+# Zigrep ⚡
 
 [![CI](https://github.com/DannyBaanks/ZigGrep/actions/workflows/ci.yml/badge.svg)](https://github.com/DannyBaanks/ZigGrep/actions/workflows/ci.yml)
 [![Zig](https://img.shields.io/badge/Zig-0.16.0-orange.svg)](https://ziglang.org/)
@@ -6,7 +6,7 @@
 
 **Ultra-fast, zero-libc, grep-compatible search engine written in pure Zig 0.16.**
 
-`zigrep` combines direct Linux kernel syscalls (`getdents64`), lock-free work-stealing swarms, rarest-byte SIMD vectorization, and a linear regex engine with lazy DFA caching to achieve state-of-the-art search throughput across tiny folders, massive monorepos, and whole drives.
+`Zigrep` combines direct Linux kernel syscalls (`getdents64`), lock-free work-stealing swarms, rarest-byte SIMD vectorization, and a linear regex engine with lazy DFA caching to achieve state-of-the-art search throughput across tiny folders, massive monorepos, and whole drives.
 
 ```sh
 # Search with SIMD acceleration
@@ -26,7 +26,7 @@ zigrep -k --stats "pattern" ~
 Measured on **Ubuntu 24.04 LTS (Kernel 7.0.0, 12 AMD/Intel CPUs, NVMe)**.  
 Every figure represents the **median of repeated runs after warm-up** with ground-truth verification against GNU grep 3.11 and ripgrep 14.1.0.
 
-| Workload / Benchmark Scenario | `zigrep -k` (Swarm) | `zigrep` (Standard) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
+| Workload / Benchmark Scenario | ` -k` (Swarm) | `` (Standard) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
 |---|---:|---:|---:|---:|---:|---:|
 | **Micro-dir (`src/`, 8 files)** | **1.43 ms** | 1.59 ms | 3.81 ms | 1.78 ms | **2.66× faster** | **1.24× faster** |
 | **Early-Exit `-q` (`src/`)** | **1.38 ms** | **1.33 ms** | 3.62 ms | 1.48 ms | **2.71× faster** | **1.11× faster** |
@@ -81,16 +81,16 @@ zig build test --summary all
 zig build oracle
 ```
 
-Binaries will be installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
+Binaries will be installed at `zig-out/bin/` (and symlinked `zgrep`).
 
 ---
 
 ## 📖 CLI Usage
 
 ```text
-zigrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
+ — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
 
-usage: zigrep [OPTIONS] PATTERN [PATH...]
+usage:  [OPTIONS] PATTERN [PATH...]
 
 options:
   -F                fixed-string pattern(s); without it PATTERN is a regex
