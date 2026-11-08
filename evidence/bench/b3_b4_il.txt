@@ -1,0 +1,58 @@
+### B3-IL — real corpus, RARE pattern 'malbolge_toolkit' (2 files / 2 lines), full output  [INTERLEAVED]
+date: 2026-11-08T00:26:44-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly (5331 files, 654899262 bytes)
+load before: 5.98 10.35 8.16 4/2527 1562771
+
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=5.98 10.35 8.16 2/2527 1562772
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     57.113 |     45.630 |     69.166 |     57.047 |       6.765 |    11466.6 |     0 |
+| zgrep-memchr   |     42.427 |     38.268 |     45.449 |     42.458 |       2.197 |    15435.9 |     0 |
+| zgrep-j1       |    125.114 |    122.899 |    129.211 |    125.475 |       1.965 |     5234.4 |     0 |
+| grep           |    350.064 |    343.909 |    355.434 |    350.450 |       3.955 |     1870.8 |     0 |
+| rg             |     60.320 |     56.586 |     63.347 |     60.247 |       2.125 |    10857.0 |     0 |
+
+raw zgrep: 50919686 61635310 69165832 45630354 56061676 54662763 58165259 58739923 52076092 63416713
+raw zgrep-memchr: 44211190 38268216 45448735 42161763 44800454 40399421 42692356 40842990 43597678 42155263
+raw zgrep-j1: 123333816 124624448 124139785 126356108 125362842 124865023 126146428 129211487 122898974 127813307
+raw grep: 347553174 350375969 353309375 343909353 354183926 349532730 355433658 349751343 345686662 354764189
+raw rg: 59605787 62020389 58775196 56586397 61426651 58121776 62329370 61035202 59225762 63347373
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b3_real_rare_il.json (2143 bytes)
+exit=0
+
+### B4-IL — real corpus, ABSENT pattern, full output (all exit 1)  [INTERLEAVED]
+load before: 5.84 10.17 8.13 1/2524 1563381
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=5.84 10.17 8.13 3/2524 1563382
+
+bench: WARNING 'zgrep' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-memchr' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-j1' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'grep' exited 1 on warmup (first argv: grep)
+bench: WARNING 'rg' exited 1 on warmup (first argv: rg)
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     51.161 |     46.326 |     57.734 |     51.863 |       4.308 |    12800.8 |     1 |
+| zgrep-memchr   |     41.570 |     38.351 |     51.061 |     42.558 |       3.789 |    15754.1 |     1 |
+| zgrep-j1       |    117.634 |    116.383 |    121.754 |    118.052 |       1.586 |     5567.2 |     1 |
+| grep           |    345.990 |    337.516 |    358.679 |    347.061 |       6.325 |     1892.8 |     1 |
+| rg             |     61.184 |     55.568 |     66.170 |     60.943 |       3.456 |    10703.8 |     1 |
+
+raw zgrep: 57711264 48986862 50809407 57335614 51907560 51511892 48770610 46325661 57733761 47537796
+raw zgrep-memchr: 51061477 43885628 39406559 40283699 41808698 40941750 38350567 41725615 46703067 41414714
+raw zgrep-j1: 117078262 116702941 117822315 116383227 119630205 117410468 117977449 121753747 117446650 118310795
+raw grep: 344681340 350569478 340257930 337516241 343422141 344491593 350435986 347298573 358679386 353256878
+raw rg: 61669822 60168226 58745978 55930629 55567861 63113532 60698360 64117409 63250620 66169886
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b4_real_absent_il.json (2153 bytes)
+exit=0
+load after: 5.53 10.03 8.10 6/2519 1564017

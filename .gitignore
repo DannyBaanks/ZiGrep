@@ -1,0 +1,7 @@
+# build artifacts
+zig-cache/
+.zig-cache/
+zig-out/
+
+# generated benchmark corpus (regenerate with scripts/gen_corpus.zig)
+bench-corpus/

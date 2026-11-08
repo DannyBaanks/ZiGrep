@@ -1,0 +1,53 @@
+### B6 — synthetic corpus, PLANTED token, count mode (-c)
+date: 2026-11-08T00:21:46-06:00
+corpus: bench-corpus/synthetic (2000 files, 131128199 bytes)
+load before: 12.70 8.97 6.39 6/2483 1554927
+
+bench: runs=10 warmup=3 corpus_bytes=131128199 nproc=12 loadavg=12.70 8.97 6.39 2/2483 1554928
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     26.128 |     23.501 |     32.467 |     26.857 |       2.676 |     5018.6 |     0 |
+| zgrep-memchr   |     24.798 |     24.097 |     27.192 |     25.356 |       1.247 |     5287.8 |     0 |
+| zgrep-j1       |     85.750 |     80.812 |     89.319 |     85.831 |       2.980 |     1529.2 |     0 |
+| grep           |     26.802 |     25.232 |     28.838 |     26.973 |       1.067 |     4892.5 |     0 |
+| rg             |     13.340 |     11.429 |     16.086 |     13.370 |       1.460 |     9829.4 |     0 |
+
+raw zgrep: 26218131 24882273 27545934 32467399 27370186 26018670 29996777 26038747 24530770 23501182
+raw zgrep-memchr: 24635143 24345615 24961120 24218838 26795476 27139506 27192185 24512415 24097011 25660282
+raw zgrep-j1: 82961815 80811663 86094821 89319436 88888834 85405617 87902147 82590445 85388896 88948766
+raw grep: 28837860 26996362 26431359 27550082 27955316 26606886 26080897 26239692 27797283 25231976
+raw rg: 11471672 13423407 12917044 13379185 13301670 14159928 11428862 12486562 16086295 15047491
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF --algo=memchr ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF -j1 ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd grep grep -rcIF ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd rg rg -c -F --no-ignore --hidden --include-zero ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+json evidence/bench/b6_synth_count.json (2017 bytes)
+exit=0
+
+### B7 — synthetic corpus, RARE token (3 matches), full output
+load before: 13.37 9.17 6.47 4/2468 1555487
+bench: runs=10 warmup=3 corpus_bytes=131128199 nproc=12 loadavg=13.37 9.17 6.47 5/2468 1555488
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     23.724 |     22.431 |     33.816 |     25.409 |       3.654 |     5527.2 |     0 |
+| zgrep-memchr   |     22.809 |     22.040 |     28.830 |     23.317 |       2.024 |     5748.9 |     0 |
+| zgrep-j1       |     48.321 |     46.407 |     51.420 |     48.398 |       1.816 |     2713.7 |     0 |
+| grep           |     66.227 |     65.675 |     67.365 |     66.404 |       0.609 |     1980.0 |     0 |
+| rg             |     10.457 |      9.709 |     12.941 |     10.827 |       1.192 |    12539.9 |     0 |
+
+raw zgrep: 23518265 22733603 22781573 26427863 33815640 25485939 23746510 23702198 22431271 29442558
+raw zgrep-memchr: 22132033 22212394 23776296 22039821 23119523 22565361 23286824 23052989 22156529 28830428
+raw zgrep-j1: 51419554 49829763 48677057 46437606 50812343 48027507 46820570 48614060 46939481 46406769
+raw grep: 66015835 66233811 66437410 67245205 66062865 67042199 67364748 66219636 65674761 65744301
+raw rg: 11020302 10261509 11303189 12941379 9816110 12755584 9827291 9984935 10652327 9709381
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd grep grep -rnIF ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd rg rg -n -F --no-ignore --hidden ZGREP_RARE_TOKEN bench-corpus/synthetic
+json evidence/bench/b7_synth_rare.json (1979 bytes)
+exit=0
+load after: 13.37 9.17 6.47 3/2476 1556040

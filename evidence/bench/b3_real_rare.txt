@@ -1,0 +1,28 @@
+### B3 — real corpus, RARE pattern 'malbolge_toolkit' (2 files / 2 lines), full output
+date: 2026-11-08T00:19:47-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly (5331 files, 654899262 bytes)
+load before: 6.74 8.19 5.87 8/2505 1551638
+
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=6.74 8.19 5.87 3/2505 1551639
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     56.206 |     49.151 |     65.679 |     57.120 |       5.275 |    11651.7 |     0 |
+| zgrep-memchr   |     45.258 |     41.061 |     48.283 |     44.952 |       2.488 |    14470.3 |     0 |
+| zgrep-j1       |    130.579 |    127.637 |    133.309 |    130.218 |       2.154 |     5015.3 |     0 |
+| grep           |    364.622 |    357.073 |    378.275 |    366.716 |       7.091 |     1796.1 |     0 |
+| rg             |     61.088 |     57.293 |     65.408 |     61.522 |       2.668 |    10720.5 |     0 |
+
+raw zgrep: 59776552 54549037 55398025 54221038 52134210 65679341 58248573 57014491 49151349 65022562
+raw zgrep-memchr: 47855230 41061174 45684145 46086062 48282885 46845584 44831881 44360817 41661090 42846272
+raw zgrep-j1: 132198301 128096078 130065197 131092837 131792747 128222893 133309049 132078474 127636819 127686361
+raw grep: 378274625 371667749 366291769 361745141 369282860 362951834 361378716 361680134 357072931 376809982
+raw rg: 63315276 65039760 59516155 65408466 57293193 63297583 59249359 60771778 59924033 61405128
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden malbolge_toolkit /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b3_real_rare.json (2142 bytes)
+exit=0
+load after: 8.09 8.45 5.98 2/2504 1552278

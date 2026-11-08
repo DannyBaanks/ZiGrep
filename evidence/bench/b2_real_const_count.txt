@@ -1,0 +1,29 @@
+### B2 — real corpus, pattern 'const', count mode (-c)
+date: 2026-11-08T00:19:19-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly (5331 files, 654899262 bytes)
+note: rg uses --include-zero; rg omits binary files from -c output, zgrep and grep do not
+load before: 7.76 8.49 5.90 5/2462 1550620
+
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=7.76 8.49 5.90 6/2462 1550621
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |    122.952 |    102.176 |    176.964 |    128.274 |      25.221 |     5326.5 |     0 |
+| zgrep-memchr   |     45.960 |     42.711 |     54.768 |     47.815 |       3.992 |    14249.3 |     0 |
+| zgrep-j1       |    268.586 |    264.496 |    276.459 |    269.176 |       3.950 |     2438.3 |     0 |
+| grep           |    296.859 |    292.029 |    325.016 |    302.340 |      12.233 |     2206.1 |     0 |
+| rg             |     62.069 |     58.313 |     67.249 |     62.315 |       2.890 |    10551.1 |     0 |
+
+raw zgrep: 157125788 102175639 127755419 145730694 176963543 109098948 118147845 103968623 107372305 134404913
+raw zgrep-memchr: 45726068 53395693 42711119 51525639 45372111 45522380 47527224 54767901 46193837 45403720
+raw zgrep-j1: 271271853 267781908 273398791 268808154 264605383 276459276 271292820 264496305 268364770 265285040
+raw grep: 293821257 296385621 299287101 294702104 297333131 294544459 325015545 306859058 323420679 292029080
+raw rg: 59590426 59246899 63966165 61004284 58312703 64581559 61444823 62693894 65054919 67249447
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF --algo=memchr const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF -j1 const /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rcIF const /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -c -F --no-ignore --hidden --include-zero const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b2_real_const_count.json (2120 bytes)
+exit=0
+load after: 7.27 8.36 5.89 2/2503 1551303

@@ -1,0 +1,33 @@
+### B4 — real corpus, ABSENT pattern 'ZGREP_ABSENT_TOKEN' (0 matches, exit 1), full output
+date: 2026-11-08T00:20:23-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly (5331 files, 654899262 bytes)
+load before: 6.18 7.96 5.90 4/2466 1552648
+
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=6.18 7.96 5.90 5/2466 1552649
+
+bench: WARNING 'zgrep' exited 1 on warmup (argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-memchr' exited 1 on warmup (argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-j1' exited 1 on warmup (argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'grep' exited 1 on warmup (argv: grep)
+bench: WARNING 'rg' exited 1 on warmup (argv: rg)
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     59.731 |     50.312 |     65.075 |     59.223 |       4.223 |    10964.2 |     1 |
+| zgrep-memchr   |     42.021 |     40.378 |     65.557 |     44.402 |       7.516 |    15585.2 |     1 |
+| zgrep-j1       |    121.005 |    118.110 |    131.841 |    122.103 |       3.728 |     5412.2 |     1 |
+| grep           |    360.820 |    348.975 |    372.071 |    360.938 |       6.970 |     1815.0 |     1 |
+| rg             |     60.310 |     55.812 |     66.170 |     60.747 |       3.589 |    10858.9 |     1 |
+
+raw zgrep: 60003989 62601720 55207630 50312307 62369648 59457803 58550616 57290663 61355763 65075009
+raw zgrep-memchr: 41997476 65557097 44546628 42880549 42043933 42360902 40377685 41414223 41716134 41123252
+raw zgrep-j1: 122176244 121310865 118110448 120583586 122850863 120699362 119937415 123161541 120356555 131841091
+raw grep: 362459562 362979319 361207118 358395807 355051267 360432052 356671192 348975310 371141483 372070763
+raw rg: 59366998 65028237 61832345 58703256 61252427 66169852 58409910 55811558 56529743 64360848
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden ZGREP_ABSENT_TOKEN /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b4_real_absent.json (2152 bytes)
+exit=0
+load after: 6.00 7.89 5.89 6/2488 1553293

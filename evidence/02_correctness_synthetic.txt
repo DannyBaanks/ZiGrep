@@ -1,0 +1,60 @@
+### synthetic corpus correctness controls
+date: 2026-11-08T00:13:16-06:00
+corpus: bench-corpus/synthetic  files=2000  bytes=131128199
+
+--- control A: -r line output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=195467 bytes=23367667
+  grep             exit=0 lines=195467 bytes=23367667
+  rg               exit=0 lines=195467 bytes=23367667
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/synth_r
+exit=0
+
+--- control B: -c output, 3-way (rg needs --include-zero) ---
+check: groups=3
+  zgrep            exit=0 lines=2000 bytes=96804
+  grep             exit=0 lines=2000 bytes=96804
+  rg               exit=0 lines=2000 bytes=96804
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/synth_c
+exit=0
+
+--- control C: -l output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=2000 bytes=90750
+  grep             exit=0 lines=2000 bytes=90750
+  rg               exit=0 lines=2000 bytes=90750
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/synth_l
+exit=0
+
+--- control D: rare token (expect 3 files) ---
+check: groups=2
+  zgrep            exit=0 lines=3 bytes=141
+  grep             exit=0 lines=3 bytes=141
+pair zgrep vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+
+--- control E: absent token (expect exit 1, no output) ---
+zgrep exit=1 bytes=0; grep exit=1 bytes=0; rg exit=1 bytes=0
+
+--- control F: ground truth aggregates ---
+zgrep  -c: files=2000 sum=195467
+grep   -c: files=2000 sum=195467
+rg     -c: files=2000 sum=195467
+truth             : files=2000 sum=195467
+
+--- control G: exit codes ---
+pattern=ZGREP_PLANTED_TOKEN zgrep=0 grep=0 rg=0
+pattern=ZGREP_ABSENT_TOKEN zgrep=1 grep=1 rg=1

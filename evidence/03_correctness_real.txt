@@ -1,0 +1,109 @@
+### real corpus correctness controls
+date: 2026-11-08T00:13:45-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly
+files=5331  bytes=654899262
+grep: grep (GNU grep) 3.11
+rg:   ripgrep 14.1.0
+
+======== pattern: const ========
+--- A: -r line output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=4101 bytes=698095
+  grep             exit=0 lines=4101 bytes=698095
+  rg               exit=0 lines=4101 bytes=698095
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_const_r
+exit=0
+--- B: -c output (zgrep vs grep; rg differs by design on binary files) ---
+check: groups=2
+  zgrep            exit=0 lines=5331 bytes=607924
+  grep             exit=0 lines=5331 bytes=607924
+pair zgrep vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_const_c
+exit=0
+--- C: -l output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=342 bytes=30363
+  grep             exit=0 lines=342 bytes=30363
+  rg               exit=0 lines=342 bytes=30363
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_const_l
+exit=0
+--- D: absent pattern exit codes ---
+zgrep=1 grep=1 rg=1
+
+======== pattern: pub ========
+--- A: -r line output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=3244 bytes=597269
+  grep             exit=0 lines=3244 bytes=597269
+  rg               exit=0 lines=3244 bytes=597269
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_pub_r
+exit=0
+--- B: -c output (zgrep vs grep; rg differs by design on binary files) ---
+check: groups=2
+  zgrep            exit=0 lines=5331 bytes=607917
+  grep             exit=0 lines=5331 bytes=607917
+pair zgrep vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_pub_c
+exit=0
+--- C: -l output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=87 bytes=7632
+  grep             exit=0 lines=87 bytes=7632
+  rg               exit=0 lines=87 bytes=7632
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_pub_l
+exit=0
+--- D: absent pattern exit codes ---
+zgrep=1 grep=1 rg=1
+
+======== pattern: fn ========
+--- A: -r line output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=1822 bytes=315761
+  grep             exit=0 lines=1822 bytes=315761
+  rg               exit=0 lines=1822 bytes=315761
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_fn_r
+exit=0
+--- B: -c output (zgrep vs grep; rg differs by design on binary files) ---
+check: groups=2
+  zgrep            exit=0 lines=5331 bytes=607916
+  grep             exit=0 lines=5331 bytes=607916
+pair zgrep vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_fn_c
+exit=0
+--- C: -l output, 3-way ---
+check: groups=3
+  zgrep            exit=0 lines=132 bytes=11687
+  grep             exit=0 lines=132 bytes=11687
+  rg               exit=0 lines=132 bytes=11687
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)
+check: outputs saved to evidence/raw/real_fn_l
+exit=0
+--- D: absent pattern exit codes ---
+zgrep=1 grep=1 rg=1
+

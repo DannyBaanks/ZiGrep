@@ -1,0 +1,58 @@
+### B7-IL — synthetic corpus, RARE token (3 matches), full output  [INTERLEAVED]
+date: 2026-11-08T00:28:15-06:00
+corpus: bench-corpus/synthetic (2000 files, 131128199 bytes)
+load before: 4.11 8.50 7.70 2/2504 1566434
+
+bench: runs=10 warmup=3 corpus_bytes=131128199 nproc=12 loadavg=4.11 8.50 7.70 1/2504 1566435
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     21.961 |     20.437 |     23.813 |     22.007 |       0.979 |     5971.1 |     0 |
+| zgrep-memchr   |     22.663 |     21.068 |     24.437 |     22.567 |       0.994 |     5786.1 |     0 |
+| zgrep-j1       |     50.580 |     48.177 |     54.644 |     50.759 |       1.757 |     2592.5 |     0 |
+| grep           |     63.903 |     61.864 |     68.615 |     64.034 |       2.004 |     2052.0 |     0 |
+| rg             |     10.479 |      9.484 |     14.382 |     10.886 |       1.461 |    12514.0 |     0 |
+
+raw zgrep: 21550577 21972616 23813268 20841881 20437335 21948551 21792308 22175696 22985931 22551749
+raw zgrep-memchr: 21925878 21319614 21068345 22616449 22272096 22894941 22708712 22949622 23473543 24437164
+raw zgrep-j1: 50360987 49457989 48176964 50218792 54644377 49361139 50798807 51590157 51203073 51776355
+raw grep: 65027381 63685011 61864337 61979733 64511347 64120607 62122540 64967540 68615371 63449232
+raw rg: 9957770 10160218 11871097 10238595 10880896 9483503 9573230 10718452 14381893 11592987
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd grep grep -rnIF ZGREP_RARE_TOKEN bench-corpus/synthetic
+cmd rg rg -n -F --no-ignore --hidden ZGREP_RARE_TOKEN bench-corpus/synthetic
+json evidence/bench/b7_synth_rare_il.json (1978 bytes)
+exit=0
+
+### B8-IL — synthetic corpus, ABSENT token (all exit 1), full output  [INTERLEAVED]
+load before: 4.18 8.45 7.69 6/2507 1567002
+bench: runs=10 warmup=3 corpus_bytes=131128199 nproc=12 loadavg=4.18 8.45 7.69 3/2507 1567003
+
+bench: WARNING 'zgrep' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-memchr' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'zgrep-j1' exited 1 on warmup (first argv: /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep)
+bench: WARNING 'grep' exited 1 on warmup (first argv: grep)
+bench: WARNING 'rg' exited 1 on warmup (first argv: rg)
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     22.736 |     21.059 |     27.898 |     23.487 |       2.151 |     5767.3 |     1 |
+| zgrep-memchr   |     23.560 |     21.108 |     27.092 |     23.404 |       1.797 |     5565.8 |     1 |
+| zgrep-j1       |     48.516 |     47.105 |     51.656 |     48.803 |       1.534 |     2702.8 |     1 |
+| grep           |     63.089 |     61.292 |     64.793 |     63.071 |       1.193 |     2078.5 |     1 |
+| rg             |     11.108 |     10.152 |     12.114 |     11.235 |       0.758 |    11804.9 |     1 |
+
+raw zgrep: 21058807 22542492 22485967 23558211 22408992 21209099 27898076 24877719 25897005 22930177
+raw zgrep-memchr: 22536401 21554605 21721436 23799913 21108440 24170185 27092179 23412790 23706569 24940135
+raw zgrep-j1: 47222019 49915716 47643327 49014843 48875973 48155625 47763663 50677281 51656272 47105253
+raw grep: 62207440 63166874 61809667 61291859 63370696 64470273 63011063 64793126 62248137 64340060
+raw rg: 10735975 11964732 12112900 10151873 10513669 11466841 12114222 10749130 11923415 10615370
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_ABSENT_TOKEN bench-corpus/synthetic
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_ABSENT_TOKEN bench-corpus/synthetic
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_ABSENT_TOKEN bench-corpus/synthetic
+cmd grep grep -rnIF ZGREP_ABSENT_TOKEN bench-corpus/synthetic
+cmd rg rg -n -F --no-ignore --hidden ZGREP_ABSENT_TOKEN bench-corpus/synthetic
+json evidence/bench/b8_synth_absent_il.json (1993 bytes)
+exit=0
+load after: 4.18 8.45 7.69 4/2492 1567545

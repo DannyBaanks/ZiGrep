@@ -1,0 +1,163 @@
+### algo-mode correctness controls (bmh / memchr / auto must agree)
+date: 2026-11-08T00:17:37-06:00
+
+======== --algo=auto ========
+--- synthetic, planted, -r ---
+check: groups=2
+  zgrep-auto       exit=0 lines=195467 bytes=23367667
+  grep             exit=0 lines=195467 bytes=23367667
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, planted, -c ---
+check: groups=2
+  zgrep-auto       exit=0 lines=2000 bytes=96804
+  grep             exit=0 lines=2000 bytes=96804
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, rare, -r ---
+check: groups=2
+  zgrep-auto       exit=0 lines=3 bytes=302
+  grep             exit=0 lines=3 bytes=302
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, absent, -r (expect both exit 1) ---
+check: groups=2
+  zgrep-auto       exit=1 lines=0 bytes=0
+  grep             exit=1 lines=0 bytes=0
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, const, -r ---
+check: groups=2
+  zgrep-auto       exit=0 lines=4101 bytes=698095
+  grep             exit=0 lines=4101 bytes=698095
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, hostile_parasite (1 file), -r ---
+check: groups=2
+  zgrep-auto       exit=0 lines=1 bytes=118
+  grep             exit=0 lines=1 bytes=118
+pair zgrep-auto vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+
+======== --algo=bmh ========
+--- synthetic, planted, -r ---
+check: groups=2
+  zgrep-bmh        exit=0 lines=195467 bytes=23367667
+  grep             exit=0 lines=195467 bytes=23367667
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, planted, -c ---
+check: groups=2
+  zgrep-bmh        exit=0 lines=2000 bytes=96804
+  grep             exit=0 lines=2000 bytes=96804
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, rare, -r ---
+check: groups=2
+  zgrep-bmh        exit=0 lines=3 bytes=302
+  grep             exit=0 lines=3 bytes=302
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, absent, -r (expect both exit 1) ---
+check: groups=2
+  zgrep-bmh        exit=1 lines=0 bytes=0
+  grep             exit=1 lines=0 bytes=0
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, const, -r ---
+check: groups=2
+  zgrep-bmh        exit=0 lines=4101 bytes=698095
+  grep             exit=0 lines=4101 bytes=698095
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, hostile_parasite (1 file), -r ---
+check: groups=2
+  zgrep-bmh        exit=0 lines=1 bytes=118
+  grep             exit=0 lines=1 bytes=118
+pair zgrep-bmh vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+
+======== --algo=memchr ========
+--- synthetic, planted, -r ---
+check: groups=2
+  zgrep-memchr     exit=0 lines=195467 bytes=23367667
+  grep             exit=0 lines=195467 bytes=23367667
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, planted, -c ---
+check: groups=2
+  zgrep-memchr     exit=0 lines=2000 bytes=96804
+  grep             exit=0 lines=2000 bytes=96804
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, rare, -r ---
+check: groups=2
+  zgrep-memchr     exit=0 lines=3 bytes=302
+  grep             exit=0 lines=3 bytes=302
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- synthetic, absent, -r (expect both exit 1) ---
+check: groups=2
+  zgrep-memchr     exit=1 lines=0 bytes=0
+  grep             exit=1 lines=0 bytes=0
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, const, -r ---
+check: groups=2
+  zgrep-memchr     exit=0 lines=4101 bytes=698095
+  grep             exit=0 lines=4101 bytes=698095
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+--- real corpus, hostile_parasite (1 file), -r ---
+check: groups=2
+  zgrep-memchr     exit=0 lines=1 bytes=118
+  grep             exit=0 lines=1 bytes=118
+pair zgrep-memchr vs grep: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+
+### also: -j1 vs default output identity (thread count must not change bytes)
+check: groups=3
+  j1               exit=0 lines=195467 bytes=23367667
+  j12              exit=0 lines=195467 bytes=23367667
+  j2               exit=0 lines=195467 bytes=23367667
+pair j1 vs j12: raw=identical
+pair j1 vs j2: raw=identical
+pair j12 vs j2: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+check: groups=3
+  j1               exit=0 lines=195467 bytes=23367667
+  j12              exit=0 lines=195467 bytes=23367667
+  j2               exit=0 lines=195467 bytes=23367667
+pair j1 vs j12: raw=identical
+pair j1 vs j2: raw=identical
+pair j12 vs j2: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0
+check: groups=3
+  j1               exit=0 lines=195467 bytes=23367667
+  j12              exit=0 lines=195467 bytes=23367667
+  j2               exit=0 lines=195467 bytes=23367667
+pair j1 vs j12: raw=identical
+pair j1 vs j2: raw=identical
+pair j12 vs j2: raw=identical
+result: PASS (all pairs agree after sorting)
+exit=0

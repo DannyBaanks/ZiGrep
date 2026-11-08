@@ -1,0 +1,28 @@
+### B5 — synthetic corpus, PLANTED token (195467 matching lines, 23367667 bytes of output), full output
+date: 2026-11-08T00:20:53-06:00
+corpus: bench-corpus/synthetic (2000 files, 131128199 bytes)
+load before: 5.29 7.58 5.84 6/2491 1553672
+
+bench: runs=10 warmup=3 corpus_bytes=131128199 nproc=12 loadavg=5.29 7.58 5.84 3/2491 1553673
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     38.361 |     33.251 |     40.057 |     37.442 |       2.290 |     3418.3 |     0 |
+| zgrep-memchr   |     37.328 |     32.332 |     43.874 |     37.624 |       3.888 |     3512.8 |     0 |
+| zgrep-j1       |    104.138 |    102.087 |    108.528 |    104.612 |       2.018 |     1259.2 |     0 |
+| grep           |     26.174 |     24.865 |     26.762 |     25.951 |       0.663 |     5009.9 |     0 |
+| rg             |     16.496 |     15.882 |     17.394 |     16.515 |       0.519 |     7949.2 |     0 |
+
+raw zgrep: 38988339 38855282 34969542 39323272 39235820 40056537 33251326 36586150 37866442 35290329
+raw zgrep-memchr: 39424070 38056605 35169995 33428525 36600075 32332055 41908843 34371349 41076214 43874220
+raw zgrep-j1: 103507863 106813674 102838017 103108870 108527532 104027380 106344642 102087240 104248455 104615878
+raw grep: 24865174 25692042 25694708 26439403 26426339 26032787 26315021 24866657 26411391 26762334
+raw rg: 17393673 16883243 17099065 16122999 15881960 16764783 16605707 15917567 16096259 16385677
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --algo=memchr ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd grep grep -rnIF ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+cmd rg rg -n -F --no-ignore --hidden ZGREP_PLANTED_TOKEN bench-corpus/synthetic
+json evidence/bench/b5_synth_full.json (2011 bytes)
+exit=0
+load after: 5.29 7.58 5.84 2/2485 1554221

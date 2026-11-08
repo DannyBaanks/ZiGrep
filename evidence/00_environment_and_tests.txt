@@ -1,0 +1,29 @@
+### 00 — environment
+date: 2026-11-08T00:29:38-06:00
+host: Linux DannyISyCo 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+nproc: 12
+loadavg: 3.83 7.24 7.32 4/2569 1569174
+mem: MemTotal:       15570924 kB MemAvailable:    4623128 kB 
+zig: 0.16.0
+zig path: /home/danny/.local/bin/zig
+grep: grep (GNU grep) 3.11
+rg: ripgrep 14.1.0
+git: git version 2.43.0
+corpus real: /home/danny/Development/ISyCo/workspace/assembly files=5331 bytes=654899262
+corpus synth: bench-corpus/synthetic files=2000 bytes=131128199
+
+### 01 — unit tests
+Build Summary: 3/3 steps succeeded; 24/24 tests passed
+test success
++- run test 24 pass (24 total) 60ms MaxRSS:4M
+   +- compile test Debug native cached 15ms MaxRSS:37M
+
+test exit=0
+
+### zgrep --stats (real corpus, const, default)
+zgrep-stats: files=5331 bytes=402241343 matched_files=342 matched_lines=4101 errors=0 threads=12 elapsed_s=0.1543 throughput_MBps=2607.2
+stats exit=0
+
+### zgrep --stats (real corpus, const, --algo=memchr)
+zgrep-stats: files=5331 bytes=402241343 matched_files=342 matched_lines=4101 errors=0 threads=12 elapsed_s=0.0511 throughput_MBps=7873.1
+stats exit=0

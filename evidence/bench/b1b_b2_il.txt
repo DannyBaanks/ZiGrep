@@ -1,0 +1,56 @@
+### B1b-IL — real corpus, 'const', full output: algorithm x parallelism matrix  [INTERLEAVED]
+date: 2026-11-08T00:25:56-06:00
+corpus: /home/danny/Development/ISyCo/workspace/assembly (5331 files, 654899262 bytes)
+load before: 7.56 11.30 8.33 6/2514 1561016
+
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=7.56 11.30 8.33 2/2514 1561017
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| j1-auto        |    258.096 |    254.255 |    270.958 |    259.539 |       4.779 |     2537.4 |     0 |
+| j1-bmh         |    257.949 |    254.673 |    264.802 |    258.269 |       3.067 |     2538.9 |     0 |
+| j1-memchr      |     82.431 |     80.104 |     91.346 |     83.451 |       3.353 |     7944.8 |     0 |
+| j12-auto       |    105.198 |     89.349 |    120.456 |    103.692 |      10.166 |     6225.4 |     0 |
+| j12-bmh        |     98.782 |     92.544 |    127.877 |    100.786 |      10.426 |     6629.7 |     0 |
+| j12-memchr     |     44.118 |     40.584 |     49.907 |     44.209 |       2.479 |    14844.1 |     0 |
+
+raw j1-auto: 270958055 261312868 257837559 258132645 258060163 255111596 261327280 261845307 256547922 254254573
+raw j1-bmh: 264802068 256581308 256507534 259183607 258666857 254722454 257231041 260965369 259352903 254672713
+raw j1-memchr: 82654210 82208246 81539971 87188983 81268927 80103582 83269296 81712738 83216459 91346116
+raw j12-auto: 114027508 102490650 107906257 89348938 95091315 109339369 108893850 98005802 91361322 120455920
+raw j12-bmh: 93392156 92544253 95225352 102673927 100666887 127876885 96897822 103027863 92822452 102736822
+raw j12-memchr: 44128703 49907346 42548642 45526225 42482841 44250973 43225900 45324491 44107999 40584418
+cmd j1-auto /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 const /home/danny/Development/ISyCo/workspace/assembly
+cmd j1-bmh /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 --algo=bmh const /home/danny/Development/ISyCo/workspace/assembly
+cmd j1-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF -j1 --algo=memchr const /home/danny/Development/ISyCo/workspace/assembly
+cmd j12-auto /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --threads=12 const /home/danny/Development/ISyCo/workspace/assembly
+cmd j12-bmh /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --threads=12 --algo=bmh const /home/danny/Development/ISyCo/workspace/assembly
+cmd j12-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rnF --threads=12 --algo=memchr const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b1b_real_const_matrix_il.json (2694 bytes)
+exit=0
+
+### B2-IL — real corpus, pattern 'const', count mode (-c)  [INTERLEAVED]
+load before: 7.23 11.11 8.30 1/2531 1561738
+bench: runs=10 warmup=3 corpus_bytes=654899262 nproc=12 loadavg=6.89 10.97 8.27 2/2531 1561739
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     98.487 |     90.743 |    215.244 |    108.912 |      37.524 |     6649.6 |     0 |
+| zgrep-memchr   |     44.826 |     40.606 |     54.793 |     45.713 |       4.373 |    14609.8 |     0 |
+| zgrep-j1       |    259.064 |    255.699 |    271.071 |    260.313 |       4.584 |     2527.9 |     0 |
+| grep           |    291.452 |    283.792 |    313.407 |    293.667 |       9.181 |     2247.0 |     0 |
+| rg             |     60.572 |     53.363 |     68.101 |     60.716 |       3.848 |    10811.9 |     0 |
+
+raw zgrep: 98341387 101213675 91280140 90743137 98630723 96455912 215244454 98401829 100232510 98571248
+raw zgrep-memchr: 43539680 43941221 45711088 46385387 41124019 51053449 46510864 54793427 40606035 43467401
+raw zgrep-j1: 257366329 256429724 258445299 264584485 255698946 259903595 261679535 271070640 258268022 259682505
+raw grep: 286074584 285646018 283792461 294123940 288540605 313406560 291290973 291613819 302309951 299867654
+raw rg: 60030074 60219849 59626051 64440464 61135541 60924218 68100594 61456584 57861990 53362525
+cmd zgrep /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-memchr /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF --algo=memchr const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep-j1 /home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep -rcF -j1 const /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rcIF const /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -c -F --no-ignore --hidden --include-zero const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b2_real_const_count_il.json (2111 bytes)
+exit=0
+load after: 7.33 10.94 8.29 2/2542 1562403

@@ -1,0 +1,8 @@
+check: groups=3
+  zgrep            exit=0 lines=195467 bytes=23367667
+  grep             exit=0 lines=195467 bytes=23367667
+  rg               exit=0 lines=195467 bytes=23367667
+pair zgrep vs grep: raw=identical
+pair zgrep vs rg: raw=different sorted=identical
+pair grep vs rg: raw=different sorted=identical
+result: PASS (all pairs agree after sorting)

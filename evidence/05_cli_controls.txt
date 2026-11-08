@@ -1,0 +1,12 @@
+### 05 — CLI flag controls (zgrep vs GNU grep 3.11)
+date: 2026-11-08T00:42:04-06:00
+note: an earlier run of this control was overwritten in place (same path).
+      Its mismatches were harness bugs, not tool divergences:
+        (1) it passed the literal path 'T' instead of "$T" to grep, so grep
+            exited 2 with "No such file or directory";
+        (2) it used 'grep -rnaIF', where -I overrides -a, so grep skipped the
+            binary files that 'zgrep -a' correctly searched.
+      Both are corrected below.
+tree:
+  /tmp/opencode/cli_ctrl2/a.txt  (24 bytes, NUL bytes=0)
+  /tmp/opencode/cli_ctrl2/b.txt  (14 bytes, NUL bytes=0)
