@@ -14,6 +14,8 @@
 //! The engine is `Searcher`, a value that owns the precomputed table and is
 //! passed by pointer into the hot loop.
 const std = @import("std");
+const regex = @import("regex.zig");
+const Allocator = std.mem.Allocator;
 
 pub const Algo = enum { auto, bmh, memchr };
 
@@ -84,9 +86,22 @@ pub const byte_rank: [256]u8 = blk: {
     break :blk r;
 };
 
+pub const Kind = enum { literal, regex };
+
 pub const Searcher = struct {
     needle: []const u8,
     algo: Algo,
+    /// `.literal` (default, the original fast path) or `.regex` (lazy DFA).
+    kind: Kind = .literal,
+    /// Literal kinds only: `needle` is stored lower-cased and matched ASCII
+    /// case-insensitively.
+    icase: bool = false,
+    /// Literal kinds only: a match must be delimited by non-word bytes (-w).
+    word: bool = false,
+    prog: ?*const regex.Program = null,
+    /// Regex only: a required literal; lines are only handed to the DFA when
+    /// the literal occurs in them (the common case for code searches).
+    prefilter: ?*const Searcher = null,
     /// `skip[c]` = distance to advance the window when the byte at the last
     /// position of the window is `c`. Default is the pattern length.
     skip: [256]u32 = undefined,
@@ -130,17 +145,104 @@ pub const Searcher = struct {
         };
     }
 
-    /// First occurrence of the needle at or after `start`, or null.
+    /// First match at or after `start`, or null.
+    ///
+    /// Literal kinds return the exact offset of the occurrence. Regex returns
+    /// the start of the first matching *line* (`start` must be a line start);
+    /// callers only use the result to locate the line, so both are equivalent.
     /// An empty needle matches at `start` (grep semantics: matches every line).
     pub fn find(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        if (self.kind == .regex) return self.findRegex(hay, start);
+        if (self.word) return self.findWord(hay, start);
+        return self.findRaw(hay, start);
+    }
+
+    fn findRaw(self: *const Searcher, hay: []const u8, start: usize) ?usize {
         const n = self.needle.len;
         if (n == 0) return if (start <= hay.len) start else null;
         if (start >= hay.len or hay.len - start < n) return null;
+        if (self.icase) return self.findCi(hay, start);
         return switch (self.effectiveAlgo()) {
             .bmh => self.findBmh(hay, start),
             .memchr => self.findMemchr(hay, start),
             .auto => unreachable,
         };
+    }
+
+    fn isWordByte(c: u8) bool {
+        return std.ascii.isAlphanumeric(c) or c == '_';
+    }
+
+    fn findWord(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        var pos = start;
+        while (pos <= hay.len) {
+            const m = self.findRaw(hay, pos) orelse return null;
+            const end = m + self.needle.len;
+            const left_ok = m == 0 or !isWordByte(hay[m - 1]);
+            const right_ok = end >= hay.len or !isWordByte(hay[end]);
+            if (left_ok and right_ok) return m;
+            pos = m + 1;
+        }
+        return null;
+    }
+
+    /// Vectorised scan for `lower` (a lower-case byte) in either case.
+    fn scanCi(hay: []const u8, from: usize, lower: u8) ?usize {
+        var i = from;
+        const is_alpha = lower >= 'a' and lower <= 'z';
+        const V = @Vector(32, u8);
+        const want: V = @splat(lower);
+        const bit: V = @splat(0x20);
+        while (i + 32 <= hay.len) : (i += 32) {
+            const v: V = hay[i..][0..32].*;
+            const m = if (is_alpha) ((v | bit) == want) else (v == want);
+            const bits: u32 = @bitCast(m);
+            if (bits != 0) return i + @ctz(bits);
+        }
+        while (i < hay.len) : (i += 1) {
+            const c = hay[i];
+            if ((if (is_alpha) std.ascii.toLower(c) else c) == lower) return i;
+        }
+        return null;
+    }
+
+    fn findCi(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        const nd = self.needle; // lower-cased
+        const n = nd.len;
+        const roff = self.rarest_offset;
+        var p_idx = start + roff;
+        while (p_idx < hay.len) {
+            const p = scanCi(hay, p_idx, self.rarest_byte) orelse return null;
+            const cand = p - roff;
+            if (cand + n > hay.len) return null;
+            var ok = true;
+            for (nd, hay[cand .. cand + n]) |a, b| {
+                if (a != std.ascii.toLower(b)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) return cand;
+            p_idx = p + 1;
+        }
+        return null;
+    }
+
+    fn findRegex(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        const dfa = regex.threadDfa(self.prog.?) catch return null;
+        if (self.prefilter) |pf| {
+            var pos = start;
+            while (pos < hay.len) {
+                const m = pf.find(hay, pos) orelse return null;
+                const ls = if (std.mem.findScalarLast(u8, hay[pos..m], '\n')) |k| pos + k + 1 else pos;
+                const le = std.mem.findScalarPos(u8, hay, m, '\n') orelse hay.len;
+                if (dfa.firstMatchingLine(hay, ls, le) != null) return ls;
+                if (le >= hay.len) return null;
+                pos = le + 1;
+            }
+            return null;
+        }
+        return dfa.firstMatchingLine(hay, start, hay.len);
     }
 
     fn findBmh(self: *const Searcher, hay: []const u8, start: usize) ?usize {
@@ -177,6 +279,77 @@ pub const Searcher = struct {
         return null;
     }
 };
+
+pub const BuildOptions = struct {
+    algo: Algo = .auto,
+    /// Treat every pattern as a fixed string (-F).
+    fixed: bool = false,
+    icase: bool = false,
+    word: bool = false,
+};
+
+pub const BuildError = error{ BadRegex, OutOfMemory };
+
+/// Builds the right matcher for one or more patterns.
+///
+/// A single pattern that is a plain string (always true with -F, and for any
+/// regex without metacharacters) takes the original literal kernels, so the
+/// default cost of searching "const" is unchanged. Anything else compiles to a
+/// regex DFA. Allocations live for the life of the process.
+pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) BuildError!Searcher {
+    var arena_inst = std.heap.ArenaAllocator.init(gpa);
+    defer arena_inst.deinit();
+    const arena = arena_inst.allocator();
+
+    if (patterns.len == 1) {
+        const pure: ?[]const u8 = if (o.fixed)
+            patterns[0]
+        else blk: {
+            const n = try regex.parse(arena, patterns[0], .{});
+            break :blk try regex.asPureLiteral(arena, n);
+        };
+        if (pure) |lit| {
+            const text = try gpa.dupe(u8, lit);
+            if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+            if (o.icase) for (text) |*c| {
+                c.* = std.ascii.toLower(c.*);
+            };
+            var s = Searcher.init(text, o.algo);
+            s.icase = o.icase;
+            s.word = o.word;
+            return s;
+        }
+    }
+
+    const nodes = try arena.alloc(*regex.Node, patterns.len);
+    for (patterns, 0..) |p, idx| {
+        var n = if (o.fixed)
+            try regex.literalNode(arena, p, o.icase)
+        else
+            try regex.parse(arena, p, .{ .icase = o.icase });
+        if (o.word) n = try regex.wordWrap(arena, n);
+        nodes[idx] = n;
+    }
+    const root = try regex.altOf(arena, nodes);
+    const prog = try regex.compile(gpa, root);
+
+    var s = Searcher.init("", o.algo);
+    s.kind = .regex;
+    s.prog = prog;
+    s.icase = o.icase;
+    if (patterns.len == 1) {
+        if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
+            if (lit.len >= 3) {
+                const text = try gpa.dupe(u8, lit);
+                const pf = try gpa.create(Searcher);
+                pf.* = Searcher.init(text, o.algo);
+                pf.icase = o.icase;
+                s.prefilter = pf;
+            }
+        }
+    }
+    return s;
+}
 
 fn naiveFind(hay: []const u8, needle: []const u8, start: usize) ?usize {
     if (needle.len == 0) return if (start <= hay.len) start else null;
@@ -286,4 +459,32 @@ test "find: differential against naive for random haystacks" {
             }
         }
     }
+}
+
+test "build: plain string keeps the literal fast path, flags select kernels" {
+    const gpa = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    _ = a;
+    // build() allocations are process-lifetime; use page_allocator here.
+    const pa = std.heap.page_allocator;
+    const lit = try build(pa, &.{"const"}, .{});
+    try std.testing.expectEqual(Kind.literal, lit.kind);
+    const dotted = try build(pa, &.{"a\\.b"}, .{});
+    try std.testing.expectEqual(Kind.literal, dotted.kind);
+    try std.testing.expectEqualStrings("a.b", dotted.needle);
+    const ci = try build(pa, &.{"HeLLo"}, .{ .icase = true });
+    try std.testing.expectEqual(@as(?usize, 4), ci.find("say hello", 0));
+    try std.testing.expectEqual(@as(?usize, null), lit.find("say CONST", 0));
+    const wd = try build(pa, &.{"cat"}, .{ .word = true });
+    try std.testing.expectEqual(@as(?usize, null), wd.find("concatenate", 0));
+    try std.testing.expectEqual(@as(?usize, 2), wd.find("a cat", 0));
+    const re = try build(pa, &.{"fo+bar"}, .{});
+    try std.testing.expectEqual(Kind.regex, re.kind);
+    try std.testing.expectEqual(@as(?usize, 4), re.find("xxx\nfoobar\n", 0));
+    const multi = try build(pa, &.{ "zzz", "bar" }, .{ .fixed = true });
+    try std.testing.expectEqual(Kind.regex, multi.kind);
+    try std.testing.expectEqual(@as(?usize, 4), multi.find("foo\nbar\n", 0));
+    try std.testing.expectError(error.BadRegex, build(pa, &.{"a(b"}, .{}));
 }

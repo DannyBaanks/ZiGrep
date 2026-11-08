@@ -7,6 +7,7 @@ const std = @import("std");
 test {
     _ = @import("main.zig");
     _ = @import("search.zig");
+    _ = @import("regex.zig");
     _ = @import("walk.zig");
     _ = @import("scan.zig");
     _ = @import("kamikaze.zig");

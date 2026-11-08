@@ -201,3 +201,14 @@ zig run scripts/bench.zig -- --runs=10 --warmup=3 --bytes=654899262 \
 
 Todo lo crudo queda en `evidence/`; el resumen y la tabla de claims están en
 `evidence/REPORT.md`.
+
+## Regex, -i, -w, -e (2026-11-08)
+
+`zigrep PATTERN` ahora es regex (dialecto tipo `rg`): `. [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $`.
+Un patrón sin metacaracteres usa el kernel literal rápido de siempre. `-F` fuerza literal.
+
+- `-i` ignora mayúsculas (ASCII) · `-w` palabra completa · `-e P` (repetible) varios patrones.
+- No soportado (da error, nunca resultado incorrecto): `\b`, backreferences, lookaround.
+- Motor: NFA -> DFA perezoso por hilo (`src/regex.zig`), lineal, sin backtracking. Si el patrón
+  tiene un literal obligatorio (>=3 bytes) se usa como prefiltro y el DFA solo mira esas líneas.
+- Oráculo: `analysis/regex_oracle.py` compara conteos por archivo contra `grep -E` y `rg`.

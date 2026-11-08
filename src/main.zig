@@ -27,12 +27,16 @@ const Allocator = std.mem.Allocator;
 const version = "0.1.0";
 
 const usage =
-    \\zgrep — grep-compatible fixed-string search with concurrent kamikaze swarm, written in Zig
+    \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
     \\
     \\usage: zgrep [OPTIONS] PATTERN [PATH...]
     \\
     \\options:
-    \\  -F                fixed-string pattern (the only mode; kept for grep compat)
+    \\  -F                fixed-string pattern(s); without it PATTERN is a regex
+    \\  -E                extended regex (the default; kept for grep compat)
+    \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
+    \\  -i                ignore ASCII case
+    \\  -w                match whole words only
     \\  -r                recurse into directories (always on; kept for grep compat)
     \\  -n                print line numbers (always on; kept for grep compat)
     \\  -c                print only a count of matching lines per file
@@ -63,8 +67,10 @@ const usage =
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
-    \\patterns containing a newline are rejected (zgrep reports one line at a
-    \\time, like grep -F with a single pattern).
+    \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \\d \\w \\s * + ? {n,m} | ( ) ^ $
+    \\not supported (reported as an error): \\b, back-references, lookaround.
+    \\a plain string with no metacharacters takes the fast literal path.
+    \\patterns containing a newline are rejected.
     \\
     \\exit status: 0 match found, 1 no match, 2 error
     \\
@@ -93,6 +99,11 @@ pub const Options = struct {
     include_patterns: [32][]const u8 = undefined,
     include_patterns_count: usize = 0,
     skip_hidden: bool = false,
+    fixed: bool = false,
+    ignore_case: bool = false,
+    word: bool = false,
+    patterns: [16][]const u8 = undefined,
+    patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
     /// `parseArgs` itself never writes to a stream, which keeps it testable.
     fail: ?Failure = null,
@@ -310,6 +321,21 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 };
             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
                 opts.kamikaze = true;
+            } else if (std.mem.eql(u8, body, "ignore-case")) {
+                opts.ignore_case = true;
+            } else if (std.mem.eql(u8, body, "word-regexp")) {
+                opts.word = true;
+            } else if (std.mem.eql(u8, body, "fixed-strings")) {
+                opts.fixed = true;
+            } else if (std.mem.eql(u8, body, "extended-regexp")) {
+                // default dialect
+            } else if (std.mem.startsWith(u8, body, "regexp=")) {
+                if (opts.patterns_count >= opts.patterns.len) {
+                    opts.fail = .{ .what = "too many -e patterns (max 16)", .arg = a };
+                    return error.Usage;
+                }
+                opts.patterns[opts.patterns_count] = body["regexp=".len..];
+                opts.patterns_count += 1;
             } else if (std.mem.eql(u8, body, "no-hidden")) {
                 opts.skip_hidden = true;
             } else if (std.mem.eql(u8, body, "no-ignore")) {
@@ -366,7 +392,10 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 // Accepted no-ops: zgrep is always recursive, fixed-string
                 // and line-numbered, never follows symlinks, and already
                 // skips binary files the way `-I` asks for.
-                'r', 'F', 'n', 'I' => {},
+                'r', 'n', 'I', 'E', 'G' => {},
+                'F' => opts.fixed = true,
+                'i', 'y' => opts.ignore_case = true,
+                'w' => opts.word = true,
                 'k' => opts.kamikaze = true,
                 'c' => opts.mode = .count,
                 'l' => opts.mode = .files,
@@ -377,6 +406,24 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 'V' => {
                     std.debug.print("zgrep {s}\n", .{version});
                     std.process.exit(0);
+                },
+                'e' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    if (opts.patterns_count >= opts.patterns.len) {
+                        opts.fail = .{ .what = "too many -e patterns (max 16)", .arg = value };
+                        return error.Usage;
+                    }
+                    opts.patterns[opts.patterns_count] = value;
+                    opts.patterns_count += 1;
+                    ci = chars.len;
                 },
                 'j' => {
                     const rest = chars[ci + 1 ..];
@@ -402,6 +449,11 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
         }
     }
 
+    if (opts.patterns_count > 0) {
+        // Patterns came from -e: every positional is a path.
+        const ops: []const [:0]const u8 = if (pattern != null) args[pattern_idx..] else &.{};
+        return .{ .pattern = "", .operands = ops };
+    }
     const p = pattern orelse {
         opts.fail = .{ .what = "missing PATTERN", .arg = "" };
         return error.Usage;
@@ -435,9 +487,15 @@ pub fn main(init: std.process.Init) !void {
     const pattern = parsed.pattern;
     const operands = parsed.operands;
 
-    if (std.mem.indexOfScalar(u8, pattern, '\n') != null) {
-        std.debug.print("zgrep: patterns containing a newline are not supported\n", .{});
-        std.process.exit(2);
+    const pattern_list: []const []const u8 = if (opts.patterns_count > 0)
+        opts.patterns[0..opts.patterns_count]
+    else
+        @as([*]const []const u8, @ptrCast(&pattern))[0..1];
+    for (pattern_list) |pp| {
+        if (std.mem.indexOfScalar(u8, pp, '\n') != null) {
+            std.debug.print("zgrep: patterns containing a newline are not supported\n", .{});
+            std.process.exit(2);
+        }
     }
     if (operands.len == 0) {
         std.debug.print("{s}zgrep: no path\n", .{usage});
@@ -451,7 +509,21 @@ pub fn main(init: std.process.Init) !void {
 
     const t0 = nowMonotonicNs();
 
-    const searcher = search.Searcher.init(pattern, opts.algo);
+    const searcher = search.build(gpa, pattern_list, .{
+        .algo = opts.algo,
+        .fixed = opts.fixed,
+        .icase = opts.ignore_case,
+        .word = opts.word,
+    }) catch |e| switch (e) {
+        error.BadRegex => {
+            std.debug.print("zgrep: invalid regex: {s}\n", .{@import("regex.zig").last_error});
+            std.process.exit(2);
+        },
+        error.OutOfMemory => {
+            std.debug.print("zgrep: out of memory\n", .{});
+            std.process.exit(2);
+        },
+    };
     const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
     const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads) else cpu_count;
 
@@ -826,4 +898,16 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
     }
+}
+
+test "parseArgs: -i -w -e collect patterns and keep every positional as a path" {
+    const a = [_][:0]const u8{ "zgrep", "-iw", "-e", "foo", "-ebar", "dir1", "dir2" };
+    var o: Options = .{};
+    const p = try parseArgs(&a, &o);
+    try std.testing.expect(o.ignore_case and o.word and !o.fixed);
+    try std.testing.expectEqual(@as(usize, 2), o.patterns_count);
+    try std.testing.expectEqualStrings("foo", o.patterns[0]);
+    try std.testing.expectEqualStrings("bar", o.patterns[1]);
+    try std.testing.expectEqual(@as(usize, 2), p.operands.len);
+    try std.testing.expectEqualStrings("dir1", p.operands[0]);
 }
