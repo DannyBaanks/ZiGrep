@@ -24,21 +24,22 @@ zigrep --sort "pattern" .
 
 ---
 
-## 🚀 Benchmark Results (Head-to-Head)
+## 🚀 Benchmark Results (Head-to-Head: 10 Corridas Controladas)
 
-Measured on **Ubuntu 24.04 LTS (Kernel 7.0.0, 12 AMD/Intel CPUs, NVMe)**.  
-Every figure represents the **median of repeated runs after warm-up** with ground-truth verification against GNU grep 3.11 and ripgrep 14.1.0.
+Medido en **Ubuntu 24.04 LTS (Kernel 7.0.0, 12 AMD/Intel CPUs, NVMe)**.  
+Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometradas consecutivas tras 3 rondas de calentamiento previo** en orden intercalado y rotativo para neutralizar jitter de CPU. Verificación contra GNU grep 3.11 y ripgrep 14.1.0.
 
-| Workload / Benchmark Scenario | `zigrep` (Default Swarm) | `zigrep --sort` (Deterministic) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
-|---|---:|---:|---:|---:|---:|---:|
-| **Micro-dir (`src/`, 8 files)** | **1.43 ms** | 1.59 ms | 3.81 ms | 1.78 ms | **2.66× faster** | **1.24× faster** |
-| **Early-Exit `-q` (`src/`)** | **1.38 ms** | **1.33 ms** | 3.62 ms | 1.48 ms | **2.71× faster** | **1.11× faster** |
-| **Early-Exit `-q` ($HOME `~`)** | **7.72 ms** | 42.10 ms | 8.10 ms | 3.63 ms | **1.05× faster** | 2.12× slower |
-| **Assembly Corpus (670 MB, 5,338 files)** | **32.61 ms** | 41.09 ms | 66.15 ms | 415.51 ms | **2.03× faster** | **12.74× faster** |
-| **Monorepo Real (1.4 GB `CoEvoLang`)** | **29.40 ms** | 1.77 s | 49.40 ms | 4,878.99 ms | **1.68× faster** | **165.9× faster** |
-| **Regex Engine (`def\s+\w+\(` in 1.4 GB)** | **32.36 ms** | 1.82 s | 32.84 ms | 4,676.77 ms | **1.01× faster** | **144.5× faster** |
+| Escenario de Prueba | Tamaño / Archivos | `zigrep` (Default) | `zigrep --sort` (Ordenado) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
+|---|---|---:|---:|---:|---:|---:|---:|
+| **Micro-árbol (`corpus_50`)** | 50 archivos (1.6 MB) | **5.74 ms** | 6.76 ms | 7.95 ms | **3.92 ms** | **1.38× más rápido** | 1.46× más lento |
+| **Árbol medio (`corpus_1000`)** | 1,000 archivos (32.8 MB) | **9.03 ms** | 15.68 ms | 11.49 ms | 13.58 ms | **1.27× más rápido** | **1.50× más rápido** |
+| **Árbol sintético (`synthetic`)** | 2,000 archivos (131 MB) | **21.04 ms** | 27.24 ms | **18.57 ms** | 34.72 ms | 1.13× más lento | **1.65× más rápido** |
+| **Monorepo Real (`assembly`)** | 5,338 archivos (655 MB) | **26.72 ms** | **41.42 ms** | 62.92 ms | 343.61 ms | **2.35× más rápido** | **12.86× más rápido** |
+| **Monorepo Real (`CoEvoLang`)** | Árbol real (1.45 GB) | **21.71 ms** | 53.02 ms | **20.38 ms** | 2,146.80 ms | *Empate (~20 ms)* | **98.88× más rápido** |
+| **Regex Engine (`pub\s+fn\s+`)** | `assembly` (655 MB) | **25.93 ms** | **41.84 ms** | 61.08 ms | 333.46 ms | **2.35× más rápido** | **12.86× más rápido** |
+| **Early-Exit `-q` (Silencioso)** | `assembly` (655 MB) | **5.81 ms** | — | 4.99 ms | **2.23 ms** | ~A la par | 2.60× más lento |
 
-> *Full raw logs, environment parameters, and SHA-256 hashes are preserved in [`evidence/REPORT.md`](evidence/REPORT.md).*
+> *El reporte exhaustivo de las 10 corridas individuales, desviaciones estándar y datos crudos está en [`PRUEBAS.md`](PRUEBAS.md). Los logs completos y hashes SHA-256 están en [`evidence/REPORT.md`](evidence/REPORT.md).*
 
 ---
 
