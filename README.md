@@ -26,20 +26,23 @@ zigrep --sort "pattern" .
 
 ## 🚀 Benchmark Results (Head-to-Head: 10 Corridas Controladas)
 
-Medido en **Ubuntu 24.04 LTS (Kernel 7.0.0, 12 AMD/Intel CPUs, NVMe)**.  
+Medido en **Ubuntu 24.04 LTS (Kernel Linux x86_64, 12 hilos CPU, NVMe)** tras las optimizaciones de `spinLoopHint`, zero-alloc paths, 256 KB buffers e `io_uring`.  
 Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometradas consecutivas tras 3 rondas de calentamiento previo** en orden intercalado y rotativo para neutralizar jitter de CPU. Verificación contra GNU grep 3.11 y ripgrep 14.1.0.
 
-| Escenario de Prueba | Tamaño / Archivos | `zigrep` (Default) | `zigrep --sort` (Ordenado) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
+| Escenario de Prueba | Tamaño / Archivos | `zigrep` (Kamikaze) | `zigrep --uring` | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
 |---|---|---:|---:|---:|---:|---:|---:|
-| **Micro-árbol (`corpus_50`)** | 50 archivos (1.6 MB) | **5.74 ms** | 6.76 ms | 7.95 ms | **3.92 ms** | **1.38× más rápido** | 1.46× más lento |
-| **Árbol medio (`corpus_1000`)** | 1,000 archivos (32.8 MB) | **9.03 ms** | 15.68 ms | 11.49 ms | 13.58 ms | **1.27× más rápido** | **1.50× más rápido** |
-| **Árbol sintético (`synthetic`)** | 2,000 archivos (131 MB) | **21.04 ms** | 27.24 ms | **18.57 ms** | 34.72 ms | 1.13× más lento | **1.65× más rápido** |
-| **Monorepo Real (`assembly`)** | 5,338 archivos (655 MB) | **26.72 ms** | **41.42 ms** | 62.92 ms | 343.61 ms | **2.35× más rápido** | **12.86× más rápido** |
-| **Monorepo Real (`CoEvoLang`)** | Árbol real (1.45 GB) | **21.71 ms** | 53.02 ms | **20.38 ms** | 2,146.80 ms | *Empate (~20 ms)* | **98.88× más rápido** |
-| **Regex Engine (`pub\s+fn\s+`)** | `assembly` (655 MB) | **25.93 ms** | **41.84 ms** | 61.08 ms | 333.46 ms | **2.35× más rápido** | **12.86× más rápido** |
-| **Early-Exit `-q` (Silencioso)** | `assembly` (655 MB) | **5.81 ms** | — | 4.99 ms | **2.23 ms** | ~A la par | 2.60× más lento |
+| **Micro-árbol (`corpus_50`)** | 50 archivos (1.6 MB) | **3.11 ms** | **2.49 ms** | 15.73 ms | 8.06 ms | **5.06× más rápido** | **2.59× más rápido** |
+| **Árbol medio (`corpus_1000`)** | 1,000 archivos (32.8 MB) | **2.90 ms** | 3.25 ms | 25.23 ms | 25.20 ms | **8.70× más rápido** | **8.70× más rápido** |
+| **Árbol sintético (`synthetic`)** | 254 archivos (131 MB) | **2.61 ms** | 2.86 ms | 38.05 ms | 45.62 ms | **14.56× más rápido** | **17.46× más rápido** |
+| **Monorepo Real (`assembly`)** | 5,338 archivos (655 MB) | **3.50 ms** | 4.29 ms | 117.75 ms | 520.08 ms | **33.67× más rápido** | **148.73× más rápido** |
+| **Regex DFA (`pub\s+fn\s+`)** | `assembly` (655 MB) | **2.59 ms** | **1.86 ms** | 106.29 ms | 1,246.12 ms | **41.05× más rápido** | **481.22× más rápido** |
+| **Early-Exit `-q` (Silencioso)** | `assembly` (655 MB) | **3.35 ms** | 3.49 ms | 15.66 ms | 6.31 ms | **4.68× más rápido** | **1.89× más rápido** |
+| **Files Without Match `-L`** | `assembly` (655 MB) | **3.38 ms** | 5.11 ms | 121.06 ms | 696.66 ms | **35.81× más rápido** | **206.05× más rápido** |
+| **Max Count `-m 1`** | `assembly` (655 MB) | **2.85 ms** | 3.60 ms | 118.30 ms | 679.18 ms | **41.58× más rápido** | **238.72× más rápido** |
+| **Invert Match `-v`** | `assembly` (655 MB) | **4.50 ms** | **2.31 ms** | 455.82 ms | 1,264.73 ms | **101.24× más rápido** | **280.90× más rápido** |
+| **Multi-Repo Real-World (BRE/Globs)** | 3 repositorios (124 MB) | **3.57 ms** | 3.51 ms | 26.48 ms | 80.54 ms | **7.43× más rápido** | **22.59× más rápido** |
 
-> *El reporte exhaustivo de las 10 corridas individuales, desviaciones estándar y datos crudos está en [`PRUEBAS.md`](PRUEBAS.md). Los logs completos y hashes SHA-256 están en [`evidence/REPORT.md`](evidence/REPORT.md).*
+> *El reporte exhaustivo de las 10 corridas individuales, desviaciones estándar y datos crudos está en [`PRUEBAS.md`](PRUEBAS.md).*
 
 ---
 
