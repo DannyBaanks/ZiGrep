@@ -23,6 +23,8 @@ const search = @import("search.zig");
 const scan = @import("scan.zig");
 pub const filter = @import("filter.zig");
 pub const FilterEngine = filter.FilterEngine;
+pub const nav = @import("nav.zig");
+pub const NavPlan = nav.NavPlan;
 
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
@@ -63,9 +65,15 @@ pub const SpinLock = struct {
     }
 };
 
+/// A directory scheduled for exploration by a Scout worker.
+pub const DirTask = struct {
+    path: [:0]const u8,
+    depth: usize = 0,
+};
+
 /// Concurrent WorkPool coordinating both Directory Scouting and File Scanning.
 pub const WorkPool = struct {
-    dir_queue: std.ArrayList([:0]const u8) = .empty,
+    dir_queue: std.ArrayList(DirTask) = .empty,
     batch_queue: std.ArrayList(DirectoryBatch) = .empty,
     dirs_in_flight: usize = 0,
     batches_in_flight: usize = 0,
@@ -80,7 +88,7 @@ pub const WorkPool = struct {
     pub fn deinit(self: *WorkPool) void {
         self.lock.lock();
         defer self.lock.unlock();
-        for (self.dir_queue.items) |d| self.gpa.free(d);
+        for (self.dir_queue.items) |d| self.gpa.free(d.path);
         self.dir_queue.deinit(self.gpa);
         for (self.batch_queue.items) |b| {
             self.gpa.free(b.dir_path);
@@ -98,7 +106,7 @@ pub const WorkPool = struct {
         self.lock.lock();
         defer self.lock.unlock();
         const copy = try self.gpa.dupeZ(u8, root);
-        try self.dir_queue.append(self.gpa, copy);
+        try self.dir_queue.append(self.gpa, .{ .path = copy, .depth = 0 });
         self.dirs_in_flight += 1;
     }
 
@@ -134,7 +142,7 @@ pub const WorkPool = struct {
         }
     }
 
-    pub fn popDir(self: *WorkPool) ?[:0]const u8 {
+    pub fn popDir(self: *WorkPool) ?DirTask {
         self.lock.lock();
         defer self.lock.unlock();
         if (self.aborted.load(.acquire)) return null;
@@ -156,6 +164,7 @@ pub const WorkPool = struct {
         self: *WorkPool,
         batch: ?DirectoryBatch,
         subdirs: []const [:0]const u8,
+        depth: usize,
     ) Allocator.Error!void {
         self.lock.lock();
         defer self.lock.unlock();
@@ -174,9 +183,9 @@ pub const WorkPool = struct {
             self.batches_in_flight += 1;
         }
 
-        if (subdirs.len > 0) {
-            try self.dir_queue.appendSlice(self.gpa, subdirs);
-            self.dirs_in_flight += subdirs.len;
+        for (subdirs) |sd| {
+            try self.dir_queue.append(self.gpa, .{ .path = sd, .depth = depth + 1 });
+            self.dirs_in_flight += 1;
         }
     }
 
@@ -205,6 +214,7 @@ pub const KamikazeContext = struct {
     pool: *WorkPool,
     searcher: *const Searcher,
     filter: *const FilterEngine,
+    nav_plan: nav.NavPlan = .{},
     mode: Mode,
     binary: bool,
     show_path: bool,
@@ -228,6 +238,7 @@ fn flushToStdout(bytes: []const u8) void {
 fn scoutDirConcurrent(
     ctx: *KamikazeContext,
     dir: [:0]const u8,
+    depth: usize,
 ) Allocator.Error!void {
     if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
     if (ctx.pool.aborted.load(.acquire)) return;
@@ -256,6 +267,9 @@ fn scoutDirConcurrent(
         files.deinit(ctx.gpa);
     }
 
+    const scan_files = ctx.nav_plan.shouldScanFiles(depth);
+    const recurse_subdirs = ctx.nav_plan.shouldRecurseSubdirs(depth);
+
     var buf: [32 * 1024]u8 = undefined;
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
@@ -282,10 +296,12 @@ fn scoutDirConcurrent(
 
             const kind = ent.type;
             if (kind == linux.DT.DIR) {
+                if (!recurse_subdirs) continue;
                 if (ctx.filter.isDirExcluded(name)) continue;
                 const child = try joinPathSentinel(ctx.gpa, dir, name);
                 try subdirs.append(ctx.gpa, child);
             } else if (kind == linux.DT.REG) {
+                if (!scan_files) continue;
                 if (ctx.filter.isFileExcluded(name)) continue;
                 const child_name = try ctx.gpa.dupeZ(u8, name);
                 try files.append(ctx.gpa, child_name);
@@ -296,12 +312,12 @@ fn scoutDirConcurrent(
                 if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true }, &stx)) == .SUCCESS) {
                     const m = stx.mode & linux.S.IFMT;
                     if (m == linux.S.IFDIR) {
-                        if (!ctx.filter.isDirExcluded(name)) {
+                        if (recurse_subdirs and !ctx.filter.isDirExcluded(name)) {
                             const child = try ctx.gpa.dupeZ(u8, full_p);
                             try subdirs.append(ctx.gpa, child);
                         }
                     } else if (m == linux.S.IFREG) {
-                        if (!ctx.filter.isFileExcluded(name)) {
+                        if (scan_files and !ctx.filter.isFileExcluded(name)) {
                             const child_name = try ctx.gpa.dupeZ(u8, name);
                             try files.append(ctx.gpa, child_name);
                         }
@@ -309,6 +325,10 @@ fn scoutDirConcurrent(
                 }
             }
         }
+    }
+
+    if (ctx.nav_plan.reverse_siblings and files.items.len > 1) {
+        std.mem.reverse([:0]const u8, files.items);
     }
 
     var batch: ?DirectoryBatch = null;
@@ -320,7 +340,7 @@ fn scoutDirConcurrent(
         };
     }
 
-    try ctx.pool.pushScoutResults(batch, subdirs.items);
+    try ctx.pool.pushScoutResults(batch, subdirs.items, depth);
     subdirs.deinit(ctx.gpa);
 }
 
@@ -407,10 +427,10 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
         }
 
         // 2. Try to pop a directory (Scout next directory)
-        if (ctx.pool.popDir()) |dir| {
-            scoutDirConcurrent(ctx, dir) catch {};
+        if (ctx.pool.popDir()) |task| {
+            scoutDirConcurrent(ctx, task.path, task.depth) catch {};
             ctx.pool.finishDir();
-            ctx.gpa.free(dir);
+            ctx.gpa.free(task.path);
             continue;
         }
 
@@ -526,6 +546,7 @@ pub fn runKamikazePipeline(
     searcher: *const Searcher,
     roots: []const [:0]const u8,
     filter_engine: *const FilterEngine,
+    nav_plan: nav.NavPlan,
     mode: Mode,
     binary: bool,
     show_path: bool,
@@ -533,7 +554,7 @@ pub fn runKamikazePipeline(
     stats: *KamikazeStats,
 ) !bool {
     // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
-    if (roots.len == 1 and threads_count > 1) {
+    if (roots.len == 1 and threads_count > 1 and nav_plan.len == 0) {
         const root = roots[0];
         var stx: linux.Statx = undefined;
         if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
@@ -557,6 +578,7 @@ pub fn runKamikazePipeline(
         .pool = &pool,
         .searcher = searcher,
         .filter = filter_engine,
+        .nav_plan = nav_plan,
         .mode = mode,
         .binary = binary,
         .show_path = show_path,
@@ -624,7 +646,7 @@ test "WorkPool lifecycle and termination" {
 
     const r = pool.popDir();
     try std.testing.expect(r != null);
-    try std.testing.expectEqualStrings("root_dir", r.?);
+    try std.testing.expectEqualStrings("root_dir", r.?.path);
 
     const sub1 = try gpa.dupeZ(u8, "root_dir/sub1");
     const sub2 = try gpa.dupeZ(u8, "root_dir/sub2");
@@ -633,14 +655,14 @@ test "WorkPool lifecycle and termination" {
     const batch_files = try gpa.alloc([:0]const u8, 1);
     batch_files[0] = try gpa.dupeZ(u8, "file1.txt");
     const batch = DirectoryBatch{
-        .dir_path = try gpa.dupeZ(u8, r.?),
+        .dir_path = try gpa.dupeZ(u8, r.?.path),
         .file_names = batch_files,
         .batch_idx = 0,
     };
 
-    try pool.pushScoutResults(batch, &subdirs);
+    try pool.pushScoutResults(batch, &subdirs, 0);
     pool.finishDir();
-    gpa.free(r.?);
+    gpa.free(r.?.path);
 
     try std.testing.expect(!pool.isDone());
 
@@ -657,14 +679,14 @@ test "WorkPool lifecycle and termination" {
     // Pop and finish subdirs
     const d1 = pool.popDir();
     try std.testing.expect(d1 != null);
-    gpa.free(d1.?);
+    gpa.free(d1.?.path);
     pool.finishDir();
 
     try std.testing.expect(!pool.isDone());
 
     const d2 = pool.popDir();
     try std.testing.expect(d2 != null);
-    gpa.free(d2.?);
+    gpa.free(d2.?.path);
     pool.finishDir();
 
     // Now all queues are empty and everything in flight is finished

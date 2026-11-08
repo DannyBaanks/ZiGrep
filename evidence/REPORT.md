@@ -590,4 +590,28 @@ Following community analysis (Argon Defects #1-#5), `zigrep` integrated:
 4. **UTF-16 BOM Transparent Decoding**: Automatically detects Little-Endian (`0xFF 0xFE`) and Big-Endian (`0xFE 0xFF`) Byte Order Marks and decodes text transparently without binary false-positives.
 5. **Cross-Platform VFS Layer**: Isolated in `src/vfs.zig` with zero-syscall libc bypass on Linux (`linux.getdents64`) and structured platform hooks for Windows and Darwin/BSD.
 
+### 10.3 Befunge 2D Vector Scout Navigation & Topological Ticket Pruning
+
+1. **Befunge 2D Vector Scout Navigation (`-m`, `--nav`, `--befunge SPEC`)**:
+   Directory trees are structured as a 2D Cartesian grid ($X$ = sibling directory entries, $Y$ = filesystem tree depth). Navigation bytecode tokens:
+   * `v` / `d` (down): descend `openat` into child subdirectories.
+   * `^` / `u` (up): ascend / prune subtree traversal.
+   * `>` / `r` (right): natural forward sibling ordering ($0 \to N$).
+   * `<` / `l` (left): reverse sibling ordering ($N \to 0$).
+   * **Contraposition Combos**:
+     * `v^` / `du` (**Depth Ceiling**): Scans depth 0 root files and immediately bounces child subdirectories without descending.
+     * `^v` / `ud` (**Trampoline / Leapfrog**): Skips root files entirely and dives straight into child subdirectories.
+
+2. **Topological Ticket Pruning ("Poda en Decremento")**:
+   When ordering output (`--sort`), ripgrep stalls worker threads and buffers all output lines across gigabytes of memory to sort them at the end. `ZiGrep` implements a speculative order-preserving streaming pipeline:
+   * The Scout assigns monotonic ticket IDs ($0, 1, 2, \dots$) as files are found during `getdents64` directory sweeps.
+   * Workers scan file batches independently in parallel.
+   * Files yielding zero matches are pruned with a single atomic memory write (`ready = true, matched = false`), eliminating output buffer retention for the >95% of non-matching files.
+   * The emission cursor sweeps through the sliding window at bus speed, streaming results in exact ticket order without latency stalls.
+
+3. **Pure Zig Test Suite & CI Verification**:
+   * **Unit Tests**: 44/44 tests passing (`src/nav.zig`, `src/filter.zig`, `src/vfs.zig`, `src/regex.zig`, `src/search.zig`, `src/kamikaze.zig`).
+   * **Differential Oracle (`zig build oracle`)**: 19/19 test cases passing against GNU grep and ripgrep.
+
+
 

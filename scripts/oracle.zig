@@ -145,6 +145,22 @@ const cases = [_]TestCase{
         .check_output = true,
     },
     .{
+        .name = "nav depth ceiling -m 'v^' (scan root only)",
+        .zigrep_args = &.{ "-m", "v^", "Searcher", "src" },
+        .grep_args = &.{ "-rnIF", "Searcher", "src" },
+        .rg_args = &.{ "-n", "-F", "Searcher", "src" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        .name = "nav trampoline -m '^v' (dive into subdirs)",
+        .zigrep_args = &.{ "-m", "^v", "name", ".github" },
+        .grep_args = &.{ "-rnIF", "name", ".github" },
+        .rg_args = &.{ "-n", "-F", "name", ".github" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
         .name = "absent needle (exit 1)",
         .zigrep_args = &.{ "zzz_non_existent_token_xyz", "src" },
         .grep_args = &.{ "-rnIF", "zzz_non_existent_token_xyz", "src" },

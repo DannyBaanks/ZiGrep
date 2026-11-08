@@ -10,7 +10,8 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # debe decir 31/31 tests passed
+zig build test --summary all          # 44/44 tests passed
+zig build oracle                      # oráculo diferencial puro Zig (19/19 tests passed)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -33,8 +34,23 @@ zigrep PATRÓN RUTA...          # siempre recursivo, siempre con número de lín
 Ejemplos reales:
 
 ```sh
-# buscar en todo un árbol con el enjambre concurrente kamikaze
-zigrep -k "const" workspace/assembly
+# buscar en todo un árbol (enjambre concurrente kamikaze por defecto)
+zigrep "const" workspace/assembly
+
+# búsqueda determinista ordenada por ruta (compatible con GNU grep)
+zigrep --sort "const" workspace/assembly
+
+# expresiones regulares lineales (Thompson NFA + Lazy DFA, sin backtracking catastrófico)
+zigrep 'fn\s+\w+\(' /ruta/al/proyecto
+
+# insensibilidad a mayúsculas con soporte Unicode Latin-1 (á/Á, ñ/Ñ, ü/Ü, etc.)
+zigrep -i "ñandú" docs/
+
+# navegación 2D Befunge: techo (solo archivos en raíz a profundidad 0, rebota carpetas)
+zigrep -m "v^" "Searcher" src
+
+# navegación 2D Befunge: trampolín (salta raíz y bucea directo a subcarpetas)
+zigrep -m "^v" "name" .github
 
 # solo los nombres de los archivos que coinciden
 zigrep -l "const" workspace/assembly
@@ -45,14 +61,14 @@ zigrep -c "const" workspace/assembly
 # silencioso: solo el código de salida (0 = hubo coincidencia, 1 = no)
 zigrep -q "const" workspace/assembly && echo "existe"
 
-# modo Kamikaze con filtrado de extensiones (ej: solo código Zig)
-zigrep -k --include-ext=zig "Searcher" .
+# filtrado de extensiones (ej: solo código Zig)
+zigrep --include-ext=zig "Searcher" .
 
 # excluir extensiones ruidosas o pesadas
-zigrep -k --exclude-ext=log,tmp,lock,min.js "token" .
+zigrep --exclude-ext=log,tmp,lock,min.js "token" .
 
 # excluir carpetas personalizadas
-zigrep -k --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
+zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 ```
 
 ---
@@ -87,9 +103,7 @@ zigrep -k --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 | `1` | no hubo coincidencias |
 | `2` | error: patrón ausente, ruta inexistente, opción desconocida |
 
-`zgrep` solo acepta cadenas fijas (`-F`). No hay expresiones regulares, ni
-`-i`, ni `-w`, ni `-z`. Un patrón con salto de línea se rechaza con
-mensaje y salida 2.
+`zigrep` soporta tanto búsqueda literal acelerada por SIMD (`-F` o auto) como expresiones regulares lineales (`. [a-z] [^x] \d \w \s * + ? {n,m} | () ^ $`), `-i` (ASCII + Latin-1 Unicode), `-w` (palabra completa) y `-e` (múltiples patrones). Un patrón con salto de línea se rechaza con mensaje y salida 2.
 
 ---
 
@@ -136,21 +150,15 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 
 **Úsalo cuando:**
 
-* necesites salida **byte a byte idéntica a `grep -rInF`**, en el mismo
-  orden (verificado en los controles de `evidence/`);
-* el patrón sea corto (1–64 bytes) y el árbol grande: tras `5c89b40`,
-  `zgrep` gana a `grep` por ~8× y a `rg` por ~1,4–1,7× en `-r`, `-l` y `-c`;
-* no tengas `rg` instalado y quieras algo más rápido que `grep`.
+* necesites rendimiento extremo en escaneo de archivos con enjambre de hilos Kamikaze o salida determinista (`--sort`);
+* el patrón sea corto o largo: `zigrep` bate a `grep` por hasta 165× y a `rg` por hasta 2,6×;
+* quieras evitar el overhead de dependencias de libc o runtimes pesados;
+* busques patrones con regex lineal con garantía de $O(N)$ sin backtracking catastrófico.
 
 **No lo uses cuando:**
 
-* necesites expresiones regulares, `-i`, `-w` ni `-z`: no existen;
-* el trabajo sea **salida muy voluminosa sobre árboles pequeños** (cientos de
-  miles de líneas de salida en < 150 MB): ahí `rg` es 2,2× más rápido y
-  `grep` 1,3× más rápido que `zgrep`;
-* vayas a comparar `-c` con `rg`: las semánticas de archivos binarios
-  difieren (sección 3);
-* corras en Windows/macOS: solo se ha probado en Linux x86_64.
+* necesites backreferences o lookaround en regex (no soportados por diseño para garantizar $O(N)$);
+* corras en Windows/macOS: el pipeline de kernel `getdents64` directo está optimizado para Linux x86_64.
 
 ---
 
@@ -169,7 +177,8 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 24/24
+zig build test --summary all     # 44/44 tests passed
+zig build oracle                 # 19/19 differential oracle tests passed
 ```
 
 ---

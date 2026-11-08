@@ -19,6 +19,7 @@ const walk = @import("walk.zig");
 const scan = @import("scan.zig");
 const kamikaze = @import("kamikaze.zig");
 const filter = @import("filter.zig");
+const nav = @import("nav.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -35,7 +36,7 @@ const usage =
     \\  -F                fixed-string pattern(s); without it PATTERN is a regex
     \\  -E                extended regex (the default; kept for grep compat)
     \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
-    \\  -i                ignore ASCII case
+    \\  -i                ignore case (ASCII + Latin-1 Unicode)
     \\  -w                match whole words only
     \\  -r                recurse into directories (always on; kept for grep compat)
     \\  -n                print line numbers (always on; kept for grep compat)
@@ -50,6 +51,8 @@ const usage =
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
     \\      --sort, --deterministic
     \\                    emit results in deterministic order by path (disables streaming)
+    \\  -m, --nav SPEC    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+    \\                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
     \\      --exclude-dir=DIR
     \\                    skip directory matching DIR (comma-separated or globs)
     \\      --exclude-ext=EXT
@@ -89,6 +92,7 @@ pub const Options = struct {
     binary: bool = false,
     kamikaze: bool = true,
     sort: bool = false,
+    nav_plan: nav.NavPlan = .{},
     no_ignore: bool = false,
     no_default_ignore: bool = false,
     exclude_dirs: [32][]const u8 = undefined,
@@ -328,6 +332,25 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
                 opts.sort = true;
                 opts.kamikaze = false;
+            } else if (std.mem.startsWith(u8, body, "nav=") or std.mem.startsWith(u8, body, "befunge=")) {
+                const spec = if (std.mem.startsWith(u8, body, "nav="))
+                    body["nav=".len..]
+                else
+                    body["befunge=".len..];
+                opts.nav_plan = nav.NavPlan.parse(spec) catch {
+                    opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = spec };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "nav") or std.mem.eql(u8, body, "befunge")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.nav_plan = nav.NavPlan.parse(args[i]) catch {
+                    opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = args[i] };
+                    return error.Usage;
+                };
             } else if (std.mem.eql(u8, body, "ignore-case")) {
                 opts.ignore_case = true;
             } else if (std.mem.eql(u8, body, "word-regexp")) {
@@ -403,6 +426,22 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
                 'w' => opts.word = true,
+                'm' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.nav_plan = nav.NavPlan.parse(value) catch {
+                        opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = value };
+                        return error.Usage;
+                    };
+                    ci = chars.len;
+                },
                 'k' => {
                     opts.kamikaze = true;
                     opts.sort = false;
@@ -595,6 +634,7 @@ pub fn main(init: std.process.Init) !void {
             &searcher,
             valid_operands.items,
             &filter_engine,
+            opts.nav_plan,
             opts.mode,
             opts.binary,
             show_path,
@@ -670,7 +710,7 @@ pub fn main(init: std.process.Init) !void {
         _ = linux.statx(linux.AT.FDCWD, op, 0, .{ .TYPE = true }, &stx);
         const m = stx.mode & linux.S.IFMT;
         if (m == linux.S.IFDIR) {
-            walk.walk(arena, &.{op}, &files, &filter_engine) catch |err| {
+            walk.walk(arena, &.{op}, &files, &filter_engine, opts.nav_plan) catch |err| {
                 std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
                 had_error = true;
             };
@@ -952,6 +992,20 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         _ = try parseArgs(&a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.nav_plan.has_trampoline);
+        try std.testing.expect(!o.nav_plan.has_ceiling);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.nav_plan.has_ceiling);
+        try std.testing.expect(!o.nav_plan.has_trampoline);
     }
     {
         var o: Options = .{};

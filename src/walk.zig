@@ -11,6 +11,8 @@ const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const filter = @import("filter.zig");
 const FilterEngine = filter.FilterEngine;
+const nav = @import("nav.zig");
+const NavPlan = nav.NavPlan;
 
 /// Hard guard against pathological trees. Deeper than this is reported as an
 /// error rather than risking a stack overflow in the recursive descent.
@@ -33,18 +35,25 @@ pub const Item = struct {
     pub fn lessThan(_: void, a: Item, b: Item) bool {
         return std.mem.order(u8, a.path, b.path) == .lt;
     }
+
+    pub fn greaterThan(_: void, a: Item, b: Item) bool {
+        return std.mem.order(u8, a.path, b.path) == .gt;
+    }
 };
 
 /// Appends every regular file reachable from `roots` to `out`.
 /// If `filter_engine` is provided, noisy directories (.git, node_modules, etc.)
 /// and ignored files are pruned immediately during getdents64 scanning.
+/// If `nav_plan` is provided, Befunge 2D vector instructions (^, v, >, <, ^v, v^)
+/// control depth scanning, trampoline skips, and sibling ordering.
 pub fn walk(
     gpa: Allocator,
     roots: []const [:0]const u8,
     out: *std.ArrayList([:0]const u8),
     filter_engine: ?*const FilterEngine,
+    nav_plan: ?NavPlan,
 ) Error!void {
-    for (roots) |root| try walkOne(gpa, root, out, 0, filter_engine);
+    for (roots) |root| try walkOne(gpa, root, out, 0, filter_engine, nav_plan);
 }
 
 fn childPath(gpa: Allocator, dir: [:0]const u8, name: []const u8) Allocator.Error![:0]const u8 {
@@ -60,6 +69,7 @@ fn walkOne(
     out: *std.ArrayList([:0]const u8),
     depth: usize,
     filter_engine: ?*const FilterEngine,
+    nav_plan: ?NavPlan,
 ) Error!void {
     if (depth > max_depth) return error.TooDeep;
 
@@ -81,6 +91,9 @@ fn walkOne(
 
     const buf = try gpa.alloc(u8, dirent_buffer_bytes);
     defer gpa.free(buf);
+
+    const scan_files = if (nav_plan) |np| np.shouldScanFiles(depth) else true;
+    const recurse_subdirs = if (nav_plan) |np| np.shouldRecurseSubdirs(depth) else true;
 
     while (true) {
         const n = linux.getdents64(fd, buf.ptr, buf.len);
@@ -105,6 +118,7 @@ fn walkOne(
 
             var kind: u8 = ent.type;
             if (kind == linux.DT.DIR) {
+                if (!recurse_subdirs) continue;
                 if (filter_engine) |fe| {
                     if (fe.isDirExcluded(name)) continue;
                 }
@@ -112,6 +126,7 @@ fn walkOne(
                 try items.append(gpa, .{ .path = child, .kind = kind });
                 continue;
             } else if (kind == linux.DT.REG) {
+                if (!scan_files) continue;
                 if (filter_engine) |fe| {
                     if (fe.isFileExcluded(name)) continue;
                 }
@@ -137,6 +152,10 @@ fn walkOne(
             }
             const m = stx.mode & linux.S.IFMT;
             if (m == linux.S.IFDIR) {
+                if (!recurse_subdirs) {
+                    gpa.free(child);
+                    continue;
+                }
                 if (filter_engine) |fe| {
                     if (fe.isDirExcluded(name)) {
                         gpa.free(child);
@@ -146,6 +165,10 @@ fn walkOne(
                 kind = linux.DT.DIR;
                 try items.append(gpa, .{ .path = child, .kind = kind });
             } else if (m == linux.S.IFREG) {
+                if (!scan_files) {
+                    gpa.free(child);
+                    continue;
+                }
                 if (filter_engine) |fe| {
                     if (fe.isFileExcluded(name)) {
                         gpa.free(child);
@@ -160,12 +183,16 @@ fn walkOne(
         }
     }
 
-    // Deterministic per-directory sort
-    std.sort.pdq(Item, items.items, {}, Item.lessThan);
+    // Deterministic per-directory sort (reverse if requested by Befunge '<' or 'l')
+    if (nav_plan != null and nav_plan.?.reverse_siblings) {
+        std.sort.pdq(Item, items.items, {}, Item.greaterThan);
+    } else {
+        std.sort.pdq(Item, items.items, {}, Item.lessThan);
+    }
 
     for (items.items) |it| {
         if (it.kind == linux.DT.DIR) {
-            try walkOne(gpa, it.path, out, depth + 1, filter_engine);
+            try walkOne(gpa, it.path, out, depth + 1, filter_engine, nav_plan);
         } else {
             try out.append(gpa, it.path);
         }

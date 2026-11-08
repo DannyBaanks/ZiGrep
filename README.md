@@ -65,6 +65,23 @@ Every figure represents the **median of repeated runs after warm-up** with groun
 7. **Universal FilterEngine & Upward Gitignore Discovery**:
    Prunes branches directly at the `getdents64` syscall level. Discovers `.gitignore` and `.dataignore` by traversing upwards to the repository root, skipping build artifacts, caches (`.git`, `node_modules`, `target`, `.zig-cache`, `.venv`), and ignored files before `openat` or `statx`.
 
+8. **Befunge 2D Vector Scout Navigation (`-m`, `--nav`, `--befunge SPEC`)**:
+   Treats the filesystem hierarchy as a 2D Cartesian plane ($X$ = sibling directory entries, $Y$ = filesystem depth) using 2-bit navigation tokens:
+   * `v` / `d` (down): descend `openat` into child subdirectories.
+   * `^` / `u` (up): ascend / prune subtree traversal.
+   * `>` / `r` (right): forward sibling traversal ($0 \to N$).
+   * `<` / `l` (left): reverse sibling traversal ($N \to 0$).
+   * **Contraposition Combos**:
+     * `v^` / `du` (**Depth Ceiling**): Scans depth 0 root files and bounces child subdirectories without descending.
+     * `^v` / `ud` (**Trampoline / Leapfrog**): Skips shallow root clutter entirely and dives straight into child subdirectories.
+
+9. **Topological Ticket Pruning ("Poda en Decremento")**:
+   Standard grep utilities stall threads and buffer entire output streams in memory when sorting (`--sort path`). `ZiGrep` implements a speculative, lock-free order-preserving pipeline:
+   * The Scout assigns monotonic sequence tickets ($0, 1, 2, \dots$) as directory entries stream in from `getdents64`.
+   * Workers run SIMD scans on their assigned batches in parallel.
+   * Files yielding zero matches are pruned instantaneously with a single atomic memory write (`ready = true, matched = false`), advancing the emission window without memory buffering.
+   * Matching results stream out in exact ticket order at bus speeds without latency spikes.
+
 ---
 
 ## 📦 Installation & Build
@@ -80,10 +97,10 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (42/42)
+# Run all unit tests (44/44)
 zig build test --summary all
 
-# Run pure Zig differential oracle against GNU grep & ripgrep (17/17)
+# Run pure Zig differential oracle against GNU grep & ripgrep (19/19)
 zig build oracle
 ```
 
@@ -117,6 +134,8 @@ options:
                     streaming dataflow with concurrent kamikaze swarm (default)
       --sort, --deterministic
                     emit results in deterministic order by path (disables streaming)
+  -m, --nav SPEC    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
       --exclude-dir=DIR
                     skip directory matching DIR (comma-separated or globs)
       --exclude-ext=EXT
@@ -142,8 +161,8 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 42/42 tests covering memory allocators, VFS streams, AST parsing, regex compilation, UTF-16 BOM decoding, and SIMD shifts.
-* **Differential Oracle (`zig build oracle`)**: 17 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep.
+* **Unit Tests**: 44/44 tests covering memory allocators, VFS streams, AST parsing, regex compilation, Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, and SIMD shifts.
+* **Differential Oracle (`zig build oracle`)**: 19 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling and trampoline modes).
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 
