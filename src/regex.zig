@@ -495,6 +495,7 @@ const NNode = struct {
 };
 
 pub const Program = struct {
+    id: u64 = 0,
     nodes: []NNode,
     sets: []Set,
     start: u32,
@@ -566,6 +567,8 @@ const Builder = struct {
     }
 };
 
+var next_prog_id: std.atomic.Value(u64) = .init(1);
+
 /// Builds a `Program` that matches if ANY line substring matches `root`.
 /// `gpa` owns the result for the life of the process.
 pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
@@ -577,6 +580,7 @@ pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
 
     const prog = try gpa.create(Program);
     prog.* = .{
+        .id = next_prog_id.fetchAdd(1, .monotonic),
         .nodes = try gpa.dupe(NNode, b.nodes.items),
         .sets = try gpa.dupe(Set, b.sets.items),
         .start = start,
@@ -602,6 +606,7 @@ const State = struct {
 
 pub const Dfa = struct {
     prog: *const Program,
+    prog_id: u64 = 0,
     gpa: Allocator,
     arena: std.heap.ArenaAllocator,
     states: std.ArrayList(State) = .empty,
@@ -621,6 +626,7 @@ pub const Dfa = struct {
         const d = try gpa.create(Dfa);
         d.* = .{
             .prog = prog,
+            .prog_id = prog.id,
             .gpa = gpa,
             .arena = std.heap.ArenaAllocator.init(gpa),
             .mark = try gpa.alloc(u32, prog.nodes.len),
@@ -628,6 +634,18 @@ pub const Dfa = struct {
         @memset(d.mark, 0);
         try d.reset();
         return d;
+    }
+
+    pub fn deinit(self: *Dfa) void {
+        self.arena.deinit();
+        self.gpa.free(self.mark);
+        self.states.deinit(self.gpa);
+        self.trans.deinit(self.gpa);
+        self.index.deinit(self.gpa);
+        self.stack.deinit(self.gpa);
+        self.work.deinit(self.gpa);
+        self.seeds.deinit(self.gpa);
+        self.gpa.destroy(self);
     }
 
     fn reset(self: *Dfa) Allocator.Error!void {
@@ -778,7 +796,9 @@ threadlocal var tl_dfa: ?*Dfa = null;
 /// This thread's DFA for `prog`, building it on first use.
 pub fn threadDfa(prog: *const Program) Allocator.Error!*Dfa {
     if (tl_dfa) |d| {
-        if (d.prog == prog) return d;
+        if (d.prog_id == prog.id) return d;
+        d.deinit();
+        tl_dfa = null;
     }
     const d = try Dfa.create(std.heap.page_allocator, prog);
     tl_dfa = d;

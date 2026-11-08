@@ -1,18 +1,30 @@
 //! Module root for the `zgrep` test build.
 //!
 //! The executable is built from `src/main.zig`; this file exists so that
-//! `zig build test` reaches every implementation file and runs its tests.
+//! `zig build test` reaches every implementation file and runs its tests,
+//! and so external scripts (like fuzzer swarms) can access internal modules.
 const std = @import("std");
 
+pub const main_mod = @import("main.zig");
+pub const search = @import("search.zig");
+pub const regex = @import("regex.zig");
+pub const walk = @import("walk.zig");
+pub const scan = @import("scan.zig");
+pub const kamikaze = @import("kamikaze.zig");
+pub const filter = @import("filter.zig");
+pub const vfs = @import("vfs.zig");
+pub const nav = @import("nav.zig");
+pub const uring = @import("uring.zig");
+
 test {
-    _ = @import("main.zig");
-    _ = @import("search.zig");
-    _ = @import("regex.zig");
-    _ = @import("walk.zig");
-    _ = @import("scan.zig");
-    _ = @import("kamikaze.zig");
-    _ = @import("filter.zig");
-    _ = @import("vfs.zig");
-    _ = @import("nav.zig");
-    _ = @import("uring.zig");
+    _ = main_mod;
+    _ = search;
+    _ = regex;
+    _ = walk;
+    _ = scan;
+    _ = kamikaze;
+    _ = filter;
+    _ = vfs;
+    _ = nav;
+    _ = uring;
 }

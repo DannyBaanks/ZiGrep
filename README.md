@@ -132,6 +132,9 @@ zig build test --summary all
 
 # Run pure Zig differential oracle against GNU grep & ripgrep (25/25 on native Windows)
 zig build oracle
+
+# Run the Adversarial Entropic Fuzzer Swarm (100k+ permutations across CPU cores)
+zig build fuzz -- 100000
 ```
 
 Binaries are installed at `zig-out/bin/zigrep` (and `zgrep`; on Windows both are `.exe` files).
@@ -225,6 +228,11 @@ Every commit is tested via GitHub Actions CI in pure Zig:
 * **Unit Tests**: 52/52 tests on native Windows (Zig 0.16.0), covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
 * **Differential Oracle (`zig build oracle`)**: 25/25 automated multi-way verification checks on native Windows against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and the `--uring` batched engine, which falls back to the synchronous workers where io_uring is unavailable). The POSIX-only piped-stdin case is skipped on Windows, so Linux runs 26 checks.
 * **Native Windows job**: builds ReleaseFast, runs the same unit tests and differential oracle, then smoke-tests Unicode/space-containing paths and `.gitignore` filtering.
+* **Adversarial Entropic Fuzzer Swarm (`zig build fuzz`)**: A parallel multi-core stress testing swarm featuring 4 specialized adversaries:
+  1. **The Grammar Shatterer**: Mutates regex grammars, unbalanced groups, quantifier overflows, nested alternations, control bytes, and catastrophic backtracking patterns.
+  2. **The Chaos CLI Permutator**: Generates combinatorial, conflicting, and edge-case CLI flags (`-v`, `-c`, `-l`, `-L`, `-q`, extreme numeric counts, Befunge navigation specs) running against an isolated dummy sandbox sink.
+  3. **The Toxic Payload Injector**: Generates degenerate buffers (SIMD boundary alignments at 15/16/31/32/64 bytes, truncated UTF-16 BOMs with odd byte lengths, 1 MB single lines, and NUL floods).
+  4. **The Differential Oracle Auditor**: Enforces mathematical invariants across search modes (invert match partition: `matches(P) + matches(-v P) == total_lines`, quiet mode exit code equivalence, line count invariants, and BMH vs memchr equivalence).
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 
