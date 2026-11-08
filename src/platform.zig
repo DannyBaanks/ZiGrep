@@ -4,6 +4,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const linux = std.os.linux;
 
+/// Maximum path length used by the zero-allocation stack path buffers.
+/// Windows accepts longer paths; the callers fall back to the heap when
+/// the stack buffer does not fit.
+pub const path_max: usize = 4096;
+
 pub fn nowNs(io: std.Io) u64 {
     if (builtin.os.tag == .linux) {
         var ts: linux.timespec = undefined;

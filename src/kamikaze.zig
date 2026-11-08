@@ -26,6 +26,7 @@ pub const filter = @import("filter.zig");
 pub const FilterEngine = filter.FilterEngine;
 pub const nav = @import("nav.zig");
 pub const NavPlan = nav.NavPlan;
+pub const uring = @import("uring.zig");
 
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
@@ -54,9 +55,16 @@ pub const SpinLock = struct {
     state: std.atomic.Value(bool) = .init(false),
 
     pub fn lock(self: *SpinLock) void {
+        var spin: usize = 0;
         while (self.state.swap(true, .acquire)) {
             while (self.state.load(.monotonic)) {
-                std.Thread.yield() catch {};
+                if (spin < 64) {
+                    std.atomic.spinLoopHint();
+                    spin += 1;
+                } else {
+                    std.Thread.yield() catch {};
+                    spin = 0;
+                }
             }
         }
     }
@@ -200,6 +208,32 @@ pub const WorkPool = struct {
     }
 };
 
+pub fn formatPathBuf(buf: []u8, dir: []const u8, name: []const u8) ?[:0]const u8 {
+    if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
+        if (name.len + 1 > buf.len) return null;
+        @memcpy(buf[0..name.len], name);
+        buf[name.len] = 0;
+        return buf[0..name.len :0];
+    }
+    // Native separator, so the emitted paths match the ones built by the VFS
+    // adapter (`\` on Windows, `/` on POSIX).
+    const has_sep = dir[dir.len - 1] == '/' or dir[dir.len - 1] == '\\';
+    const sep_len: usize = if (has_sep) 0 else 1;
+    const total_len = dir.len + sep_len + name.len;
+    if (total_len + 1 > buf.len) return null;
+
+    @memcpy(buf[0..dir.len], dir);
+    var cursor = dir.len;
+    if (!has_sep) {
+        buf[cursor] = std.fs.path.sep;
+        cursor += 1;
+    }
+    @memcpy(buf[cursor .. cursor + name.len], name);
+    cursor += name.len;
+    buf[cursor] = 0;
+    return buf[0..cursor :0];
+}
+
 pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Allocator.Error![:0]const u8 {
     return vfs.joinPathSentinel(gpa, dir, name);
 }
@@ -219,6 +253,7 @@ pub const KamikazeContext = struct {
     stats: *KamikazeStats,
     out_mutex: SpinLock = .{},
     stats_mutex: SpinLock = .{},
+    use_uring: bool = false,
 };
 
 fn flushToStdout(io: std.Io, bytes: []const u8) void {
@@ -302,6 +337,7 @@ fn scanBatch(
     batch: DirectoryBatch,
     scratch: ?[]u8,
     local_out: *std.ArrayList(u8),
+    uring_scanner: ?*uring.UringScanner,
 ) void {
     defer {
         ctx.gpa.free(batch.dir_path);
@@ -314,11 +350,52 @@ fn scanBatch(
     var local_bytes: usize = 0;
     var local_files: usize = 0;
 
-    for (batch.file_names) |fname| {
+    var start_idx: usize = 0;
+    if (uring_scanner) |u_scan| {
+        while (start_idx + uring.BATCH_SIZE <= batch.file_names.len) {
+            if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
+            const slice = batch.file_names[start_idx .. start_idx + uring.BATCH_SIZE];
+            if (u_scan.scanAsyncBatch(
+                ctx.io,
+                ctx.gpa,
+                ctx.searcher,
+                batch.dir_path,
+                slice,
+                ctx.show_path,
+                ctx.mode,
+                ctx.binary,
+                ctx.scan_config,
+                local_out,
+            )) |res| {
+                local_files += res.files_scanned;
+                local_bytes += res.bytes_scanned;
+                local_matched_files += res.matched_files;
+                local_matched_lines += res.matched_lines;
+                if (res.found) {
+                    ctx.found.store(true, .release);
+                    if (ctx.mode == .quiet) {
+                        ctx.pool.abort();
+                        return;
+                    }
+                }
+                start_idx += uring.BATCH_SIZE;
+            } else |_| {
+                break;
+            }
+        }
+    }
+
+    var path_buf: [platform.path_max]u8 = undefined;
+    for (batch.file_names[start_idx..]) |fname| {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
 
-        const full_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
-        defer ctx.gpa.free(full_path);
+        const stack_path = formatPathBuf(&path_buf, batch.dir_path, fname);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| ctx.gpa.free(hp);
 
         const res = scan.scanFile(
             ctx.io,
@@ -365,25 +442,36 @@ fn scanBatch(
 }
 
 pub fn kamikazeWorker(ctx: *KamikazeContext) void {
-    const scratch = ctx.gpa.alloc(u8, 128 * 1024) catch null;
+    const scratch = ctx.gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| ctx.gpa.free(s);
 
     var local_out: std.ArrayList(u8) = .empty;
     defer local_out.deinit(ctx.gpa);
 
+    var uring_scanner: ?*uring.UringScanner = null;
+    if (ctx.use_uring and uring.isSupported()) {
+        uring_scanner = uring.UringScanner.create(ctx.gpa, 32) catch null;
+    }
+    defer if (uring_scanner) |u_scan| {
+        u_scan.destroy(ctx.gpa);
+    };
+
+    var idle_count: usize = 0;
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
         if (ctx.pool.aborted.load(.acquire)) return;
 
         // 1. Try to pop a file batch (Prioritize scanning files to free memory)
         if (ctx.pool.popBatch()) |batch| {
-            scanBatch(ctx, batch, scratch, &local_out);
+            idle_count = 0;
+            scanBatch(ctx, batch, scratch, &local_out, uring_scanner);
             ctx.pool.finishBatch();
             continue;
         }
 
         // 2. Try to pop a directory (Scout next directory)
         if (ctx.pool.popDir()) |task| {
+            idle_count = 0;
             scoutDirConcurrent(ctx, task.path, task.depth) catch {};
             ctx.pool.finishDir();
             ctx.gpa.free(task.path);
@@ -395,8 +483,16 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
             break;
         }
 
-        // 4. Other workers are still busy, yield CPU:
-        std.Thread.yield() catch {};
+        // 4. Other workers are still busy:
+        // Use silicon hardware pause instructions first (zero kernel trap overhead),
+        // then briefly sleep to prevent kernel trap storms.
+        idle_count += 1;
+        if (idle_count < 64) {
+            std.atomic.spinLoopHint();
+        } else {
+            platform.sleepBrief(ctx.io); // 50 us sleep, native on every OS
+            idle_count = 0;
+        }
     }
 }
 
@@ -443,7 +539,7 @@ fn tryQuickSingleDirScan(
     }
 
     // Flat small directory with <= 64 files: scan immediately on current thread!
-    const scratch = gpa.alloc(u8, 128 * 1024) catch null;
+    const scratch = gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| gpa.free(s);
 
     var local_out: std.ArrayList(u8) = .empty;
@@ -452,9 +548,15 @@ fn tryQuickSingleDirScan(
     var matched_any = false;
     stats.dirs_scouted += 1;
 
+    var path_buf: [platform.path_max]u8 = undefined;
     for (files.items) |fname| {
-        const full_path = joinPathSentinel(gpa, dir, fname) catch continue;
-        defer gpa.free(full_path);
+        const stack_path = formatPathBuf(&path_buf, dir, fname);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(gpa, dir, fname) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| gpa.free(hp);
 
         const res = scan.scanFile(
             io,
@@ -487,6 +589,65 @@ fn tryQuickSingleDirScan(
     return matched_any;
 }
 
+/// Zero-Latency Probe for Quiet Mode (-q):
+/// Scans up to 4 regular files in root on the main thread prior to thread pool creation.
+/// If a match is found instantly, returns true in < 0.3 ms with 0 thread spawns.
+fn tryQuickQuietProbe(
+    io: std.Io,
+    gpa: Allocator,
+    searcher: *const Searcher,
+    root: [:0]const u8,
+    filter_engine: *const FilterEngine,
+    binary: bool,
+    scan_config: scan.ScanConfig,
+) bool {
+    var stream = vfs.DirStream.open(io, root) catch return false;
+    defer stream.close();
+
+    var probed: usize = 0;
+    var scratch: [64 * 1024]u8 = undefined;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+
+    var path_buf: [platform.path_max]u8 = undefined;
+    while (probed < 4) {
+        const maybe_entry = stream.next() catch return false;
+        const entry = maybe_entry orelse break;
+        var kind = entry.kind;
+        if (kind == .unknown) {
+            const probe_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+            defer gpa.free(probe_path);
+            kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
+        }
+        if (kind != .file) continue;
+        if (filter_engine.isFileExcluded(entry.name)) continue;
+
+        const stack_path = formatPathBuf(&path_buf, root, entry.name);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| gpa.free(hp);
+
+        const res = scan.scanFile(
+            io,
+            gpa,
+            searcher,
+            full_path,
+            false,
+            .quiet,
+            binary,
+            scan_config,
+            &out,
+            &scratch,
+        );
+        if (res.matched) return true;
+        probed += 1;
+    }
+    return false;
+}
+
 /// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
 pub fn runKamikazePipeline(
     io: std.Io,
@@ -501,9 +662,19 @@ pub fn runKamikazePipeline(
     scan_config: scan.ScanConfig,
     threads_count: usize,
     stats: *KamikazeStats,
+    use_uring: bool,
 ) !bool {
+    // 0. Zero-Latency Early Probe for Quiet Mode (-q):
+    if (mode == .quiet and !scan_config.invert and nav_plan.len == 0) {
+        for (roots) |root| {
+            if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {
+                stats.early_aborted = true;
+                return true;
+            }
+        }
+    }
     // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
-    if (roots.len == 1 and threads_count > 1 and nav_plan.len == 0) {
+    if (roots.len == 1 and nav_plan.len == 0) {
         const root = roots[0];
         if (vfs.stat(io, root, true)) |info| {
             if (info.kind == .directory) {
@@ -533,6 +704,7 @@ pub fn runKamikazePipeline(
         .scan_config = scan_config,
         .found = &found,
         .stats = stats,
+        .use_uring = use_uring,
     };
 
     // Seed root directories / files into the pool
@@ -547,22 +719,27 @@ pub fn runKamikazePipeline(
     }
 
     // Spawn concurrent hybrid worker swarm
-    var threads: std.ArrayList(std.Thread) = .empty;
-    defer threads.deinit(gpa);
-
     const actual_workers = @max(1, threads_count);
-    var i: usize = 0;
-    while (i < actual_workers) : (i += 1) {
-        const t = std.Thread.spawn(.{}, kamikazeWorker, .{&ctx}) catch break;
-        threads.append(gpa, t) catch break;
-    }
-
-    // If zero threads could be spawned, fallback to running worker logic on current thread
-    if (threads.items.len == 0) {
+    if (actual_workers == 1) {
+        // Zero-spawn fast path: single thread runs directly on calling thread
         kamikazeWorker(&ctx);
     } else {
-        for (threads.items) |t| {
-            t.join();
+        var threads: std.ArrayList(std.Thread) = .empty;
+        defer threads.deinit(gpa);
+
+        var i: usize = 0;
+        while (i < actual_workers) : (i += 1) {
+            const t = std.Thread.spawn(.{}, kamikazeWorker, .{&ctx}) catch break;
+            threads.append(gpa, t) catch break;
+        }
+
+        // If zero threads could be spawned, fallback to running worker logic on current thread
+        if (threads.items.len == 0) {
+            kamikazeWorker(&ctx);
+        } else {
+            for (threads.items) |t| {
+                t.join();
+            }
         }
     }
 

@@ -14,4 +14,5 @@ test {
     _ = @import("filter.zig");
     _ = @import("vfs.zig");
     _ = @import("nav.zig");
+    _ = @import("uring.zig");
 }

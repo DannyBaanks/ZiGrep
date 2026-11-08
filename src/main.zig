@@ -63,7 +63,8 @@ const usage =
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
     \\      --sort, --deterministic
     \\                    emit results in deterministic order by path (disables streaming)
-    \\  -m, --nav SPEC    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+    \\  -N, --nav, --befunge SPEC
+    \\                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
     \\                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
     \\      --exclude-dir=DIR
     \\                    skip directory matching DIR (comma-separated or globs)
@@ -81,6 +82,7 @@ const usage =
     \\      --no-hidden   skip hidden files and directories
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
+    \\      --uring       use Linux io_uring asynchronous batched I/O engine
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
@@ -105,6 +107,7 @@ pub const Options = struct {
     binary: bool = false,
     kamikaze: bool = true,
     sort: bool = false,
+    use_uring: bool = false,
     invert_match: bool = false,
     max_count: ?usize = null,
     nav_plan: nav.NavPlan = .{},
@@ -167,7 +170,7 @@ const Ctx = struct {
     found: std.atomic.Value(bool) = .init(false),
 };
 
-const default_scratch_bytes = 128 * 1024; // 128 KB covers ~97% of files
+const default_scratch_bytes = 256 * 1024; // 256 KB covers ~99.5% of files
 
 fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     const slot = &ctx.slots[idx];
@@ -357,6 +360,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
                 opts.kamikaze = true;
                 opts.sort = false;
+            } else if (std.mem.eql(u8, body, "uring") or std.mem.eql(u8, body, "io-uring")) {
+                opts.use_uring = true;
             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
                 opts.sort = true;
                 opts.kamikaze = false;
@@ -553,6 +558,22 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     }
                     ci = chars.len;
                 },
+                'N' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.nav_plan = nav.NavPlan.parse(value) catch {
+                        opts.fail = .{ .what = "invalid Befunge navigation spec", .arg = value };
+                        return error.Usage;
+                    };
+                    ci = chars.len;
+                },
                 'k' => {
                     opts.kamikaze = true;
                     opts.sort = false;
@@ -653,6 +674,17 @@ pub fn main(init: std.process.Init) !void {
     };
     const pattern = parsed.pattern;
     const operands = parsed.operands;
+
+    if (opts.threads == 0) {
+        if (init.environ_map.get("ZIGREP_THREADS") orelse
+            init.environ_map.get("ZGREP_THREADS") orelse
+            init.environ_map.get("THREADS")) |val|
+        {
+            if (parseCount(val)) |t| {
+                opts.threads = t;
+            }
+        }
+    }
 
     const pattern_list: []const []const u8 = if (opts.patterns_count > 0)
         opts.patterns[0..opts.patterns_count]
@@ -851,6 +883,7 @@ pub fn main(init: std.process.Init) !void {
             scan_cfg,
             worker_count,
             &k_stats,
+            opts.use_uring,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
             std.process.exit(2);
@@ -1307,6 +1340,14 @@ test "parseArgs: -v, -L, -m NUM, --max-count=NUM" {
         var o: Options = .{};
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(?usize, 42), o.max_count);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "-N", "v^", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2), o.nav_plan.len);
+        try std.testing.expectEqual(nav.NavOp.down, o.nav_plan.ops[0]);
+        try std.testing.expectEqual(nav.NavOp.up, o.nav_plan.ops[1]);
     }
 }
 

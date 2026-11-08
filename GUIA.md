@@ -28,7 +28,7 @@ src\search.zig
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
 zig build test --summary all          # 52/52 tests passed (native Windows)
-zig build oracle                      # oráculo diferencial puro Zig (24/24 en native Windows)
+zig build oracle                      # oráculo diferencial puro Zig (25/25 en native Windows)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -200,7 +200,7 @@ Para ver el estado del build y los tests:
 
 ```sh
 zig build test --summary all     # 52/52 tests passed (native Windows)
-zig build oracle                 # 24/24 differential oracle tests passed (native Windows)
+zig build oracle                 # 25/25 differential oracle tests passed (native Windows)
 ```
 
 ---
@@ -290,14 +290,14 @@ test success
 Salida:
 
 ```text
-Results: 24 PASSED, 0 FAILED (total 24)
+Results: 25 PASSED, 0 FAILED (total 25)
 Build Summary: 10/10 steps succeeded
 oracle success
 ```
 
 El caso `stdin pipeline (pipe -> zigrep)` del oráculo se salta en Windows: usa
 `sh -c` y `printf`, que no están garantizados en el PATH nativo; en Linux son
-25 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+26 checks. La lectura por stdin sí funciona en Windows (ver abajo).
 
 El smoke test usó un directorio con espacios y Unicode y un `.gitignore` que
 excluía `skip.txt`:
