@@ -43,6 +43,9 @@ zgrep -c -F "const" workspace/assembly
 
 # silencioso: solo el código de salida (0 = hubo coincidencia, 1 = no)
 zgrep -q -F "const" workspace/assembly && echo "existe"
+
+# modo Kamikaze Dataflow (streaming continuo + scout de carpetas en repositorios masivos)
+zgrep -k --exclude-dir=.git --exclude-dir=.zig-cache "patrón" /ruta/al/repo
 ```
 
 ### Cómo se interpreta el resultado
@@ -74,18 +77,21 @@ mensaje y salida 2.
 ## 4. Ajuste de rendimiento (no existen en grep)
 
 ```sh
-zgrep --algo=memchr -F "const" RUTA     # más rápido en la práctica
-zgrep -j 4 -F "const" RUTA              # limitar hilos
-zgrep --stats -F "const" RUTA           # informa por stderr: tiempo y MB/s
+zgrep -F "const" RUTA                    # el default ya usa el kernel más rápido
+zgrep -j 4 -F "const" RUTA               # limitar hilos
+zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 ```
 
-* `--algo=auto` (por defecto) usa `memchr` para patrones de ≤ 3 bytes y
-  Boyer–Moore–Horspool para el resto.
-* **Consejo práctico:** en el corpus de 655 MB medido, `--algo=memchr` fue
-  2,1× más rápido que la configuración por defecto. Si te importa la
-  velocidad, usa `--algo=memchr` explícitamente. La heurística `auto` es un
-  defecto de rendimiento conocido (claim C8 del informe), no de corrección:
-  los tres modos producen salida idéntica.
+* `--algo=auto` (por defecto) busca el **byte más raro** del patrón con
+  escaneo vectorizado y compara el patrón completo solo cuando ese byte
+  aparece. Es el modo más rápido en el corpus medido.
+* **Ya no hace falta forzar `--algo=memchr`**: desde el commit `5c89b40` el
+  modo por defecto *es* ese kernel. El defecto de rendimiento `auto`
+  (claim C8 del informe) quedó resuelto; los tres modos siguen produciendo
+  salida idéntica byte a byte.
+* `--algo=bmh` (Boyer–Moore–Horspool) sigue disponible por comparación, pero
+  perde contra el default a cualquier longitud de patrón (1 a 64 bytes) en el
+  corpus medido.
 * `--stats` escribe por **stderr**, así que puedes combinarlo con la salida
   normal sin contaminarla:
 
@@ -101,8 +107,8 @@ zgrep --stats -F "const" RUTA           # informa por stderr: tiempo y MB/s
 
 * necesites salida **byte a byte idéntica a `grep -rInF`**, en el mismo
   orden (verificado en los controles de `evidence/`);
-* el patrón sea raro o ausente en un árbol grande: ahí `zgrep` gana a
-  `grep` por 6–8× y a `rg` por 1,2–1,5×;
+* el patrón sea corto (1–64 bytes) y el árbol grande: tras `5c89b40`,
+  `zgrep` gana a `grep` por ~8× y a `rg` por ~1,4–1,7× en `-r`, `-l` y `-c`;
 * no tengas `rg` instalado y quieras algo más rápido que `grep`.
 
 **No lo uses cuando:**

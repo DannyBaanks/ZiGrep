@@ -40,12 +40,18 @@ always in effect. Clustered short flags (`-rnF`, `-cj4`) work.
 | Flag | Meaning |
 |---|---|
 | `-j N`, `--threads N` | worker threads (default: CPU count) |
-| `--algo=auto\|bmh\|memchr` | matcher (default `auto`) |
+| `-k`, `--kamikaze`, `--dataflow` | streaming dataflow with kamikaze directory scout (zero pre-walk delay) |
+| `--exclude-dir=DIR` | skip directories matching DIR (e.g. `.git`, `.zig-cache`) |
+| `--no-hidden` | skip hidden files and directories |
+| `--algo=auto|bmh|memchr` | matcher (default `auto`) |
 | `--stats` | timing and throughput to stderr |
 
-`auto` picks `memchr` for patterns of ≤ 3 bytes and Boyer–Moore–Horspool
-otherwise. **On the benchmark corpus this heuristic is measurably
-suboptimal** — see `evidence/REPORT.md`, claim C8.
+`auto` scans for the **rarest byte** of the pattern with a vectorised
+(`@Vector`) scan and verifies the whole needle once — the same kernel as
+`memchr`. Boyer–Moore–Horspool (`bmh`) is still available for comparison:
+on the measured corpus it loses to the default at every needle length from
+1 to 64 bytes (see `evidence/REPORT.md` §7.4). Default and `bmh` produce
+identical output; only the speed differs.
 
 ## Layout
 
@@ -101,11 +107,13 @@ Corpora used:
 
 ## Results in one line
 
-On the 655 MB real corpus with pattern `const` (median of 10 interleaved
-runs): `zgrep` **97.4 ms**, `zgrep --algo=memchr` **46.4 ms**,
-`grep -rInF` **327.1 ms**, `rg` **61.4 ms** — i.e. 3.4× / 7.1× faster than
-GNU grep, and the `memchr` variant 1.3× faster than ripgrep while the default
-configuration is 1.6× slower than ripgrep.
+After the rarest-byte SIMD + per-thread scratch + early-exit changes
+(commit `5c89b40`, `evidence/REPORT.md` §7), on the 670 MB real corpus with
+pattern `const` (median of 10 interleaved runs): `zgrep` **41.7 ms**,
+`grep -rInF` **330.1 ms**, `rg` **61.4 ms** — i.e. 7.9× faster than GNU grep
+and **1.51× faster than ripgrep**, in `-r`, `-l` and `-c` alike. In `-q` mode
+zgrep is 2.6× *slower* than rg (10.5 vs 4.0 ms) because it always completes
+the full directory walk.
 
 Full numbers, controls, caveats and the claims table: **`evidence/REPORT.md`**.
 

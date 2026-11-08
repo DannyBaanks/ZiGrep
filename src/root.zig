@@ -9,4 +9,5 @@ test {
     _ = @import("search.zig");
     _ = @import("walk.zig");
     _ = @import("scan.zig");
+    _ = @import("kamikaze.zig");
 }

@@ -17,6 +17,7 @@ const linux = std.os.linux;
 const search = @import("search.zig");
 const walk = @import("walk.zig");
 const scan = @import("scan.zig");
+const kamikaze = @import("kamikaze.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -40,6 +41,11 @@ const usage =
     \\  -h                do not print the file name with each result
     \\  -a                treat binary files as text
     \\  -j, --threads N   worker threads (default: number of CPUs)
+    \\  -k, --kamikaze, --dataflow
+    \\                    streaming dataflow with kamikaze directory scout
+    \\      --exclude-dir=DIR
+    \\                    skip directory matching DIR (e.g. .git, .zig-cache)
+    \\      --no-hidden   skip hidden files and directories
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
     \\      --help        print this help
@@ -61,6 +67,10 @@ pub const Options = struct {
     show_path: ?bool = null,
     show_stats: bool = false,
     binary: bool = false,
+    kamikaze: bool = false,
+    exclude_dirs: [16][]const u8 = undefined,
+    exclude_dirs_count: usize = 0,
+    skip_hidden: bool = false,
     /// Set when `parseArgs` fails so the caller can print one clean message.
     /// `parseArgs` itself never writes to a stream, which keeps it testable.
     fail: ?Failure = null,
@@ -276,6 +286,25 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                     opts.fail = .{ .what = "bad value for --threads", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
+                opts.kamikaze = true;
+            } else if (std.mem.eql(u8, body, "no-hidden")) {
+                opts.skip_hidden = true;
+            } else if (std.mem.startsWith(u8, body, "exclude-dir=")) {
+                if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
+                    opts.exclude_dirs[opts.exclude_dirs_count] = body["exclude-dir=".len..];
+                    opts.exclude_dirs_count += 1;
+                }
+            } else if (std.mem.eql(u8, body, "exclude-dir")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
+                    opts.exclude_dirs[opts.exclude_dirs_count] = args[i];
+                    opts.exclude_dirs_count += 1;
+                }
             } else {
                 opts.fail = .{ .what = "unrecognized option", .arg = a };
                 return error.Usage;
@@ -292,6 +321,7 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 // and line-numbered, never follows symlinks, and already
                 // skips binary files the way `-I` asks for.
                 'r', 'F', 'n', 'I' => {},
+                'k' => opts.kamikaze = true,
                 'c' => opts.mode = .count,
                 'l' => opts.mode = .files,
                 'q' => opts.mode = .quiet,
@@ -375,8 +405,12 @@ pub fn main(init: std.process.Init) !void {
 
     const t0 = nowMonotonicNs();
 
-    // --- collect the file list -------------------------------------------
-    var files: std.ArrayList([:0]const u8) = .empty;
+    const searcher = search.Searcher.init(pattern, opts.algo);
+    const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
+    const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads) else cpu_count;
+
+    // Check operands validity
+    var valid_operands: std.ArrayList([:0]const u8) = .empty;
     var had_error = false;
     for (operands) |op| {
         var stx: linux.Statx = undefined;
@@ -386,6 +420,68 @@ pub fn main(init: std.process.Init) !void {
             had_error = true;
             continue;
         }
+        try valid_operands.append(arena, op);
+    }
+
+    if (valid_operands.items.len == 0 and had_error) {
+        std.process.exit(2);
+    }
+
+    // --- Kamikaze Scout & Streaming Dataflow Path -------------------------
+    if (opts.kamikaze or opts.exclude_dirs_count > 0 or opts.skip_hidden) {
+        var k_stats: kamikaze.KamikazeStats = .{};
+        const k_conf = kamikaze.ScoutConfig{
+            .exclude_dirs = opts.exclude_dirs[0..opts.exclude_dirs_count],
+            .skip_hidden = opts.skip_hidden,
+        };
+        const matched = kamikaze.runKamikazePipeline(
+            gpa,
+            &searcher,
+            valid_operands.items,
+            k_conf,
+            opts.mode,
+            opts.binary,
+            show_path,
+            worker_count,
+            &k_stats,
+        ) catch |err| {
+            std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
+            std.process.exit(2);
+        };
+
+        const t1 = nowMonotonicNs();
+        if (opts.show_stats) {
+            const elapsed_ns: u64 = if (t1 > t0) @intCast(t1 - t0) else 1;
+            const elapsed_s: f64 = @as(f64, @floatFromInt(elapsed_ns)) / 1e9;
+            const mb_s: f64 = if (elapsed_s > 0)
+                (@as(f64, @floatFromInt(k_stats.bytes_scanned)) / (1024.0 * 1024.0)) / elapsed_s
+            else
+                0;
+            std.debug.print(
+                "kamikaze: dirs={d} files={d} bytes={d} matched_files={d} matched_lines={d} threads={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
+                .{
+                    k_stats.dirs_scouted,
+                    k_stats.files_scanned,
+                    k_stats.bytes_scanned,
+                    k_stats.matched_files,
+                    k_stats.matched_lines,
+                    worker_count,
+                    elapsed_s,
+                    mb_s,
+                },
+            );
+        }
+
+        if (had_error) std.process.exit(2);
+        if (matched) std.process.exit(0);
+        std.process.exit(1);
+    }
+
+    // --- collect the file list (standard sequential walk) -----------------
+    var files: std.ArrayList([:0]const u8) = .empty;
+    for (valid_operands.items) |op| {
+        var stx: linux.Statx = undefined;
+        _ = linux.statx(linux.AT.FDCWD, op, 0, .{ .TYPE = true }, &stx);
         const m = stx.mode & linux.S.IFMT;
         if (m == linux.S.IFDIR) {
             walk.walk(arena, &.{op}, &files) catch |err| {
@@ -398,17 +494,12 @@ pub fn main(init: std.process.Init) !void {
                 had_error = true;
             };
         }
-        // fifos, devices and sockets are skipped, as grep does.
     }
-
-    const searcher = search.Searcher.init(pattern, opts.algo);
 
     const slots: []Slot = try gpa.alloc(Slot, files.items.len);
     defer gpa.free(slots);
     for (slots) |*s| s.* = .{};
 
-    const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
-    const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads) else cpu_count;
     const use_threads = worker_count > 1 and files.items.len > 1;
     // Quiet mode buffers no output, so it needs no run-ahead limit at all —
     // otherwise the cursor would never advance and the workers would deadlock.
@@ -627,4 +718,22 @@ test "parseArgs: missing pattern is a usage error" {
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep" };
     try std.testing.expectError(error.Usage, parseArgs(&a, &o));
+}
+
+test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.kamikaze);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.kamikaze);
+        try std.testing.expect(o.skip_hidden);
+        try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+        try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+    }
 }
