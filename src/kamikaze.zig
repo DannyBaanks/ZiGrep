@@ -735,7 +735,7 @@ pub fn runKamikazePipeline(
         }
     }
     // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
-    if (roots.len == 1 and threads_count > 1 and nav_plan.len == 0) {
+    if (roots.len == 1 and nav_plan.len == 0) {
         const root = roots[0];
         var stx: linux.Statx = undefined;
         if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
@@ -783,22 +783,27 @@ pub fn runKamikazePipeline(
     }
 
     // Spawn concurrent hybrid worker swarm
-    var threads: std.ArrayList(std.Thread) = .empty;
-    defer threads.deinit(gpa);
-
     const actual_workers = @max(1, threads_count);
-    var i: usize = 0;
-    while (i < actual_workers) : (i += 1) {
-        const t = std.Thread.spawn(.{}, kamikazeWorker, .{&ctx}) catch break;
-        threads.append(gpa, t) catch break;
-    }
-
-    // If zero threads could be spawned, fallback to running worker logic on current thread
-    if (threads.items.len == 0) {
+    if (actual_workers == 1) {
+        // Zero-spawn fast path: single thread runs directly on calling thread
         kamikazeWorker(&ctx);
     } else {
-        for (threads.items) |t| {
-            t.join();
+        var threads: std.ArrayList(std.Thread) = .empty;
+        defer threads.deinit(gpa);
+
+        var i: usize = 0;
+        while (i < actual_workers) : (i += 1) {
+            const t = std.Thread.spawn(.{}, kamikazeWorker, .{&ctx}) catch break;
+            threads.append(gpa, t) catch break;
+        }
+
+        // If zero threads could be spawned, fallback to running worker logic on current thread
+        if (threads.items.len == 0) {
+            kamikazeWorker(&ctx);
+        } else {
+            for (threads.items) |t| {
+                t.join();
+            }
         }
     }
 

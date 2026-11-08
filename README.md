@@ -136,6 +136,25 @@ Binaries are installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
 
 ---
 
+## 🧵 Thread Scaling & Environment Variable (`ZIGREP_THREADS`)
+
+You can control worker threads either via CLI flag (`-j N`, `--threads N`) or dynamically in front of any command with environment variables:
+
+```sh
+# Force single-threaded zero-spawn execution (fastest for micro-trees < 100 files):
+ZIGREP_THREADS=1 zigrep "pattern" micro_folder/
+
+# Optimal physical core scaling for large monorepos (5-6 threads on 6-core Ryzen):
+ZIGREP_THREADS=6 zigrep "pattern" /large/monorepo/
+```
+
+### Empirical Thread Scaling Curve (Ryzen 5: 6 Cores / 12 SMT Threads):
+* **Micro-trees (`corpus_50`: 50 files, 1.6 MB)**: **1 Thread is optimal (5.59 ms)**. Spawning 12 threads causes kernel creation/join overhead, taking 11.97 ms (2× slower).
+* **Medium-trees (`corpus_1000`: 1,000 files, 32.8 MB)**: **2–4 Threads** achieve 90% of scaling (21 ms vs 35 ms single-threaded).
+* **Large Monorepos (`assembly`: 5,338 files, 655 MB)**: **5–6 Threads is optimal (68.80 ms vs 152 ms single-threaded)**. Beyond 6 threads, SMT cache/execution port contention between paired hyperthreads starts adding slight overhead (~84 ms at 12 threads).
+
+---
+
 ## 📖 CLI Usage
 
 ```text

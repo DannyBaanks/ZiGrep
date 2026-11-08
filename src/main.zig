@@ -685,6 +685,17 @@ pub fn main(init: std.process.Init) !void {
     const pattern = parsed.pattern;
     const operands = parsed.operands;
 
+    if (opts.threads == 0) {
+        if (init.environ_map.get("ZIGREP_THREADS") orelse
+            init.environ_map.get("ZGREP_THREADS") orelse
+            init.environ_map.get("THREADS")) |val|
+        {
+            if (parseCount(val)) |t| {
+                opts.threads = t;
+            }
+        }
+    }
+
     const pattern_list: []const []const u8 = if (opts.patterns_count > 0)
         opts.patterns[0..opts.patterns_count]
     else
