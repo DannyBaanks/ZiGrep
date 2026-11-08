@@ -81,9 +81,16 @@ const Parser = struct {
         if (self.depth > 200) return fail("regex nested too deeply");
         var branches: std.ArrayList(*Node) = .empty;
         try branches.append(self.a, try self.parseCat());
-        while (self.peek() == '|') {
-            self.i += 1;
-            try branches.append(self.a, try self.parseCat());
+        while (true) {
+            if (self.peek() == '|') {
+                self.i += 1;
+                try branches.append(self.a, try self.parseCat());
+            } else if (self.peek() == '\\' and self.i + 1 < self.src.len and self.src[self.i + 1] == '|') {
+                self.i += 2;
+                try branches.append(self.a, try self.parseCat());
+            } else {
+                break;
+            }
         }
         if (branches.items.len == 1) return branches.items[0];
         return self.newNode(.{ .alt = branches.items });
@@ -93,6 +100,7 @@ const Parser = struct {
         var items: std.ArrayList(*Node) = .empty;
         while (self.peek()) |c| {
             if (c == '|' or c == ')') break;
+            if (c == '\\' and self.i + 1 < self.src.len and self.src[self.i + 1] == '|') break;
             const n = try self.parseRepeat();
             // Flatten plain groups so literal runs stay contiguous.
             switch (n.*) {
@@ -812,6 +820,10 @@ test "regex: repeats and alternation" {
     try std.testing.expect(try testMatch("colou?r", "color", plain));
     try std.testing.expect(try testMatch("cat|dog", "hotdog", plain));
     try std.testing.expect(!try testMatch("cat|dog", "bird", plain));
+    try std.testing.expect(try testMatch("cat\\|dog", "hotdog", plain));
+    try std.testing.expect(try testMatch("webgpu\\|wgpu\\|dawn", "this is dawn here", plain));
+    try std.testing.expect(try testMatch("webgpu\\|wgpu\\|dawn", "wgpu backend", plain));
+    try std.testing.expect(!try testMatch("webgpu\\|wgpu\\|dawn", "vulkan only", plain));
     try std.testing.expect(try testMatch("(ab){2}", "xababx", plain));
     try std.testing.expect(!try testMatch("(ab){2}", "xabax", plain));
     try std.testing.expect(try testMatch("a{2,3}", "baab", plain));

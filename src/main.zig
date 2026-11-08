@@ -108,15 +108,15 @@ pub const Options = struct {
     nav_plan: nav.NavPlan = .{},
     no_ignore: bool = false,
     no_default_ignore: bool = false,
-    exclude_dirs: [32][]const u8 = undefined,
+    exclude_dirs: [64][]const u8 = undefined,
     exclude_dirs_count: usize = 0,
-    exclude_exts: [32][]const u8 = undefined,
+    exclude_exts: [64][]const u8 = undefined,
     exclude_exts_count: usize = 0,
-    include_exts: [32][]const u8 = undefined,
+    include_exts: [64][]const u8 = undefined,
     include_exts_count: usize = 0,
-    exclude_patterns: [32][]const u8 = undefined,
+    exclude_patterns: [64][]const u8 = undefined,
     exclude_patterns_count: usize = 0,
-    include_patterns: [32][]const u8 = undefined,
+    include_patterns: [64][]const u8 = undefined,
     include_patterns_count: usize = 0,
     skip_hidden: bool = false,
     fixed: bool = false,
@@ -281,22 +281,27 @@ fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
 
+fn trimQuotes(s: []const u8) []const u8 {
+    var res = s;
+    if (res.len >= 2 and ((res[0] == '"' and res[res.len - 1] == '"') or (res[0] == '\'' and res[res.len - 1] == '\''))) {
+        res = res[1 .. res.len - 1];
+    }
+    return res;
+}
+
 /// Splits argv into options, the pattern and the path operands.
 /// `opts` is mutated in place; on a usage problem the caller exits with 2.
-pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
     var i: usize = 1;
     var end_of_opts = false;
-    var pattern: ?[:0]const u8 = null;
-    var pattern_idx: usize = 0;
+    var positionals: std.ArrayList([:0]const u8) = .empty;
+    errdefer positionals.deinit(allocator);
 
     while (i < args.len) : (i += 1) {
         const a = args[i];
         const is_option = !end_of_opts and a.len >= 2 and a[0] == '-';
         if (!is_option) {
-            if (pattern == null) {
-                pattern = a;
-                pattern_idx = i;
-            }
+            positionals.append(allocator, a) catch return error.Usage;
             continue;
         }
         if (std.mem.eql(u8, a, "--")) {
@@ -316,6 +321,23 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 opts.show_stats = true;
             } else if (std.mem.startsWith(u8, body, "algo=")) {
                 const v = body["algo=".len..];
+                opts.algo = if (std.mem.eql(u8, v, "auto"))
+                    .auto
+                else if (std.mem.eql(u8, v, "bmh"))
+                    .bmh
+                else if (std.mem.eql(u8, v, "memchr"))
+                    .memchr
+                else {
+                    opts.fail = .{ .what = "unknown --algo (want auto|bmh|memchr)", .arg = v };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "algo")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                const v = args[i];
                 opts.algo = if (std.mem.eql(u8, v, "auto"))
                     .auto
                 else if (std.mem.eql(u8, v, "bmh"))
@@ -408,6 +430,18 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 }
                 opts.patterns[opts.patterns_count] = body["regexp=".len..];
                 opts.patterns_count += 1;
+            } else if (std.mem.eql(u8, body, "regexp")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.patterns_count >= opts.patterns.len) {
+                    opts.fail = .{ .what = "too many -e patterns (max 16)", .arg = a };
+                    return error.Usage;
+                }
+                opts.patterns[opts.patterns_count] = args[i];
+                opts.patterns_count += 1;
             } else if (std.mem.eql(u8, body, "no-hidden")) {
                 opts.skip_hidden = true;
             } else if (std.mem.eql(u8, body, "no-ignore")) {
@@ -416,7 +450,7 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 opts.no_default_ignore = true;
             } else if (std.mem.startsWith(u8, body, "exclude-dir=")) {
                 if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
-                    opts.exclude_dirs[opts.exclude_dirs_count] = body["exclude-dir=".len..];
+                    opts.exclude_dirs[opts.exclude_dirs_count] = trimQuotes(body["exclude-dir=".len..]);
                     opts.exclude_dirs_count += 1;
                 }
             } else if (std.mem.eql(u8, body, "exclude-dir")) {
@@ -426,27 +460,67 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                     return error.Usage;
                 }
                 if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
-                    opts.exclude_dirs[opts.exclude_dirs_count] = args[i];
+                    opts.exclude_dirs[opts.exclude_dirs_count] = trimQuotes(args[i]);
                     opts.exclude_dirs_count += 1;
                 }
             } else if (std.mem.startsWith(u8, body, "exclude-ext=")) {
                 if (opts.exclude_exts_count < opts.exclude_exts.len) {
-                    opts.exclude_exts[opts.exclude_exts_count] = body["exclude-ext=".len..];
+                    opts.exclude_exts[opts.exclude_exts_count] = trimQuotes(body["exclude-ext=".len..]);
+                    opts.exclude_exts_count += 1;
+                }
+            } else if (std.mem.eql(u8, body, "exclude-ext")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.exclude_exts_count < opts.exclude_exts.len) {
+                    opts.exclude_exts[opts.exclude_exts_count] = trimQuotes(args[i]);
                     opts.exclude_exts_count += 1;
                 }
             } else if (std.mem.startsWith(u8, body, "include-ext=")) {
                 if (opts.include_exts_count < opts.include_exts.len) {
-                    opts.include_exts[opts.include_exts_count] = body["include-ext=".len..];
+                    opts.include_exts[opts.include_exts_count] = trimQuotes(body["include-ext=".len..]);
+                    opts.include_exts_count += 1;
+                }
+            } else if (std.mem.eql(u8, body, "include-ext")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.include_exts_count < opts.include_exts.len) {
+                    opts.include_exts[opts.include_exts_count] = trimQuotes(args[i]);
                     opts.include_exts_count += 1;
                 }
             } else if (std.mem.startsWith(u8, body, "exclude=")) {
                 if (opts.exclude_patterns_count < opts.exclude_patterns.len) {
-                    opts.exclude_patterns[opts.exclude_patterns_count] = body["exclude=".len..];
+                    opts.exclude_patterns[opts.exclude_patterns_count] = trimQuotes(body["exclude=".len..]);
+                    opts.exclude_patterns_count += 1;
+                }
+            } else if (std.mem.eql(u8, body, "exclude")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.exclude_patterns_count < opts.exclude_patterns.len) {
+                    opts.exclude_patterns[opts.exclude_patterns_count] = trimQuotes(args[i]);
                     opts.exclude_patterns_count += 1;
                 }
             } else if (std.mem.startsWith(u8, body, "include=")) {
                 if (opts.include_patterns_count < opts.include_patterns.len) {
-                    opts.include_patterns[opts.include_patterns_count] = body["include=".len..];
+                    opts.include_patterns[opts.include_patterns_count] = trimQuotes(body["include=".len..]);
+                    opts.include_patterns_count += 1;
+                }
+            } else if (std.mem.eql(u8, body, "include")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.include_patterns_count < opts.include_patterns.len) {
+                    opts.include_patterns[opts.include_patterns_count] = trimQuotes(args[i]);
                     opts.include_patterns_count += 1;
                 }
             } else {
@@ -464,7 +538,7 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 // Accepted no-ops: zgrep is always recursive, fixed-string
                 // and line-numbered, never follows symlinks, and already
                 // skips binary files the way `-I` asks for.
-                'r', 'n', 'I', 'E', 'G' => {},
+                'r', 'n', 'I', 'E', 'G', 's' => {},
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
                 'v' => opts.invert_match = true,
@@ -547,15 +621,21 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
     }
 
     if (opts.patterns_count > 0) {
-        // Patterns came from -e: every positional is a path.
-        const ops: []const [:0]const u8 = if (pattern != null) args[pattern_idx..] else &.{};
+        // Patterns came from -e / --regexp: all positionals are operands (paths).
+        const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
         return .{ .pattern = "", .operands = ops };
     }
-    const p = pattern orelse {
+    if (positionals.items.len == 0) {
         opts.fail = .{ .what = "missing PATTERN", .arg = "" };
         return error.Usage;
-    };
-    return .{ .pattern = p, .operands = args[pattern_idx + 1 ..] };
+    }
+    const p = positionals.items[0];
+    const ops = if (positionals.items.len > 1)
+        allocator.dupe([:0]const u8, positionals.items[1..]) catch return error.Usage
+    else
+        allocator.alloc([:0]const u8, 0) catch return error.Usage;
+    positionals.deinit(allocator);
+    return .{ .pattern = p, .operands = ops };
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +648,7 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(arena);
 
     var opts: Options = .{};
-    const parsed = parseArgs(args, &opts) catch {
+    const parsed = parseArgs(arena, args, &opts) catch {
         if (opts.fail) |f| {
             if (f.arg.len > 0) {
                 std.debug.print("zgrep: {s}: '{s}'\n", .{ f.what, f.arg });
@@ -616,12 +696,24 @@ pub fn main(init: std.process.Init) !void {
     if (is_stdin) {
         var stdin_buf: std.ArrayList(u8) = .empty;
         defer stdin_buf.deinit(gpa);
-        var chunk: [64 * 1024]u8 = undefined;
+        // Pre-reserve capacity if stdin is redirected from a file with known size
+        var stx: linux.Statx = undefined;
+        if (linux.errno(linux.statx(linux.STDIN_FILENO, "", @intCast(linux.AT.EMPTY_PATH), .{ .SIZE = true }, &stx)) == .SUCCESS and stx.size > 0) {
+            stdin_buf.ensureTotalCapacity(gpa, @intCast(stx.size)) catch {};
+        }
+
+        var chunk: [128 * 1024]u8 = undefined;
         while (true) {
             const rr = linux.read(linux.STDIN_FILENO, &chunk, chunk.len);
             const e = linux.errno(rr);
             if (e == .INTR) continue;
             if (e != .SUCCESS or rr == 0) break;
+            // Zero-latency early abort for quiet mode:
+            if (opts.mode == .quiet and !opts.invert_match) {
+                if (searcher.find(chunk[0..rr], 0) != null) {
+                    std.process.exit(0);
+                }
+            }
             try stdin_buf.appendSlice(gpa, chunk[0..rr]);
         }
 
@@ -1013,9 +1105,11 @@ fn isRegularFile(path: [:0]const u8) bool {
 // ---------------------------------------------------------------------------
 
 test "parseArgs: pattern and operands after clustered short options" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     var opts: Options = .{};
     const args = [_][:0]const u8{ "zgrep", "-rnF", "pat", "dir1", "dir2" };
-    const p = try parseArgs(&args, &opts);
+    const p = try parseArgs(arena.allocator(), &args, &opts);
     try std.testing.expectEqualStrings("pat", p.pattern);
     try std.testing.expectEqual(@as(usize, 2), p.operands.len);
     try std.testing.expectEqual(Mode.lines, opts.mode);
@@ -1023,85 +1117,102 @@ test "parseArgs: pattern and operands after clustered short options" {
 }
 
 test "parseArgs: -c, -l, -q select modes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-c", "p", "d" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(Mode.count, o.mode);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-l", "p", "d" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(Mode.files, o.mode);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-q", "p", "d" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(Mode.quiet, o.mode);
     }
 }
 
 test "parseArgs: -j takes the rest of the cluster or the next argument" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-cj4", "p", "d" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(usize, 4), o.threads);
         try std.testing.expectEqual(Mode.count, o.mode);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-j", "7", "p", "d" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(usize, 7), o.threads);
     }
 }
 
 test "parseArgs: long options" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep", "--algo=bmh", "--threads=3", "--stats", "p", "d" };
-    _ = try parseArgs(&a, &o);
+    _ = try parseArgs(arena.allocator(), &a, &o);
     try std.testing.expectEqual(Algo.bmh, o.algo);
     try std.testing.expectEqual(@as(usize, 3), o.threads);
     try std.testing.expect(o.show_stats);
 }
 
 test "parseArgs: -- ends option parsing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep", "--", "-not-a-flag", "d" };
-    const p = try parseArgs(&a, &o);
+    const p = try parseArgs(arena.allocator(), &a, &o);
     try std.testing.expectEqualStrings("-not-a-flag", p.pattern);
     try std.testing.expectEqual(@as(usize, 1), p.operands.len);
 }
 
 test "parseArgs: unknown option is a usage error with a reason" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep", "-z", "p", "d" };
-    try std.testing.expectError(error.Usage, parseArgs(&a, &o));
+    try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
     const f = o.fail orelse return error.TestExpectedEqual;
     try std.testing.expectEqualStrings("unrecognized option", f.what);
     try std.testing.expectEqualStrings("-z", f.arg);
 }
 
 test "parseArgs: missing pattern is a usage error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep" };
-    try std.testing.expectError(error.Usage, parseArgs(&a, &o));
+    try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
 }
 
 test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.kamikaze);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.kamikaze);
         try std.testing.expect(o.skip_hidden);
         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
@@ -1110,7 +1221,7 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.no_ignore);
         try std.testing.expect(o.no_default_ignore);
         try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
@@ -1121,37 +1232,39 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.nav_plan.has_trampoline);
         try std.testing.expect(!o.nav_plan.has_ceiling);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.nav_plan.has_ceiling);
         try std.testing.expect(!o.nav_plan.has_trampoline);
     }
     {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
     }
 }
 
 test "parseArgs: -i -w -e collect patterns and keep every positional as a path" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
     const a = [_][:0]const u8{ "zgrep", "-iw", "-e", "foo", "-ebar", "dir1", "dir2" };
     var o: Options = .{};
-    const p = try parseArgs(&a, &o);
+    const p = try parseArgs(arena.allocator(), &a, &o);
     try std.testing.expect(o.ignore_case and o.word and !o.fixed);
     try std.testing.expectEqual(@as(usize, 2), o.patterns_count);
     try std.testing.expectEqualStrings("foo", o.patterns[0]);
@@ -1161,41 +1274,69 @@ test "parseArgs: -i -w -e collect patterns and keep every positional as a path" 
 }
 
 test "parseArgs: -v, -L, -m NUM, --max-count=NUM" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
     {
         const a = [_][:0]const u8{ "zgrep", "-v", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.invert_match);
     }
     {
         const a = [_][:0]const u8{ "zgrep", "--invert-match", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.invert_match);
     }
     {
         const a = [_][:0]const u8{ "zgrep", "-L", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(Mode.files_without_match, o.mode);
     }
     {
         const a = [_][:0]const u8{ "zgrep", "--files-without-match", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(Mode.files_without_match, o.mode);
     }
     {
         const a = [_][:0]const u8{ "zgrep", "-m", "5", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(?usize, 5), o.max_count);
         try std.testing.expectEqual(@as(usize, 0), o.nav_plan.len);
     }
     {
         const a = [_][:0]const u8{ "zgrep", "--max-count=42", "foo", "dir" };
         var o: Options = .{};
-        _ = try parseArgs(&a, &o);
+        _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(?usize, 42), o.max_count);
     }
+}
+
+test "parseArgs: options after pattern and mixed include globs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var o: Options = .{};
+    const a = [_][:0]const u8{
+        "zgrep",
+        "-ril",
+        "webgpu\\|wgpu\\|dawn",
+        "--include=*.md",
+        "--include=*.zig",
+        "dir1",
+        "dir2",
+    };
+    const p = try parseArgs(arena.allocator(), &a, &o);
+    try std.testing.expectEqualStrings("webgpu\\|wgpu\\|dawn", p.pattern);
+    try std.testing.expectEqual(Mode.files, o.mode);
+    try std.testing.expect(o.ignore_case);
+    try std.testing.expectEqual(@as(usize, 2), o.include_patterns_count);
+    try std.testing.expectEqualStrings("*.md", o.include_patterns[0]);
+    try std.testing.expectEqualStrings("*.zig", o.include_patterns[1]);
+    try std.testing.expectEqual(@as(usize, 2), p.operands.len);
+    try std.testing.expectEqualStrings("dir1", p.operands[0]);
+    try std.testing.expectEqualStrings("dir2", p.operands[1]);
 }
