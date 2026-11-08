@@ -75,4 +75,22 @@ pub fn build(b: *std.Build) void {
     run_oracle.step.dependOn(b.getInstallStep());
     const oracle_step = b.step("oracle", "Run differential oracle tests against GNU grep and ripgrep");
     oracle_step.dependOn(&run_oracle.step);
+
+    const fuzz_mod = b.createModule(.{
+        .root_source_file = b.path("scripts/fuzz.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fuzz_mod.addAnonymousImport("zgrep", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const fuzz_exe = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_mod });
+    b.installArtifact(fuzz_exe);
+    const fuzz_run = b.addRunArtifact(fuzz_exe);
+    fuzz_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| fuzz_run.addArgs(args);
+    const fuzz_step = b.step("fuzz", "Run the adversarial entropic fuzzer swarm");
+    fuzz_step.dependOn(&fuzz_run.step);
 }
