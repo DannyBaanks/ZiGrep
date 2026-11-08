@@ -14,10 +14,15 @@ import subprocess
 import time
 from pathlib import Path
 
-REPO_ROOT = Path("/home/danny/Development/ISyCo Git/ZigGrep")
-ZIGREP = str(REPO_ROOT / "zig-out/bin/zigrep")
-RIPGREP = "rg"
-GNU_GREP = "grep"
+# Resolve the repository from this script's location so the fuzzer runs from
+# any checkout, on any host (the original hardcoded a Linux home path).
+REPO_ROOT = Path(__file__).resolve().parent.parent
+_ZIGREP_BIN = "zig-out/bin/zigrep.exe" if os.name == "nt" else "zig-out/bin/zigrep"
+ZIGREP = str(REPO_ROOT / _ZIGREP_BIN)
+# The reference engines can be overridden (useful when GNU grep lives in a
+# Git-for-Windows installation that is not on PATH).
+RIPGREP = os.environ.get("ZIGREP_RIPGREP", "rg")
+GNU_GREP = os.environ.get("ZIGREP_GREP", "grep")
 
 CORPUS_WORDS = [
     "searcher", "filter", "kamikaze", "io_uring", "walk", "scan", "buffer",
@@ -148,6 +153,13 @@ def run_one(cmd, timeout=1.5):
         }
 
 def main():
+    # Windows consoles still default to a legacy code page; keep the report
+    # readable (and never crash on an unprintable byte) by forcing UTF-8.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     iterations = 200
     knob = 3
     if len(sys.argv) > 1:
