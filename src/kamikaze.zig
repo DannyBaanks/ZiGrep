@@ -31,6 +31,16 @@ pub const uring = @import("uring.zig");
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
 
+/// Upper bound for the worker pool.
+///
+/// Every worker is an OS thread with its own stack, so the count has to stay
+/// bounded. An unbounded value (`-j 18446744073709551615`) used to turn the
+/// spawn loop below into an endless create-and-exit cycle: the machine was
+/// pinned at 100% CPU and the process could not even be killed promptly.
+/// The CLI rejects such values up front; this clamp is the second line of
+/// defence for every other caller.
+pub const max_threads: usize = 1024;
+
 /// A cluster of regular files within a single directory.
 pub const DirectoryBatch = struct {
     dir_path: [:0]const u8,
@@ -719,7 +729,7 @@ pub fn runKamikazePipeline(
     }
 
     // Spawn concurrent hybrid worker swarm
-    const actual_workers = @max(1, threads_count);
+    const actual_workers = @min(@max(1, threads_count), max_threads);
     if (actual_workers == 1) {
         // Zero-spawn fast path: single thread runs directly on calling thread
         kamikazeWorker(&ctx);

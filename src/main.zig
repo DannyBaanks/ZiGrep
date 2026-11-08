@@ -27,7 +27,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.1.0";
+const version = "0.2.0";
 
 const usage =
     \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
@@ -274,6 +274,30 @@ fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
 
+/// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+pub const max_threads: usize = kamikaze.max_threads;
+
+/// Parses a worker-thread count and rejects values that would blow the pool
+/// up. Every worker is an OS thread with its own stack, so an absurd value
+/// (`-j 18446744073709551615`) turns the spawn loop into an endless
+/// create-and-exit cycle that pins the machine at 100% CPU.
+///
+/// `what` names the offending option so the usage message stays specific.
+fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+    const n = parseCount(value) orelse {
+        opts.fail = .{ .what = what, .arg = value };
+        return error.Usage;
+    };
+    if (n > max_threads) {
+        opts.fail = .{
+            .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+            .arg = value,
+        };
+        return error.Usage;
+    }
+    return n;
+}
+
 fn trimQuotes(s: []const u8) []const u8 {
     var res = s;
     if (res.len >= 2 and ((res[0] == '"' and res[res.len - 1] == '"') or (res[0] == '\'' and res[res.len - 1] == '\''))) {
@@ -343,20 +367,14 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 };
             } else if (std.mem.startsWith(u8, body, "threads=")) {
                 const v = body["threads=".len..];
-                opts.threads = parseCount(v) orelse {
-                    opts.fail = .{ .what = "bad value for --threads", .arg = v };
-                    return error.Usage;
-                };
+                opts.threads = try parseThreadCount(opts, v, "bad value for --threads");
             } else if (std.mem.eql(u8, body, "threads")) {
                 i += 1;
                 if (i >= args.len) {
                     opts.fail = .{ .what = "option requires an argument", .arg = a };
                     return error.Usage;
                 }
-                opts.threads = parseCount(args[i]) orelse {
-                    opts.fail = .{ .what = "bad value for --threads", .arg = args[i] };
-                    return error.Usage;
-                };
+                opts.threads = try parseThreadCount(opts, args[i], "bad value for --threads");
             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
                 opts.kamikaze = true;
                 opts.sort = false;
@@ -617,10 +635,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                         }
                         break :blk args[i];
                     };
-                    opts.threads = parseCount(value) orelse {
-                        opts.fail = .{ .what = "bad value for -j", .arg = value };
-                        return error.Usage;
-                    };
+                    opts.threads = try parseThreadCount(opts, value, "bad value for -j");
                     ci = chars.len; // value consumed the rest of this cluster
                 },
                 else => {
@@ -681,6 +696,12 @@ pub fn main(init: std.process.Init) !void {
             init.environ_map.get("THREADS")) |val|
         {
             if (parseCount(val)) |t| {
+                // An out-of-range value is a hard error, not something to
+                // silently ignore: it would explode the worker pool.
+                if (t > max_threads) {
+                    std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
+                    std.process.exit(2);
+                }
                 opts.threads = t;
             }
         }
@@ -1195,6 +1216,44 @@ test "parseArgs: long options" {
     try std.testing.expectEqual(Algo.bmh, o.algo);
     try std.testing.expectEqual(@as(usize, 3), o.threads);
     try std.testing.expect(o.show_stats);
+}
+
+test "parseArgs: an absurd thread count is a usage error, not a worker-pool bomb" {
+    // Regression: `-j 18446744073709551615` used to reach the spawn loop,
+    // which then created and joined threads forever, pinning the machine at
+    // 100% CPU. Found by the adversarial fuzzer on Windows.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const cases = [_][]const [:0]const u8{
+        &.{ "zgrep", "-j", "18446744073709551615", "p", "d" },
+        &.{ "zgrep", "--threads=18446744073709551615", "p", "d" },
+        &.{ "zgrep", "--threads", "999999", "p", "d" },
+        &.{ "zgrep", "-j999999", "p", "d" },
+    };
+    for (cases) |a| {
+        var o: Options = .{};
+        try std.testing.expectError(error.Usage, parseArgs(alloc, a, &o));
+        const f = o.fail orelse return error.TestExpectedEqual;
+        try std.testing.expectEqualStrings("thread count out of range (max 1024)", f.what);
+    }
+    // The boundary itself stays valid.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-j", "1024", "p", "d" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1024), o.threads);
+    }
+}
+
+test "parseArgs: a non-numeric thread count is still a usage error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var o: Options = .{};
+    const a = [_][:0]const u8{ "zgrep", "-j", "abc", "p", "d" };
+    try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
+    const f = o.fail orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("bad value for -j", f.what);
 }
 
 test "parseArgs: -- ends option parsing" {
