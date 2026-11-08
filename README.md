@@ -83,6 +83,15 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
    * Files yielding zero matches are pruned instantaneously with a single atomic memory write (`ready = true, matched = false`), advancing the emission window without memory buffering.
    * Matching results stream out in exact ticket order at bus speeds without latency spikes.
 
+10. **Zero-Allocation Stack Path Formatting**:
+   Path formatting in directory walks formats directly into stack-allocated buffers (`formatPathBuf`) with zero heap allocations (`joinPathSentinel` / `allocPrintSentinel`), reducing allocator pressure and cache pollution to zero during deep monorepo scans.
+
+11. **256 KB Reusable Scratch Buffers & Elevated MMAP Threshold**:
+   Worker thread scratch buffers are sized at 256 KB and the file memory-mapping threshold is elevated to 256 KB, completely eliminating `mmap`/`munmap` syscall churn on small-to-medium files.
+
+12. **Native Linux `io_uring` Asynchronous Dispatch Engine (`--uring`)**:
+   Direct submission/completion queue engine interfacing with the Linux NVMe/filesystem kernel driver via `io_uring_setup` and `io_uring_enter` with zero external libc dependencies. Batches up to 16 asynchronous file reads in a single kernel syscall, falling back gracefully to synchronous workers when files exceed buffer capacity or on unsupported environments.
+
 ---
 
 ## ⚡ Quick Install (Zero Dependencies, Direct to `$PATH`)
@@ -113,10 +122,10 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (50/50)
+# Run all unit tests (52/52)
 zig build test --summary all
 
-# Run pure Zig differential oracle against GNU grep & ripgrep (25/25)
+# Run pure Zig differential oracle against GNU grep & ripgrep (26/26)
 zig build oracle
 ```
 
@@ -179,6 +188,7 @@ options:
       --no-hidden   skip hidden files and directories
       --algo MODE   auto | bmh | memchr (default: auto)
       --stats       print timing and throughput to stderr
+      --uring       use Linux io_uring asynchronous batched I/O engine
   -V, --version     print version
       --help        print help
 ```
@@ -188,8 +198,8 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 50/50 tests covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts.
-* **Differential Oracle (`zig build oracle`)**: 25 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input).
+* **Unit Tests**: 52/52 tests covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O.
+* **Differential Oracle (`zig build oracle`)**: 26 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, io_uring asynchronous batched engine `--uring`, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input).
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 

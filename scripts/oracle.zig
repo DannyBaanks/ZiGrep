@@ -137,6 +137,13 @@ const cases = [_]TestCase{
         .check_output = false,
     },
     .{
+        .name = "io_uring async batch --uring 'Searcher'",
+        .zigrep_args = &.{ "--uring", "Searcher", "src" },
+        .grep_args = &.{ "-rnIF", "Searcher", "src" },
+        .rg_args = &.{ "-n", "-F", "Searcher", "src" },
+        .expected_exit = 0,
+    },
+    .{
         .name = "deterministic sorted mode --sort",
         .zigrep_args = &.{ "--sort", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },

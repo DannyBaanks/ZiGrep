@@ -80,6 +80,7 @@ const usage =
     \\      --no-hidden   skip hidden files and directories
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
+    \\      --uring       use Linux io_uring asynchronous batched I/O engine
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
@@ -104,6 +105,7 @@ pub const Options = struct {
     binary: bool = false,
     kamikaze: bool = true,
     sort: bool = false,
+    use_uring: bool = false,
     invert_match: bool = false,
     max_count: ?usize = null,
     nav_plan: nav.NavPlan = .{},
@@ -165,7 +167,7 @@ const Ctx = struct {
     found: std.atomic.Value(bool) = .init(false),
 };
 
-const default_scratch_bytes = 128 * 1024; // 128 KB covers ~97% of files
+const default_scratch_bytes = 256 * 1024; // 256 KB covers ~99.5% of files
 
 fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     const slot = &ctx.slots[idx];
@@ -368,6 +370,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
                 opts.kamikaze = true;
                 opts.sort = false;
+            } else if (std.mem.eql(u8, body, "uring") or std.mem.eql(u8, body, "io-uring")) {
+                opts.use_uring = true;
             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
                 opts.sort = true;
                 opts.kamikaze = false;
@@ -876,6 +880,7 @@ pub fn main(init: std.process.Init) !void {
             scan_cfg,
             worker_count,
             &k_stats,
+            opts.use_uring,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
             std.process.exit(2);

@@ -25,6 +25,7 @@ pub const filter = @import("filter.zig");
 pub const FilterEngine = filter.FilterEngine;
 pub const nav = @import("nav.zig");
 pub const NavPlan = nav.NavPlan;
+pub const uring = @import("uring.zig");
 
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
@@ -206,6 +207,30 @@ pub const WorkPool = struct {
     }
 };
 
+pub fn formatPathBuf(buf: []u8, dir: []const u8, name: []const u8) ?[:0]const u8 {
+    if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
+        if (name.len + 1 > buf.len) return null;
+        @memcpy(buf[0..name.len], name);
+        buf[name.len] = 0;
+        return buf[0..name.len :0];
+    }
+    const has_slash = dir[dir.len - 1] == '/';
+    const slash_len: usize = if (has_slash) 0 else 1;
+    const total_len = dir.len + slash_len + name.len;
+    if (total_len + 1 > buf.len) return null;
+
+    @memcpy(buf[0..dir.len], dir);
+    var cursor = dir.len;
+    if (!has_slash) {
+        buf[cursor] = '/';
+        cursor += 1;
+    }
+    @memcpy(buf[cursor .. cursor + name.len], name);
+    cursor += name.len;
+    buf[cursor] = 0;
+    return buf[0..cursor :0];
+}
+
 pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Allocator.Error![:0]const u8 {
     if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
         return std.fmt.allocPrintSentinel(gpa, "{s}", .{name}, 0);
@@ -230,6 +255,7 @@ pub const KamikazeContext = struct {
     stats: *KamikazeStats,
     out_mutex: SpinLock = .{},
     stats_mutex: SpinLock = .{},
+    use_uring: bool = false,
 };
 
 fn flushToStdout(bytes: []const u8) void {
@@ -357,6 +383,7 @@ fn scanBatch(
     batch: DirectoryBatch,
     scratch: ?[]u8,
     local_out: *std.ArrayList(u8),
+    uring_scanner: ?*uring.UringScanner,
 ) void {
     defer {
         ctx.gpa.free(batch.dir_path);
@@ -369,11 +396,51 @@ fn scanBatch(
     var local_bytes: usize = 0;
     var local_files: usize = 0;
 
-    for (batch.file_names) |fname| {
+    var start_idx: usize = 0;
+    if (uring_scanner) |u_scan| {
+        while (start_idx + uring.BATCH_SIZE <= batch.file_names.len) {
+            if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
+            const slice = batch.file_names[start_idx .. start_idx + uring.BATCH_SIZE];
+            if (u_scan.scanAsyncBatch(
+                ctx.gpa,
+                ctx.searcher,
+                batch.dir_path,
+                slice,
+                ctx.show_path,
+                ctx.mode,
+                ctx.binary,
+                ctx.scan_config,
+                local_out,
+            )) |res| {
+                local_files += res.files_scanned;
+                local_bytes += res.bytes_scanned;
+                local_matched_files += res.matched_files;
+                local_matched_lines += res.matched_lines;
+                if (res.found) {
+                    ctx.found.store(true, .release);
+                    if (ctx.mode == .quiet) {
+                        ctx.pool.abort();
+                        return;
+                    }
+                }
+                start_idx += uring.BATCH_SIZE;
+            } else |_| {
+                break;
+            }
+        }
+    }
+
+    var path_buf: [linux.PATH_MAX]u8 = undefined;
+    for (batch.file_names[start_idx..]) |fname| {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
 
-        const full_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
-        defer ctx.gpa.free(full_path);
+        const stack_path = formatPathBuf(&path_buf, batch.dir_path, fname);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| ctx.gpa.free(hp);
 
         const res = scan.scanFile(
             ctx.gpa,
@@ -419,11 +486,19 @@ fn scanBatch(
 }
 
 pub fn kamikazeWorker(ctx: *KamikazeContext) void {
-    const scratch = ctx.gpa.alloc(u8, 128 * 1024) catch null;
+    const scratch = ctx.gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| ctx.gpa.free(s);
 
     var local_out: std.ArrayList(u8) = .empty;
     defer local_out.deinit(ctx.gpa);
+
+    var uring_scanner: ?*uring.UringScanner = null;
+    if (ctx.use_uring and uring.isSupported()) {
+        uring_scanner = uring.UringScanner.create(ctx.gpa, 32) catch null;
+    }
+    defer if (uring_scanner) |u_scan| {
+        u_scan.destroy(ctx.gpa);
+    };
 
     var idle_count: usize = 0;
     while (true) {
@@ -433,7 +508,7 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
         // 1. Try to pop a file batch (Prioritize scanning files to free memory)
         if (ctx.pool.popBatch()) |batch| {
             idle_count = 0;
-            scanBatch(ctx, batch, scratch, &local_out);
+            scanBatch(ctx, batch, scratch, &local_out, uring_scanner);
             ctx.pool.finishBatch();
             continue;
         }
@@ -522,7 +597,7 @@ fn tryQuickSingleDirScan(
     }
 
     // Flat small directory with <= 64 files: scan immediately on current thread!
-    const scratch = gpa.alloc(u8, 128 * 1024) catch null;
+    const scratch = gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| gpa.free(s);
 
     var local_out: std.ArrayList(u8) = .empty;
@@ -531,9 +606,15 @@ fn tryQuickSingleDirScan(
     var matched_any = false;
     stats.dirs_scouted += 1;
 
+    var path_buf: [linux.PATH_MAX]u8 = undefined;
     for (files.items) |fname| {
-        const full_path = joinPathSentinel(gpa, dir, fname) catch continue;
-        defer gpa.free(full_path);
+        const stack_path = formatPathBuf(&path_buf, dir, fname);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(gpa, dir, fname) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| gpa.free(hp);
 
         const res = scan.scanFile(
             gpa,
@@ -590,6 +671,7 @@ fn tryQuickQuietProbe(
     var scratch: [64 * 1024]u8 = undefined;
     var out: std.ArrayList(u8) = .empty;
 
+    var path_buf: [linux.PATH_MAX]u8 = undefined;
     while (off < n and probed < 4) {
         const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
         const reclen: usize = ent.reclen;
@@ -603,8 +685,13 @@ fn tryQuickQuietProbe(
         if (ent.type != linux.DT.REG) continue;
         if (filter_engine.isFileExcluded(name)) continue;
 
-        const full_path = joinPathSentinel(gpa, root, name) catch continue;
-        defer gpa.free(full_path);
+        const stack_path = formatPathBuf(&path_buf, root, name);
+        var heap_path: ?[:0]const u8 = null;
+        const full_path: [:0]const u8 = stack_path orelse blk: {
+            heap_path = joinPathSentinel(gpa, root, name) catch continue;
+            break :blk heap_path.?;
+        };
+        defer if (heap_path) |hp| gpa.free(hp);
 
         const res = scan.scanFile(
             gpa,
@@ -636,6 +723,7 @@ pub fn runKamikazePipeline(
     scan_config: scan.ScanConfig,
     threads_count: usize,
     stats: *KamikazeStats,
+    use_uring: bool,
 ) !bool {
     // 0. Zero-Latency Early Probe for Quiet Mode (-q):
     if (mode == .quiet and !scan_config.invert and nav_plan.len == 0) {
@@ -678,6 +766,7 @@ pub fn runKamikazePipeline(
         .scan_config = scan_config,
         .found = &found,
         .stats = stats,
+        .use_uring = use_uring,
     };
 
     // Seed root directories / files into the pool

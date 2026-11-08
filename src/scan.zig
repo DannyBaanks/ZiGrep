@@ -68,7 +68,7 @@ pub fn decodeUtf16ToUtf8(gpa: Allocator, raw: []const u8, is_le: bool) Allocator
 
 /// mmap below this size is rarely a win over a plain read; the read path
 /// exists mainly as a fallback for mappings the kernel refuses.
-pub const mmap_threshold = 64 * 1024;
+pub const mmap_threshold = 256 * 1024;
 
 pub const FileScan = struct {
     matched: bool = false,
@@ -388,7 +388,7 @@ pub fn scanFile(
 
 /// Emits the once-per-file part of `-c`, `-l`, and `-L`.
 /// Returns null on success or the errno if the buffer could not grow.
-fn emitOncePerFile(
+pub fn emitOncePerFile(
     out: *std.ArrayList(u8),
     gpa: Allocator,
     path: []const u8,
