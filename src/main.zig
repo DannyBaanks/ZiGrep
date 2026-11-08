@@ -651,7 +651,11 @@ pub fn main(init: std.process.Init) !void {
     defer gpa.free(slots);
     for (slots) |*s| s.* = .{};
 
-    const use_threads = worker_count > 1 and files.items.len > 1;
+    // Lazy thread spawning: clone()ing a pool costs more than reading a small
+    // tree (measured: ~2 ms vs ~0.3 ms for 8 files), so the main thread runs
+    // small jobs alone and only wakes the pool past this many files.
+    const spawn_threshold = 32;
+    const use_threads = worker_count > 1 and files.items.len > spawn_threshold;
     // Quiet mode buffers no output, so it needs no run-ahead limit at all —
     // otherwise the cursor would never advance and the workers would deadlock.
     const window: usize = if (opts.mode == .quiet) std.math.maxInt(usize) else 128;
@@ -684,6 +688,15 @@ pub fn main(init: std.process.Init) !void {
         }
         out.flush();
     } else {
+        // -q probe: scan the first few files on this thread while nothing
+        // else exists yet; a hit exits without ever spawning a worker.
+        if (opts.mode == .quiet) {
+            const probe = @min(@as(usize, 3), files.items.len);
+            var k: usize = 0;
+            while (k < probe and !ctx.found.load(.acquire)) : (k += 1) scanOne(&ctx, k, main_scratch);
+            ctx.next.store(k, .release);
+            if (ctx.found.load(.acquire)) std.process.exit(0);
+        }
         var threads: std.ArrayList(std.Thread) = .empty;
         defer threads.deinit(gpa);
         var spawned: usize = 0;
