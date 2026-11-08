@@ -85,7 +85,22 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 
 ---
 
-## 📦 Installation & Build
+## ⚡ Quick Install (Zero Dependencies, Direct to `$PATH`)
+
+Install `zigrep` and `zgrep` immediately on Linux with a single command:
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.sh | bash
+```
+
+* **Zero libc / Zero external dependencies**: Self-contained, statically linked pure ELF binary.
+* **Auto-detects Architecture**: Instant download of stripped native binaries for `x86_64` (272 KB) and `aarch64` (1.2 MB).
+* **Instant `$PATH` Integration**: Automatically symlinks both `zigrep` and `zgrep` into `~/.local/bin` (or `/usr/local/bin` if root), ready for immediate invocation by human developers, shell scripts, and AI coding agents.
+* **Offline / Source Fallback**: If offline or building from source, automatically clones and builds using `zig 0.16.0+`.
+
+---
+
+## 📦 Manual Build from Source
 
 ### Prerequisites
 * [Zig](https://ziglang.org/download/) **0.16.0+**
@@ -145,7 +160,8 @@ options:
                     streaming dataflow with concurrent kamikaze swarm (default)
       --sort, --deterministic
                     emit results in deterministic order by path (disables streaming)
-  -m, --nav SPEC    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+  -N, --nav, --befunge SPEC
+                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
                     combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
       --exclude-dir=DIR
                     skip directory matching DIR (comma-separated or globs)

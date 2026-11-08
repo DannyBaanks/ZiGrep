@@ -61,7 +61,8 @@ const usage =
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
     \\      --sort, --deterministic
     \\                    emit results in deterministic order by path (disables streaming)
-    \\  -m, --nav SPEC    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+    \\  -N, --nav, --befunge SPEC
+    \\                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
     \\                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
     \\      --exclude-dir=DIR
     \\                    skip directory matching DIR (comma-separated or globs)
@@ -561,6 +562,22 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                             return error.Usage;
                         };
                     }
+                    ci = chars.len;
+                },
+                'N' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.nav_plan = nav.NavPlan.parse(value) catch {
+                        opts.fail = .{ .what = "invalid Befunge navigation spec", .arg = value };
+                        return error.Usage;
+                    };
                     ci = chars.len;
                 },
                 'k' => {
@@ -1313,6 +1330,14 @@ test "parseArgs: -v, -L, -m NUM, --max-count=NUM" {
         var o: Options = .{};
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(?usize, 42), o.max_count);
+    }
+    {
+        const a = [_][:0]const u8{ "zgrep", "-N", "v^", "foo", "dir" };
+        var o: Options = .{};
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2), o.nav_plan.len);
+        try std.testing.expectEqual(nav.NavOp.down, o.nav_plan.ops[0]);
+        try std.testing.expectEqual(nav.NavOp.up, o.nav_plan.ops[1]);
     }
 }
 
