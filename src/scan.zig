@@ -60,14 +60,20 @@ fn emitLine(
     line_no: usize,
     text: []const u8,
 ) Allocator.Error!void {
+    const path_extra: usize = if (show_path) path.len + 1 else 0;
+    const needed = path_extra + 24 + 1 + text.len + 1;
+    try out.ensureUnusedCapacity(gpa, needed);
+
     if (show_path) {
-        try out.appendSlice(gpa, path);
-        try out.append(gpa, ':');
+        out.appendSliceAssumeCapacity(path);
+        out.appendAssumeCapacity(':');
     }
-    try appendDecimal(out, gpa, line_no);
-    try out.append(gpa, ':');
-    try out.appendSlice(gpa, text);
-    try out.append(gpa, '\n');
+    var buf: [24]u8 = undefined;
+    const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+    out.appendSliceAssumeCapacity(s);
+    out.appendAssumeCapacity(':');
+    out.appendSliceAssumeCapacity(text);
+    out.appendAssumeCapacity('\n');
 }
 
 /// Searches one in-memory buffer and, in `lines` mode, appends the matching
@@ -83,6 +89,17 @@ pub fn scanBuffer(
     out: *std.ArrayList(u8),
 ) Allocator.Error!BufferResult {
     var res: BufferResult = .{};
+
+    // Early-exit optimization for files (-l) and quiet (-q) modes:
+    // Once any match is found, we don't need to scan remaining lines.
+    if (mode == .quiet or mode == .files) {
+        if (searcher.find(data, 0) != null) {
+            res.matched = true;
+            res.lines = 1;
+        }
+        return res;
+    }
+
     var line_start: usize = 0;
     var line_no: usize = 1;
     var pos: usize = 0;
@@ -119,6 +136,9 @@ const map_failed: usize = @bitCast(@as(isize, -1));
 
 /// Scans a single file. Never returns `error`; failures are reported through
 /// `FileScan.err` so one unreadable file cannot abort a whole run.
+///
+/// An optional `scratch` buffer (e.g. 128 KB) enables zero-allocation reads for
+/// small/medium files, completely avoiding allocator mutex lock contention.
 pub fn scanFile(
     gpa: Allocator,
     searcher: *const Searcher,
@@ -127,6 +147,7 @@ pub fn scanFile(
     mode: Mode,
     binary: bool,
     out: *std.ArrayList(u8),
+    scratch: ?[]u8,
 ) FileScan {
     var res: FileScan = .{};
 
@@ -138,6 +159,52 @@ pub fn scanFile(
     }
     const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
     defer _ = linux.close(fd);
+
+    // Fast-path: read directly into scratch buffer if provided (no lseek, no heap alloc, no mutex).
+    if (scratch) |sbuf| {
+        var got: usize = 0;
+        var read_err: ?linux.E = null;
+        while (got < sbuf.len) {
+            const rr = linux.read(fd, sbuf.ptr + got, sbuf.len - got);
+            const e = linux.errno(rr);
+            if (e == .INTR) continue;
+            if (e != .SUCCESS) {
+                read_err = e;
+                break;
+            }
+            if (rr == 0) break; // EOF reached!
+            got += rr;
+        }
+
+        if (read_err) |e| {
+            res.err = e;
+            return res;
+        }
+
+        // Did the entire file fit in the scratch buffer?
+        if (got < sbuf.len) {
+            if (got == 0) {
+                if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+                return res;
+            }
+            const data = sbuf[0..got];
+            const probe = @min(data.len, binary_probe_bytes);
+            const is_binary = !binary and std.mem.findScalar(u8, data[0..probe], 0) != null;
+            if (!is_binary) {
+                const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
+                    res.err = .NOMEM;
+                    return res;
+                };
+                res.matched = br.matched;
+                res.lines = br.lines;
+                res.bytes = data.len;
+            }
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+            return res;
+        }
+        // File >= sbuf.len: rewind to 0 for mmap/read fallback.
+        _ = linux.lseek(fd, 0, linux.SEEK.SET);
+    }
 
     const szr = linux.lseek(fd, 0, linux.SEEK.END);
     const sz_err = linux.errno(szr);

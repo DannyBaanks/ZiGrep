@@ -100,7 +100,9 @@ const Ctx = struct {
     found: std.atomic.Value(bool) = .init(false),
 };
 
-fn scanOne(ctx: *Ctx, idx: usize) void {
+const default_scratch_bytes = 128 * 1024; // 128 KB covers ~97% of files
+
+fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     const slot = &ctx.slots[idx];
     const res = scan.scanFile(
         ctx.gpa,
@@ -110,6 +112,7 @@ fn scanOne(ctx: *Ctx, idx: usize) void {
         ctx.mode,
         ctx.binary,
         &slot.buf,
+        scratch,
     );
     slot.done = true;
     slot.matched = res.matched;
@@ -121,15 +124,25 @@ fn scanOne(ctx: *Ctx, idx: usize) void {
 }
 
 fn worker(ctx: *Ctx) void {
+    const scratch = ctx.gpa.alloc(u8, default_scratch_bytes) catch null;
+    defer if (scratch) |s| ctx.gpa.free(s);
+
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
         const idx = ctx.next.fetchAdd(1, .monotonic);
         if (idx >= ctx.files.len) return;
         // Bounded run-ahead: keep at most `window` files' output alive.
+        var spins: usize = 0;
         while (idx -| ctx.emit_cursor.load(.acquire) >= ctx.window) {
-            std.Thread.yield() catch {};
+            spins += 1;
+            if (spins >= 16) {
+                sleepBrief();
+                spins = 0;
+            } else {
+                std.Thread.yield() catch {};
+            }
         }
-        scanOne(ctx, idx);
+        scanOne(ctx, idx, scratch);
     }
 }
 
@@ -413,12 +426,14 @@ pub fn main(init: std.process.Init) !void {
     };
 
     var out: Out = .{};
+    const main_scratch = gpa.alloc(u8, default_scratch_bytes) catch null;
+    defer if (main_scratch) |s| gpa.free(s);
 
     if (!use_threads) {
         var idx: usize = 0;
         while (idx < files.items.len) : (idx += 1) {
             if (opts.mode == .quiet and ctx.found.load(.acquire)) break;
-            scanOne(&ctx, idx);
+            scanOne(&ctx, idx, main_scratch);
             if (opts.mode != .quiet) {
                 out.writeAll(slots[idx].buf.items);
                 slots[idx].buf.deinit(gpa);
@@ -457,7 +472,7 @@ pub fn main(init: std.process.Init) !void {
                 if (ctx.next.load(.monotonic) -| ctx.emit_cursor.load(.acquire) < window) {
                     const idx = ctx.next.fetchAdd(1, .monotonic);
                     if (idx < slots.len) {
-                        scanOne(&ctx, idx);
+                        scanOne(&ctx, idx, main_scratch);
                         miss = 0;
                         continue;
                     }

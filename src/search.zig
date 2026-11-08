@@ -17,14 +17,84 @@ const std = @import("std");
 
 pub const Algo = enum { auto, bmh, memchr };
 
+pub const byte_rank: [256]u8 = blk: {
+    var r = [_]u8{10} ** 256;
+    // Control characters & whitespace
+    r['\n'] = 250;
+    r['\r'] = 150;
+    r['\t'] = 220;
+    r[' '] = 255;
+
+    // Digits
+    for ('0'..'9' + 1) |c| r[c] = 130;
+
+    // Common symbols in code
+    r['_'] = 190;
+    r[';'] = 180;
+    r['('] = 175;
+    r[')'] = 175;
+    r['{'] = 160;
+    r['}'] = 160;
+    r['['] = 140;
+    r[']'] = 140;
+    r['"'] = 165;
+    r['\''] = 120;
+    r[':'] = 160;
+    r[','] = 170;
+    r['.'] = 180;
+    r['='] = 170;
+    r['/'] = 140;
+    r['-'] = 150;
+    r['+'] = 120;
+    r['*'] = 130;
+    r['<'] = 130;
+    r['>'] = 130;
+
+    // Uppercase letters (moderately rare compared to lowercase in typical code)
+    for ('A'..'Z' + 1) |c| r[c] = 80;
+
+    // Lowercase letters (standard frequency order: rare -> common)
+    r['z'] = 30;
+    r['q'] = 35;
+    r['x'] = 45;
+    r['j'] = 50;
+    r['k'] = 60;
+    r['v'] = 75;
+    r['b'] = 90;
+    r['p'] = 105;
+    r['y'] = 110;
+    r['g'] = 115;
+    r['f'] = 120;
+    r['w'] = 125;
+    r['m'] = 135;
+    r['u'] = 145;
+    r['c'] = 155;
+    r['d'] = 165;
+    r['l'] = 175;
+    r['h'] = 180;
+    r['r'] = 195;
+    r['s'] = 205;
+    r['n'] = 210;
+    r['i'] = 215;
+    r['o'] = 220;
+    r['a'] = 225;
+    r['t'] = 235;
+    r['e'] = 245;
+
+    break :blk r;
+};
+
 pub const Searcher = struct {
     needle: []const u8,
     algo: Algo,
     /// `skip[c]` = distance to advance the window when the byte at the last
     /// position of the window is `c`. Default is the pattern length.
     skip: [256]u32 = undefined,
+    rarest_offset: u32 = 0,
+    rarest_byte: u8 = 0,
 
-    /// Builds the BMH skip table. Must be called exactly once per pattern.
+    /// Builds the BMH skip table and identifies the rarest byte for SIMD scanning.
+    /// Must be called exactly once per pattern.
     pub fn init(needle: []const u8, algo: Algo) Searcher {
         var self: Searcher = .{ .needle = needle, .algo = algo };
         if (needle.len > std.math.maxInt(u32)) unreachable; // absurd pattern size
@@ -36,13 +106,26 @@ pub const Searcher = struct {
         while (i + 1 < needle.len) : (i += 1) {
             self.skip[needle[i]] = @intCast(needle.len - 1 - i);
         }
+
+        var rarest_idx: u32 = 0;
+        var min_rank: u8 = 255;
+        for (needle, 0..) |b, idx| {
+            const r = byte_rank[b];
+            if (r < min_rank) {
+                min_rank = r;
+                rarest_idx = @intCast(idx);
+            }
+        }
+        self.rarest_offset = rarest_idx;
+        self.rarest_byte = if (needle.len > 0) needle[rarest_idx] else 0;
+
         return self;
     }
 
     /// Resolves `auto` against the actual needle length.
     pub fn effectiveAlgo(self: *const Searcher) Algo {
         return switch (self.algo) {
-            .auto => if (self.needle.len <= 3) .memchr else .bmh,
+            .auto => .memchr,
             else => self.algo,
         };
     }
@@ -81,12 +164,15 @@ pub const Searcher = struct {
     fn findMemchr(self: *const Searcher, hay: []const u8, start: usize) ?usize {
         const nd = self.needle;
         const n = nd.len;
-        var i = start;
-        while (i + n <= hay.len) {
-            const p = std.mem.findScalarPos(u8, hay, i, nd[0]) orelse return null;
-            if (p + n > hay.len) return null;
-            if (std.mem.eql(u8, hay[p .. p + n], nd)) return p;
-            i = p + 1;
+        const roff = self.rarest_offset;
+        const rbyte = self.rarest_byte;
+        var p_idx = start + roff;
+        while (p_idx < hay.len) {
+            const p = std.mem.findScalarPos(u8, hay, p_idx, rbyte) orelse return null;
+            const cand = p - roff;
+            if (cand + n > hay.len) return null;
+            if (std.mem.eql(u8, hay[cand .. cand + n], nd)) return cand;
+            p_idx = p + 1;
         }
         return null;
     }
