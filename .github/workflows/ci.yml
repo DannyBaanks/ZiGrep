@@ -18,12 +18,12 @@ jobs:
       - name: Install dependencies (ripgrep & GNU grep)
         run: |
           sudo apt-get update
-          sudo apt-get install -y grep ripgrep
+          sudo apt-get install -y grep ripgrep xz-utils
 
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: master
+      - name: Setup Zig 0.16.0
+        run: |
+          curl -sSL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz | sudo tar -xJ -C /usr/local
+          echo "/usr/local/zig-x86_64-linux-0.16.0" >> $GITHUB_PATH
 
       - name: Verify toolchain
         run: |
