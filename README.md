@@ -1,4 +1,8 @@
-# zigrep (`zgrep`) ⚡
+# zigrep ⚡
+
+[![CI](https://github.com/DannyBaanks/ZigGrep/actions/workflows/ci.yml/badge.svg)](https://github.com/DannyBaanks/ZigGrep/actions/workflows/ci.yml)
+[![Zig](https://img.shields.io/badge/Zig-0.16.0-orange.svg)](https://ziglang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Ultra-fast, zero-libc, grep-compatible search engine written in pure Zig 0.16.**
 
@@ -67,23 +71,26 @@ Every figure represents the **median of repeated runs after warm-up** with groun
 git clone https://github.com/DannyBaanks/ZigGrep.git
 cd ZigGrep
 
-# Build optimized binaries (zigrep and zgrep)
+# Build optimized binary
 zig build -Doptimize=ReleaseFast
 
 # Run all unit tests (40/40)
 zig build test --summary all
+
+# Run pure Zig differential oracle against GNU grep & ripgrep (16/16)
+zig build oracle
 ```
 
-Binaries will be available at `zig-out/bin/zigrep` and `zig-out/bin/zgrep`.
+Binaries will be installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
 
 ---
 
 ## 📖 CLI Usage
 
 ```text
-zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
+zigrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
 
-usage: zgrep [OPTIONS] PATTERN [PATH...]
+usage: zigrep [OPTIONS] PATTERN [PATH...]
 
 options:
   -F                fixed-string pattern(s); without it PATTERN is a regex
@@ -124,10 +131,11 @@ options:
 
 ---
 
-## 🧪 Ground Truth & Verification
+## 🧪 Ground Truth & CI Verification
 
-Every feature is backed by strict correctness controls:
-* **Differential Oracles**: Continuous verification against GNU grep (`-rIF` / `-rIE`) and ripgrep across thousands of synthetic and production source files.
+Every commit is tested via GitHub Actions CI in pure Zig:
+* **Unit Tests**: 40/40 tests covering memory allocators, AST parsing, regex compilation, and SIMD shifts.
+* **Differential Oracle (`zig build oracle`)**: 16 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep.
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: Standard mode preserves exact directory-entry emission order identical to GNU grep; streaming mode (`-k`) provides high-throughput concurrent emission.
 

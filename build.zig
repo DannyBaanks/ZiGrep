@@ -62,4 +62,17 @@ pub fn build(b: *std.Build) void {
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run zgrep unit tests");
     test_step.dependOn(&run_unit_tests.step);
+
+    const oracle_exe = b.addExecutable(.{
+        .name = "oracle",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("scripts/oracle.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const run_oracle = b.addRunArtifact(oracle_exe);
+    run_oracle.step.dependOn(b.getInstallStep());
+    const oracle_step = b.step("oracle", "Run differential oracle tests against GNU grep and ripgrep");
+    oracle_step.dependOn(&run_oracle.step);
 }

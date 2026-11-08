@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-oracle:
+    name: Build, Unit Tests & Pure Zig Oracle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (ripgrep & GNU grep)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y grep ripgrep
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: master
+
+      - name: Verify toolchain
+        run: |
+          zig version
+          grep --version | head -1
+          rg --version | head -1
+
+      - name: Build zigrep (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Run unit tests (40/40)
+        run: zig build test --summary all
+
+      - name: Run pure Zig differential oracle (zigrep vs GNU grep & ripgrep)
+        run: zig build oracle

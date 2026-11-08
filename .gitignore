@@ -5,3 +5,7 @@ zig-out/
 
 # generated benchmark corpus (regenerate with scripts/gen_corpus.zig)
 bench-corpus/
+
+# ad-hoc scratch and rea experiments
+analysis/
+evidence/rea/
