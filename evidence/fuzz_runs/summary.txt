@@ -1,0 +1,10 @@
+knob=1 seed=101 iters=20000 54s | agree_all=20000
+knob=2 seed=102 iters=20000 64s | agree_all=14299 all_differ=1219 zg_alone=1520 zg_with_grep=914 zg_with_rg=2048
+knob=3 seed=103 iters=20000 62s | agree_all=14096 all_differ=1016 zg_alone=883 zg_with_grep=1967 zg_with_rg=2038
+knob=3 seed=104 iters=20000 60s | agree_all=13954 all_differ=1118 zg_alone=931 zg_with_grep=1988 zg_with_rg=2009
+knob=4 seed=105 iters=20000 64s | agree_all=16407 all_differ=1149 zg_alone=1399 zg_with_grep=848 zg_with_rg=197
+knob=4 seed=106 iters=20000 66s | agree_all=16370 all_differ=1202 zg_alone=1330 zg_with_grep=886 zg_with_rg=212
+knob=5 seed=107 iters=20000 53s | agree_all=13886 all_differ=639 zg_alone=1293 zg_with_grep=2024 zg_with_rg=2158
+knob=5 seed=108 iters=20000 52s | agree_all=13737 all_differ=691 zg_alone=1360 zg_with_grep=2067 zg_with_rg=2145
+knob=6 seed=109 iters=20000 51s | agree_all=12853 all_differ=1051 zg_alone=3115 zg_with_grep=583 zg_with_rg=2398
+knob=6 seed=110 iters=20000 51s | agree_all=12823 all_differ=1050 zg_alone=3146 zg_with_grep=616 zg_with_rg=2365

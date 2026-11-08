@@ -1,0 +1,744 @@
+{
+ "iters": 20000,
+ "knob": 6,
+ "seed": 110,
+ "workers": 4,
+ "secs": 51.5,
+ "counts": {
+  "agree_all": 12823,
+  "zg_with_grep": 616,
+  "zg_with_rg": 2365,
+  "all_differ": 1050,
+  "zg_alone": 3146
+ },
+ "samples": {
+  "all_differ": [
+   {
+    "i": 8,
+    "pat": "test|scan|omega|über|alpha|pub|test|stream|searcher|io_uring|literal|literal|buffer|kamikaze|vector|std|buffer|corrupt|über|scan|searcher|corrupt|alpha|result|stream|literal|über|corrupt|omega|result|alpha|stream|allocator|searcher|über|io_uring|corrupt|pattern|literal",
+    "flags": [
+     "-l",
+     "-L",
+     "-i"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 21,
+    "pat": "|[^a-z]+?\\s\\s\\wkamikazewalkkamikaze}(a|)[0-9](a+)+return(a|b|c)\\\\constpatternwalk|$|searcher{.*\\.{0,0}constsearcher",
+    "flags": [
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 2,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 83,
+    "pat": "kamikaze|alpha|literal|test|usize|alpha|stream|pub|scan|result|stream|literal|io_uring|pattern|const|alpha|const|fn|über|pattern|std|fn|kamikaze|nadír|result|const|pub|corrupt|literal|std|error|stream|nadír|omega|usize|fn|pattern|result|walk|pub|allocator|nadír|usize|searcher|alpha|result|literal|alpha|fn|kamikaze|kamikaze",
+    "flags": [
+     "-i",
+     "-a",
+     "-c",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 85,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-v",
+     "-L",
+     "-a",
+     "-w",
+     "-F"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 112,
+    "pat": "pattern|const|searcher|return|stream|stream|scan|allocator|pub|vector|result|scan|pub|nadír|kamikaze|vector|test|usize|buffer|usize|buffer|kamikaze|pub|literal|corrupt|buffer|kamikaze|fn|searcher|io_uring|std|test|const|fn|std|nadír|test|nadír|const|walk|nadír|error|usize|buffer|literal|scan|return|stream|searcher|omega|filter|stream|walk|vector|searcher|fn|filter|nadír|searcher|searcher|pub|nadír|scan|pub|pub|scan|usize|kamikaze|kamikaze|vector|vector|scan|nadír|usize|filter|filter|const|test|const|corrupt|const|allocator|pattern|nadír|fn|alpha|return|io_uring|error|searcher",
+    "flags": [
+     "-c",
+     "-L",
+     "-a",
+     "-i"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 134,
+    "pat": "filter|test|test|vector|error|return|const|kamikaze|walk|alpha|error|über|scan|error|pub|io_uring|omega|allocator|buffer|walk|alpha|kamikaze|error|über|usize|nadír|const|usize|error|nadír|nadír|literal|alpha|corrupt|return|fn|omega|io_uring|vector|corrupt|pub|searcher|test|omega|return|buffer|pattern|fn|scan|stream|kamikaze|error",
+    "flags": [
+     "-L",
+     "-v",
+     "-F"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 143,
+    "pat": "return|io_uring|allocator|searcher|buffer|corrupt|test|vector|io_uring|const|searcher|searcher|filter|scan|stream|allocator|test|test|error|stream|corrupt|über|filter|usize|fn|io_uring|pattern|kamikaze|vector|corrupt|kamikaze|const|stream|corrupt|usize|filter|const|test|buffer|walk|allocator|fn|literal|alpha|buffer|über|stream|stream|pattern|io_uring|walk",
+    "flags": [
+     "-v",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 160,
+    "pat": "scan|result|result|alpha|test|alpha|result|kamikaze|walk|result|über|filter|test|kamikaze|filter|corrupt|walk|corrupt|filter|searcher|vector|result|scan|vector|alpha|test|usize|filter|kamikaze|const|allocator|nadír|literal|searcher|searcher|allocator|const|nadír|test|corrupt|test|return|std|const|über|corrupt|std|literal|corrupt|scan|pub|searcher|über|result|scan|allocator|literal|pattern|über|io_uring|std|nadír|vector|omega|pattern|omega|test|fn|usize|alpha|corrupt|kamikaze|return|searcher|walk|io_uring|stream|walk|literal|nadír|pattern|pub|allocator|omega|allocator|stream|nadír|pattern|const|vector|const|searcher|test|std|usize|io_uring|stream|corrupt|std|std|searcher|kamikaze|allocator|stream|fn|omega|allocator|io_uring|pattern|usize|usize|allocator|scan|walk|alpha|io_uring|alpha",
+    "flags": [
+     "-v",
+     "-c",
+     "-L",
+     "-m",
+     "3"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 233,
+    "pat": "ÊÀs\u0016g 7¡0\u0001{N¸ýø®_º¼\u0014\u0015\u0019õ\u001eÞ",
+    "flags": [
+     "-a",
+     "-v",
+     "-i",
+     "-F",
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 249,
+    "pat": "pubfilterresult{1,5}corrupt|std\\.(mem|math)testscan[{std\\.(mem|math)[usize{2,}||{0,1}[0-9]literalpubusize\\s]filterwalküberusize[[:alpha:]]^[0-9]pub\\s+(const|fn)",
+    "flags": [
+     "-c",
+     "-w",
+     "-a",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 268,
+    "pat": "fn|omega|return|searcher|fn|usize|nadír|io_uring|scan|fn|omega|fn|usize|test|omega|allocator|allocator|filter|buffer|return|io_uring|kamikaze|buffer|alpha|omega|omega|stream|result|kamikaze|pub|error|filter|walk|kamikaze|result|test|test|pub|kamikaze|nadír|test|usize|omega|test|std|const|vector|omega|literal|pub|scan|allocator|buffer|vector|result|corrupt|literal|über|usize|alpha|std|scan|pattern|alpha|nadír|io_uring|allocator|pattern|alpha|über|alpha|filter|stream|alpha|allocator|std|filter|result|allocator|pub|nadír|nadír|fn|über|stream|buffer|corrupt|allocator|stream|scan|nadír|test|pub|über|io_uring|corrupt|usize|filter|kamikaze|nadír|nadír|scan|nadír|searcher",
+    "flags": [
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 313,
+    "pat": "filter|io_uring|std|result|allocator|searcher|error|error|pub|usize|result|fn|return|kamikaze|corrupt|io_uring|fn|vector|corrupt|corrupt|literal|fn|const|fn|alpha|pattern|literal|searcher|pattern|filter|scan|alpha|über|pattern|vector|error|result|std|stream|result|scan|test|über|filter|nadír|scan|io_uring|std|result|scan|pub|pattern|kamikaze|return|pub|vector|stream|nadír|filter|const|pub|std|buffer|return|const|io_uring|nadír|searcher|scan|buffer|searcher|pub|pub|test|walk|nadír|buffer|error|result|literal|usize|über|stream|vector|vector|io_uring|stream|filter|walk|result|allocator|std|std|buffer|nadír|pattern|walk|omega|alpha|return|über|usize|filter|error|walk",
+    "flags": [
+     "-l",
+     "-L",
+     "-v",
+     "-i",
+     "-w",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 346,
+    "pat": "io_uringstd\\.(mem|math){0,0}über}?io_uring[[:alpha:]]$fn\\s+\\w+\\(testfn[a-z][[:alpha:]]überalphareturn[error*{0,0}|+\\\\io_uringfilter(a+)+\\\\pub\\s+(const|fn){0,0}omega*pubkamikaze\\w",
+    "flags": [
+     "-a",
+     "-F",
+     "-L",
+     "-v",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 354,
+    "pat": "²",
+    "flags": [
+     "-v",
+     "-a",
+     "-L",
+     "-m",
+     "3"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 372,
+    "pat": "{0,0}fn$return(|b)()*]io_uring[??*usize(a|a)*vectorpatterna{3}std{1,5}[std\\.(mem|math)scan)omegafiltervectorerror(a|a)*stream?consta{3}streamnadír{0,1}\\\\error{0,0}{1,5}(|b){1,5}+pub\\s+(const|fn)[0-9]errorstd^filterconstcorruptfilter(a|)corrupt?allocator[a-z]|^test",
+    "flags": [
+     "-v",
+     "-a",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 2,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 384,
+    "pat": "vector|error|kamikaze|nadír|io_uring|literal|kamikaze|return|kamikaze|vector|corrupt|nadír|result|stream|test|alpha|error|std|corrupt|result|fn|kamikaze|stream|über|fn|usize|return|pub|alpha|const|pattern|result|allocator|vector|walk|usize|allocator|allocator|std|io_uring|return|scan|return|walk|const|error|omega|scan|stream|error|über|nadír|return|vector|error|alpha|usize|nadír|allocator|searcher|io_uring|pub|test|usize|über|error|return|filter|vector|searcher|nadír|std|omega|corrupt|omega|searcher|kamikaze|error|result|literal|über|nadír|return|vector|pattern|vector|nadír|pub|io_uring|fn",
+    "flags": [
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 444,
+    "pat": "¬OÔ³k\u000eÇÑÕ2e£ÐXÕ÷ê¸¿¯f­ ¯Búðr3\u0005$Õë£",
+    "flags": [
+     "-i",
+     "-v",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 487,
+    "pat": "ÇA",
+    "flags": [
+     "-L",
+     "-i",
+     "-F",
+     "-v",
+     "-m",
+     "3"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 489,
+    "pat": "))omega(a*)*io_uring(a|a)*+usizewalk{0,1}pattern+literalconst\\\\bufferreturnpub[a-z]{10,2}a{3}literal",
+    "flags": [
+     "-w",
+     "-v",
+     "-L",
+     "-F"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 513,
+    "pat": "error|filter|buffer|alpha|omega|corrupt|fn|std|searcher|filter|literal|io_uring|buffer|std|allocator|alpha|const|const|return|allocator|usize|fn|vector|usize|vector|nadír|corrupt|const|test|filter",
+    "flags": [
+     "-l",
+     "-w",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 533,
+    "pat": "((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-a",
+     "-v",
+     "-F",
+     "-L",
+     "-i"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 555,
+    "pat": "test|literal|fn|buffer|über|result|kamikaze|stream|über|test|const|error|buffer|usize|corrupt|result|stream|searcher|stream|omega|vector|buffer|error|return|alpha|stream|fn|allocator|filter|pub|searcher|filter|literal|fn|filter|buffer|pub|pub|pattern|allocator|allocator|omega|stream|stream|result|scan|error|io_uring|stream|scan|usize|filter|fn|buffer|buffer|allocator|stream|corrupt|omega|vector|pattern|error|corrupt",
+    "flags": [
+     "-L",
+     "-F",
+     "-w",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 639,
+    "pat": "searcherüber**{*\\.[$omegasearcherfnreturn[^a-z]fn\\s+\\w+\\(buffer{0,0}vectorpub\\s+(const|fn)omega||pattern(a|b|c)(a|a)*über(|b)(a*)*walkalphapub\\s+(const|fn)||",
+    "flags": [
+     "-L",
+     "-q",
+     "-w",
+     "-c",
+     "-l"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 669,
+    "pat": "literal|filter|error|error|filter|result|vector|kamikaze|vector|omega|omega|buffer|std|fn|omega|allocator|nadír|return|result|scan|scan|allocator|io_uring|io_uring|über|literal|usize|result|fn|vector|über|pattern|vector|return|corrupt|über|nadír|pattern|filter|corrupt|allocator|const|stream|pub|pub|scan|pub|omega|test|filter|omega|error|pattern|std|buffer|error|usize|nadír|buffer|über|corrupt|walk|kamikaze|corrupt|const|omega|omega|stream|über|kamikaze|error|const|return|stream|return|io_uring|walk|nadír|fn|std|filter|scan|result|usize|searcher|stream|alpha|io_uring|vector|über|return|pub|über",
+    "flags": [
+     "-L",
+     "-w",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 670,
+    "pat": "filter|stream|über|pub|return|alpha|pub|const|test|walk|error|alpha|error|return|error|error|pattern|result|pub|walk|kamikaze|buffer|buffer|vector|omega|nadír|walk|pub|über|filter|buffer|pattern|error|filter|nadír",
+    "flags": [
+     "-L",
+     "-w"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   }
+  ],
+  "zg_alone": [
+   {
+    "i": 11,
+    "pat": "wûóÙDö\u000f!Ç%X",
+    "flags": [
+     "-a",
+     "-c",
+     "-i",
+     "-l",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 16,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-q",
+     "-v",
+     "-w",
+     "-i",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 18,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-l",
+     "-a",
+     "-L",
+     "-F",
+     "-w"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 29,
+    "pat": ")÷J$*\u0003ÁÙì",
+    "flags": [
+     "-v",
+     "-w",
+     "-l",
+     "-L",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 35,
+    "pat": "3íÆ'\u001eÐP.¨A\u0015Þ\u001ftõëF)Z\u0017µÀ*¦\r<9AÅº",
+    "flags": [
+     "-F",
+     "-c",
+     "-q",
+     "-L",
+     "-m",
+     "3"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 36,
+    "pat": "vector|omega|literal|usize|vector|corrupt|error|pattern|vector|über|test|alpha|buffer|pub|walk|literal|buffer|literal|kamikaze|stream|fn|pattern|std|stream|const|scan|vector|omega|allocator|scan|omega|usize|std|std|pub|fn|searcher|std|pattern|io_uring|kamikaze|vector|std|filter|allocator|const|buffer|omega|nadír|searcher|filter|io_uring|buffer|std|usize|buffer|fn|test|fn|allocator|stream|usize|literal|vector|nadír|searcher|error|über|result|return|literal|pub|searcher|kamikaze|buffer|stream|test|stream|fn|usize|result|io_uring|filter|alpha|std|fn|usize",
+    "flags": [
+     "-q",
+     "-i",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 37,
+    "pat": "/ðÌL$ÿîj¢\u0002]ø7îÖ9!\\\u0015+óS\\Å)Ç<¸",
+    "flags": [
+     "-c",
+     "-q",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 43,
+    "pat": "_<Ñå\u0005p\u0004¿Åñ©[Z\u001aâ\"ìÜN?®ÚÔk±hKbÔúïÈ\u0019.&\u000eÞª6\u0011ÙÓJÆà\u0004º°\b7",
+    "flags": [
+     "-i",
+     "-a",
+     "-F",
+     "-c",
+     "-L",
+     "-m",
+     "0"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 57,
+    "pat": "stream|allocator|fn|result|return|alpha|stream|filter|buffer|nadír|return|fn|allocator|omega|walk|const|searcher|vector|corrupt|literal|vector|pub|return|stream|allocator|corrupt|test|walk|alpha|pattern|pub|omega|allocator|literal|scan|pattern|allocator|scan|pattern|vector|pub|walk|pattern|pattern|const|test|error|usize|vector|usize|fn|nadír|stream|corrupt|error|const|std|literal|omega|alpha|pub|test|test|vector|walk|filter|über|std",
+    "flags": [
+     "-v",
+     "-a",
+     "-q",
+     "-l",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 65,
+    "pat": "((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-v",
+     "-c",
+     "-w",
+     "-a",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 69,
+    "pat": "c¢Å\u0005´ûÞmpÕzÙ\u0007Ü÷ÜNO$Þ\u0010\u001e",
+    "flags": [
+     "-l",
+     "-w",
+     "-q",
+     "-F",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 72,
+    "pat": "corrupt\\d${10,2}?[0-9]buffer$std{0,0}std\\.(mem|math)alphastdfn${0,1}\\\\literal[[:alpha:]]patternerrorstd{0,1}fn\\s+\\w+\\(puba{3}io_uring\\s\\w|std\\s(a*)*(a+)+{1,5}fn{2,}pub])kamikazefn\\s+\\w+\\((a|a)*^constbufferscan[[:alpha:]]$|patterncorrupttest*omegavectorstream\\d{0,0}}",
+    "flags": [
+     "-q",
+     "-a",
+     "-l",
+     "-v",
+     "-F",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 73,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-L",
+     "-F",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 90,
+    "pat": "errorkamikazepatternnadír{0,1}||?testkamikaze?[^a-z]stdüber\\.\\spub\\s+(const|fn)corruptscankamikazenadír[0-9]?(a|a)*fn\\s+\\w+\\([|searcherusizepubconstnadír[^a-z]pattern[[:alpha:]]{1,5}stdalpha\\\\{1,5}omega(a+)+allocator|{10,2}patternpattern(a|)std",
+    "flags": [
+     "-a",
+     "-v",
+     "-w",
+     "-L",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 101,
+    "pat": "((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-L",
+     "-F"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 102,
+    "pat": "\u0017LÁ!êcY",
+    "flags": [
+     "-q",
+     "-v",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 110,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-l",
+     "-i",
+     "-w",
+     "-a",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 114,
+    "pat": "scan|error|allocator|alpha|alpha|nadír|usize|pub|filter|walk|error|alpha|pub|walk|walk|nadír|allocator|filter|usize|kamikaze|buffer|literal|buffer|pattern|nadír|nadír|walk|omega|usize|io_uring|std|usize|kamikaze|scan|std|usize|const|io_uring|über|pattern|searcher|filter|pattern|pattern|fn|usize|stream|result|stream|return|usize|vector|allocator|const|fn|allocator|walk|scan|vector|buffer|result|fn|error|stream|scan|über|usize|searcher|allocator|kamikaze|buffer|literal|alpha|corrupt|walk|kamikaze|alpha|fn|stream|const|corrupt|vector|result|allocator|vector|result|literal|pub|usize|vector|vector|alpha|alpha|test|searcher|const|test|pattern|return|pub|omega|omega|allocator|literal|literal|buffer|const|über",
+    "flags": [
+     "-F",
+     "-c",
+     "-L",
+     "-i",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 117,
+    "pat": "patterntest[0-9]?filtera{3}(|b)\\d]\\\\allocatorreturn{conststreama{3}.){[a-z]^searcher$pub\\s+(const|fn)pub\\s+(const|fn)error||[0-9][fn\\s+\\w+\\((a+)+{0,0}\\\\(a|a)*[[:alpha:]]\\w(a|a)*||alpha(|b)[[:alpha:]][patternreturn^{0,1}(literal",
+    "flags": [
+     "-l",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 121,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-v",
+     "-q",
+     "-c",
+     "-F",
+     "-m",
+     "3"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 122,
+    "pat": "alpha()(a+)+||fn\\s+\\w+\\(stdconst{2,}{10,2}(a|b|c)(|b)(a*)*[0-9]){+pub(a|a)*\\\\}{10,2}searcher$\\dpub\\s+(const|fn)||[a-z](a*)*[^a-z][0-9]{2,}über({10,2}\\d",
+    "flags": [
+     "-F",
+     "-L",
+     "-a",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 125,
+    "pat": "(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+    "flags": [
+     "-a",
+     "-i",
+     "-q",
+     "-L",
+     "-F"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 133,
+    "pat": "(a*)*$fn\\s+\\w+\\(()a{3})(|b)constüber{10,2}constsearcher?^\\sstd\\.(mem|math).\\.pattern\\.\\d[^a-z]walk(corruptconstalpha\\dfnstd\\.(mem|math)a{3}stream{2,}kamikazea{3}(a+)+{10,2}\\.fnerror||std\\.(mem|math)allocatorfnpub\\s+(const|fn)(a|a)*error{2,}(a+)+a{3}[(a*)*(a|a)*",
+    "flags": [
+     "-v",
+     "-q",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 164,
+    "pat": "+errora{3}||nadír[0-9]searcher{0,1}+{\\dpattern{0,1}\\d\\.überalpha[^a-z]\\\\[0-9]",
+    "flags": [
+     "-i",
+     "-w",
+     "-m",
+     "0"
+    ],
+    "zg": 2,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 179,
+    "pat": "std|const|über|vector|scan|io_uring|scan|filter|result|return|usize|über|fn|usize|alpha|usize|alpha|filter|std|walk|io_uring|buffer|searcher|error|test|scan|über|pub|kamikaze|buffer|filter|pub",
+    "flags": [
+     "-v",
+     "-q",
+     "-a",
+     "-l",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   }
+  ]
+ }
+}

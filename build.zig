@@ -93,4 +93,22 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| fuzz_run.addArgs(args);
     const fuzz_step = b.step("fuzz", "Run the adversarial entropic fuzzer swarm");
     fuzz_step.dependOn(&fuzz_run.step);
+
+    const cell_mod = b.createModule(.{
+        .root_source_file = b.path("scripts/cell_fuzz.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    cell_mod.addAnonymousImport("zgrep", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const cell_exe = b.addExecutable(.{ .name = "cell_fuzz", .root_module = cell_mod });
+    b.installArtifact(cell_exe);
+    const cell_run = b.addRunArtifact(cell_exe);
+    cell_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| cell_run.addArgs(args);
+    const cell_step = b.step("cell-fuzz", "Run the N-dimensional discrete cell space fuzzer");
+    cell_step.dependOn(&cell_run.step);
 }

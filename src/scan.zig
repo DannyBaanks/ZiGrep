@@ -128,6 +128,10 @@ pub fn scanBuffer(
 ) Allocator.Error!BufferResult {
     var res: BufferResult = .{};
 
+    if (data.len == 0) {
+        return res;
+    }
+
     if (config.max_count != null and config.max_count.? == 0) {
         return res;
     }

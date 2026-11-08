@@ -1,0 +1,11 @@
+{
+ "iters": 20000,
+ "knob": 1,
+ "seed": 101,
+ "workers": 4,
+ "secs": 54.1,
+ "counts": {
+  "agree_all": 20000
+ },
+ "samples": {}
+}
