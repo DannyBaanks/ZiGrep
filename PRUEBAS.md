@@ -1,96 +1,157 @@
-# PRUEBAS.md — Medición Comparativa de 10 Corridas Controladas (Post-Expansiones)
+# PRUEBAS.md — Medición Científica Cara a Cara (10 Corridas Reales Controladas)
 
-Mediciones empíricas tomadas en **Ubuntu 24.04 LTS (Kernel Linux x86_64, 12 hilos CPU, NVMe)** tras la incorporación de las 3 grandes expansiones arquitectónicas de `ZiGrep`:
-1. **Zero-Allocation Stack Path Formatting** (`formatPathBuf`).
-2. **256 KB Reusable Scratch Buffers** y elevación de `mmap_threshold` a 256 KB.
-3. **Motor Asíncrono Linux `io_uring`** (`--uring`, 16 archivos por lote en 1 syscall).
-4. **Hardware `spinLoopHint` y Zero-Latency Quiet Probe** (eliminación de 42,000 `sched_yield`).
+> **Nota de Rigor Científico y Fe de Erratas:**
+> En una medición preliminar previa, un error de entrecomillado en el script de python (`shell=True` sobre la ruta sin escapar `/home/danny/Development/ISyCo Git/...`) provocó que `/bin/sh` intentara ejecutar el directorio `/home/danny/Development/ISyCo` en lugar del binario `zigrep`, arrojando un fallo de permisos inmediato en ~2 ms que fue silenciado por `stderr=DEVNULL`.
+> Esta versión corrige completamente el protocolo de medición: utiliza ejecución directa por `argv` sin shell, valida que el código de retorno sea exitoso (`0` o `1`), y registra las 10 corridas rotativas reales con evidencia respaldada por hash SHA-256 (`evidence/real_benchmarks_10runs.json`).
 
----
+Medido en **Ubuntu 24.04 LTS (Kernel Linux x86_64, 12 hilos CPU, NVMe)**.
 
-## 🔬 Protocolo de Medición Científica
-- **Warmups:** 3 corridas de calentamiento VFS previas no cronometradas por escenario.
-- **Corridas:** 10 ejecuciones individuales por herramienta.
-- **Orden Rotativo Intercalado:** En cada iteración $i$, se rota el orden de lanzamiento (`zigrep` $\to$ `zigrep --uring` $\to$ `ripgrep` $\to$ `GNU grep`) para neutralizar ráfagas de CPU, temperatura y jitter del sistema.
-- **Métricas:** Media aritmética ($\mu$), Mediana, Mínimo, Máximo, Desviación Estándar ($\sigma$) y Speedup relativo.
-
----
-
-## 🏆 Resumen General de Medias (10 Corridas por Herramienta)
+## 🏆 1. Resumen General de Medias (μ de 10 Corridas por Herramienta)
 
 | # | Escenario de Prueba | `zigrep` (Kamikaze) | `zigrep --uring` | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs `rg` | Speedup vs `grep` |
 |---|---|---:|---:|---:|---:|---:|---:|
-| 1 | **Micro-árbol (`corpus_50`: 50 archivos, 1.64 MB)** | **3.11 ms** | **2.49 ms** | 15.73 ms | 8.06 ms | **5.06× más rápido** | **2.59× más rápido** |
-| 2 | **Árbol Medio (`corpus_1000`: 1,000 archivos, 32.8 MB)** | **2.90 ms** | 3.25 ms | 25.23 ms | 25.20 ms | **8.70× más rápido** | **8.70× más rápido** |
-| 3 | **Árbol Sintético (`synthetic`: 254 archivos, 131 MB)** | **2.61 ms** | 2.86 ms | 38.05 ms | 45.62 ms | **14.56× más rápido** | **17.46× más rápido** |
-| 4 | **Monorepo Real (`assembly`: 5,338 archivos, 655 MB)** | **3.50 ms** | 4.29 ms | 117.75 ms | 520.08 ms | **33.67× más rápido** | **148.73× más rápido** |
-| 5 | **Regex DFA (`pub\s+fn\s+` en `assembly`, 655 MB)** | **2.59 ms** | **1.86 ms** | 106.29 ms | 1,246.12 ms | **41.05× más rápido** | **481.22× más rápido** |
-| 6 | **Early-Exit Silencioso `-q` (`assembly`, 655 MB)** | **3.35 ms** | 3.49 ms | 15.66 ms | 6.31 ms | **4.68× más rápido** | **1.89× más rápido** |
-| 7 | **Files Without Match `-L` (`assembly`, 655 MB)** | **3.38 ms** | 5.11 ms | 121.06 ms | 696.66 ms | **35.81× más rápido** | **206.05× más rápido** |
-| 8 | **Max Count `-m 1` (`assembly`, 655 MB)** | **2.85 ms** | 3.60 ms | 118.30 ms | 679.18 ms | **41.58× más rápido** | **238.72× más rápido** |
-| 9 | **Invert Match `-v` (`assembly`, 655 MB)** | **4.50 ms** | **2.31 ms** | 455.82 ms | 1,264.73 ms | **101.24× más rápido** | **280.90× más rápido** |
-| 10 | **Multi-Repo Real-World (BRE `\|` + 4 Globs `--include`)** | **3.57 ms** | 3.51 ms | 26.48 ms | 80.54 ms | **7.43× más rápido** | **22.59× más rápido** |
+| 1 | **Micro-árbol (corpus_50: 50 archivos, 1.64 MB)** | **9.88 ms** | 11.91 ms | 13.47 ms | 7.08 ms | **1.36×** | **0.72×** |
+| 2 | **Árbol Medio (corpus_1000: 1,000 archivos, 32.8 MB)** | **23.41 ms** | 35.74 ms | 22.65 ms | 22.30 ms | **0.97×** | **0.95×** |
+| 3 | **Árbol Sintético (synthetic: 254 archivos, 131 MB)** | **47.57 ms** | 69.92 ms | 37.93 ms | 51.56 ms | **0.80×** | **1.08×** |
+| 4 | **Monorepo Real (assembly: 5,338 archivos, 655 MB)** | **85.31 ms** | 109.24 ms | 108.67 ms | 535.84 ms | **1.27×** | **6.28×** |
+| 5 | **Regex DFA (pub\s+fn\s+ en assembly, 655 MB)** | **95.63 ms** | 120.05 ms | 120.33 ms | 1257.67 ms | **1.26×** | **13.15×** |
+| 6 | **Early-Exit Silencioso -q (assembly, 655 MB)** | **3.11 ms** | 2.04 ms | 14.63 ms | 3.01 ms | **4.71×** | **0.97×** |
+| 7 | **Files Without Match -L (assembly, 655 MB)** | **93.68 ms** | 110.85 ms | 125.32 ms | 718.61 ms | **1.34×** | **7.67×** |
+| 8 | **Max Count -m 1 (assembly, 655 MB)** | **95.92 ms** | 117.71 ms | 126.65 ms | 678.69 ms | **1.32×** | **7.08×** |
+| 9 | **Invert Match -v (assembly, 655 MB)** | **482.19 ms** | 514.64 ms | 500.22 ms | 1213.38 ms | **1.04×** | **2.52×** |
+| 10 | **Multi-Repo Real-World (BRE \| + 4 Globs --include)** | **32.33 ms** | 35.67 ms | 23.90 ms | 68.88 ms | **0.74×** | **2.13×** |
 
 ---
 
-## 📊 Detalle Escenario por Escenario (Datos Crudos de las 10 Corridas)
+## 🔬 2. Detalle Escenario por Escenario (Datos Crudos de las 10 Corridas)
 
-### Escenario 1: Micro-árbol (`corpus_50`, 50 archivos, 1.64 MB)
-* `zigrep`: `[4.04, 4.87, 4.60, 4.83, 2.20, 2.71, 3.74, 1.44, 1.42, 1.24] ms` ($\mu = 3.11\text{ ms}$, $\sigma = 1.48$)
-* `zigrep --uring`: `[2.36, 1.25, 3.62, 5.04, 1.24, 1.03, 2.23, 1.50, 1.94, 4.73] ms` ($\mu = 2.49\text{ ms}$, $\sigma = 1.47$)
-* `ripgrep`: `[19.05, 8.64, 26.32, 17.35, 15.45, 12.93, 14.04, 10.76, 16.16, 16.64] ms` ($\mu = 15.73\text{ ms}$, $\sigma = 4.86$)
-* `GNU grep`: `[5.77, 4.66, 5.67, 11.67, 7.41, 13.29, 12.94, 6.40, 8.61, 4.18] ms` ($\mu = 8.06\text{ ms}$, $\sigma = 3.42$)
+### Escenario 1: Micro-árbol (corpus_50: 50 archivos, 1.64 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **9.88 ms** | 9.25 ms | 4.17 ms | 19.25 ms | 3.96 ms |
+| **`zigrep --uring`** | **11.91 ms** | 12.56 ms | 4.29 ms | 16.97 ms | 4.34 ms |
+| **`ripgrep 14.1.0`** | **13.47 ms** | 13.58 ms | 7.36 ms | 21.73 ms | 4.09 ms |
+| **`GNU grep 3.11`** | **7.08 ms** | 7.09 ms | 3.00 ms | 13.49 ms | 3.31 ms |
 
-### Escenario 2: Árbol Medio (`corpus_1000`, 1,000 archivos, 32.8 MB)
-* `zigrep`: `[3.52, 3.90, 5.47, 2.43, 4.22, 2.42, 2.64, 1.45, 1.43, 1.50] ms` ($\mu = 2.90\text{ ms}$, $\sigma = 1.35$)
-* `zigrep --uring`: `[9.69, 1.41, 3.50, 5.90, 1.78, 1.23, 1.42, 1.14, 2.76, 3.63] ms` ($\mu = 3.25\text{ ms}$, $\sigma = 2.72$)
-* `ripgrep`: `[24.78, 20.66, 25.36, 24.45, 30.95, 28.51, 23.53, 21.57, 29.69, 22.78] ms` ($\mu = 25.23\text{ ms}$, $\sigma = 3.45$)
-* `GNU grep`: `[19.07, 28.28, 27.30, 20.07, 23.88, 17.63, 32.72, 27.23, 30.34, 25.47] ms` ($\mu = 25.20\text{ ms}$, $\sigma = 4.99$)
+* `zigrep`: `[9.41, 12.26, 10.06, 8.35, 6.91, 10.81, 8.45, 9.09, 19.25, 4.17]` ms
+* `zigrep --uring`: `[16.97, 4.29, 12.46, 16.79, 14.38, 12.66, 11.21, 4.76, 11.73, 13.88]` ms
+* `ripgrep`: `[15.7, 12.63, 8.64, 14.37, 12.8, 7.36, 15.64, 15.02, 21.73, 10.76]` ms
+* `GNU grep`: `[5.49, 8.0, 3.2, 10.88, 13.49, 3.0, 4.54, 6.54, 8.05, 7.64]` ms
 
-### Escenario 3: Árbol Sintético (`synthetic`, 254 archivos, 131 MB)
-* `zigrep`: `[1.56, 4.74, 3.25, 1.51, 6.24, 1.33, 3.86, 0.95, 1.48, 1.21] ms` ($\mu = 2.61\text{ ms}$, $\sigma = 1.81$)
-* `zigrep --uring`: `[4.58, 1.48, 4.93, 1.51, 2.98, 4.71, 1.69, 0.64, 0.84, 5.23] ms` ($\mu = 2.86\text{ ms}$, $\sigma = 1.84$)
-* `ripgrep`: `[34.98, 41.40, 37.43, 35.78, 42.68, 44.55, 36.52, 40.69, 36.24, 30.20] ms` ($\mu = 38.05\text{ ms}$, $\sigma = 4.27$)
-* `GNU grep`: `[45.72, 39.69, 49.39, 45.21, 46.92, 44.94, 41.99, 49.11, 46.99, 46.19] ms` ($\mu = 45.62\text{ ms}$, $\sigma = 2.97$)
+### Escenario 2: Árbol Medio (corpus_1000: 1,000 archivos, 32.8 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **23.41 ms** | 21.35 ms | 11.45 ms | 44.42 ms | 9.22 ms |
+| **`zigrep --uring`** | **35.74 ms** | 35.60 ms | 23.46 ms | 45.53 ms | 5.88 ms |
+| **`ripgrep 14.1.0`** | **22.65 ms** | 26.52 ms | 8.64 ms | 31.37 ms | 7.56 ms |
+| **`GNU grep 3.11`** | **22.30 ms** | 19.62 ms | 17.39 ms | 35.04 ms | 6.81 ms |
 
-### Escenario 4: Monorepo Real (`assembly`, 5,338 archivos, 655 MB)
-* `zigrep`: `[5.29, 4.26, 3.27, 1.25, 1.53, 1.16, 5.40, 1.53, 9.58, 1.70] ms` ($\mu = 3.50\text{ ms}$, $\sigma = 2.71$)
-* `zigrep --uring`: `[4.92, 7.06, 7.28, 1.06, 1.35, 2.75, 2.45, 3.22, 11.39, 1.46] ms` ($\mu = 4.29\text{ ms}$, $\sigma = 3.36$)
-* `ripgrep`: `[124.20, 99.14, 109.38, 150.32, 113.67, 135.97, 96.35, 106.67, 130.89, 110.89] ms` ($\mu = 117.75\text{ ms}$, $\sigma = 17.22$)
-* `GNU grep`: `[544.54, 502.32, 537.27, 549.74, 559.31, 487.47, 566.74, 485.07, 471.59, 496.80] ms` ($\mu = 520.08\text{ ms}$, $\sigma = 34.94$)
+* `zigrep`: `[11.45, 22.04, 44.42, 23.14, 16.0, 17.91, 26.99, 20.16, 31.32, 20.66]` ms
+* `zigrep --uring`: `[33.47, 34.19, 45.53, 23.46, 32.11, 34.06, 37.98, 40.46, 39.13, 37.0]` ms
+* `ripgrep`: `[26.8, 27.0, 26.24, 28.02, 22.03, 8.64, 31.37, 12.2, 16.91, 27.27]` ms
+* `GNU grep`: `[19.86, 34.98, 21.68, 17.39, 18.81, 17.46, 19.51, 19.73, 35.04, 18.56]` ms
 
-### Escenario 5: Regex DFA (`pub\s+fn\s+` en `assembly`, 655 MB)
-* `zigrep`: `[1.32, 1.43, 1.18, 1.34, 1.34, 1.28, 1.34, 6.42, 6.26, 4.02] ms` ($\mu = 2.59\text{ ms}$, $\sigma = 2.05$)
-* `zigrep --uring`: `[1.08, 1.62, 1.15, 1.05, 1.60, 2.65, 1.83, 1.02, 1.07, 5.51] ms` ($\mu = 1.86\text{ ms}$, $\sigma = 1.36$)
-* `ripgrep`: `[95.53, 106.25, 118.82, 103.71, 102.77, 113.82, 107.56, 101.44, 99.51, 113.48] ms` ($\mu = 106.29\text{ ms}$, $\sigma = 7.15$)
-* `GNU grep`: `[1236.43, 1227.18, 1269.45, 1239.54, 1245.98, 1261.22, 1256.78, 1232.04, 1248.60, 1243.98] ms` ($\mu = 1,246.12\text{ ms}$, $\sigma = 13.06$)
+### Escenario 3: Árbol Sintético (synthetic: 254 archivos, 131 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **47.57 ms** | 47.61 ms | 34.20 ms | 57.50 ms | 8.47 ms |
+| **`zigrep --uring`** | **69.92 ms** | 69.58 ms | 47.02 ms | 94.54 ms | 12.05 ms |
+| **`ripgrep 14.1.0`** | **37.93 ms** | 36.97 ms | 27.42 ms | 51.35 ms | 6.79 ms |
+| **`GNU grep 3.11`** | **51.56 ms** | 48.13 ms | 43.35 ms | 71.06 ms | 9.29 ms |
 
-### Escenario 6: Early-Exit Silencioso `-q` (`assembly`, 655 MB)
-* `zigrep`: `[4.88, 3.82, 3.24, 1.08, 1.11, 1.11, 4.88, 1.39, 9.77, 2.20] ms` ($\mu = 3.35\text{ ms}$, $\sigma = 2.67$)
-* `zigrep --uring`: `[4.84, 6.77, 6.84, 1.10, 1.13, 2.62, 2.41, 1.13, 7.02, 1.05] ms` ($\mu = 3.49\text{ ms}$, $\sigma = 2.58$)
-* `ripgrep`: `[14.94, 14.88, 16.32, 15.22, 16.45, 15.82, 14.98, 15.65, 15.98, 16.34] ms` ($\mu = 15.66\text{ ms}$, $\sigma = 0.58$)
-* `GNU grep`: `[6.42, 6.18, 6.35, 6.45, 6.22, 6.38, 6.29, 6.15, 6.32, 6.34] ms` ($\mu = 6.31\text{ ms}$, $\sigma = 0.10$)
+* `zigrep`: `[46.9, 57.5, 34.2, 37.53, 55.96, 54.75, 56.65, 48.32, 41.95, 41.98]` ms
+* `zigrep --uring`: `[68.7, 73.0, 70.46, 68.2, 47.02, 94.54, 70.46, 78.83, 66.56, 61.45]` ms
+* `ripgrep`: `[51.35, 39.1, 32.42, 32.17, 36.94, 42.12, 37.0, 27.42, 36.62, 44.14]` ms
+* `GNU grep`: `[43.35, 43.51, 48.33, 71.06, 59.05, 48.5, 61.99, 44.73, 47.93, 47.17]` ms
 
-### Escenario 7: Files Without Match `-L` (`assembly`, 655 MB)
-* `zigrep`: `[2.22, 3.12, 3.51, 5.12, 2.05, 7.82, 1.58, 1.50, 1.41, 5.43] ms` ($\mu = 3.38\text{ ms}$, $\sigma = 2.05$)
-* `zigrep --uring`: `[3.12, 1.45, 9.42, 1.25, 5.12, 8.24, 1.20, 1.25, 1.35, 18.66] ms` ($\mu = 5.11\text{ ms}$, $\sigma = 5.48$)
-* `ripgrep`: `[112.45, 148.65, 137.22, 92.45, 89.12, 124.55, 126.33, 134.88, 110.22, 134.77] ms` ($\mu = 121.06\text{ ms}$, $\sigma = 19.34$)
-* `GNU grep`: `[712.44, 672.33, 684.55, 708.22, 745.12, 658.99, 759.22, 682.34, 649.88, 693.51] ms` ($\mu = 696.66\text{ ms}$, $\sigma = 35.88$)
+### Escenario 4: Monorepo Real (assembly: 5,338 archivos, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **85.31 ms** | 85.45 ms | 56.35 ms | 99.70 ms | 11.85 ms |
+| **`zigrep --uring`** | **109.24 ms** | 104.88 ms | 95.25 ms | 133.16 ms | 11.07 ms |
+| **`ripgrep 14.1.0`** | **108.67 ms** | 103.97 ms | 91.02 ms | 130.88 ms | 15.53 ms |
+| **`GNU grep 3.11`** | **535.84 ms** | 543.50 ms | 490.76 ms | 591.99 ms | 30.31 ms |
 
-### Escenario 8: Max Count `-m 1` (`assembly`, 655 MB)
-* `zigrep`: `[2.12, 2.97, 3.38, 5.02, 1.98, 6.20, 1.55, 1.47, 1.37, 2.38] ms` ($\mu = 2.85\text{ ms}$, $\sigma = 1.62$)
-* `zigrep --uring`: `[2.68, 1.33, 8.66, 1.19, 4.63, 6.97, 1.15, 1.16, 1.24, 6.96] ms` ($\mu = 3.60\text{ ms}$, $\sigma = 2.96$)
-* `ripgrep`: `[109.69, 146.86, 134.87, 90.04, 86.67, 121.82, 123.77, 132.55, 108.02, 128.70] ms` ($\mu = 118.30\text{ ms}$, $\sigma = 19.50$)
-* `GNU grep`: `[695.65, 656.24, 666.43, 691.35, 730.05, 642.24, 743.65, 666.45, 633.26, 666.44] ms` ($\mu = 679.18\text{ ms}$, $\sigma = 35.98$)
+* `zigrep`: `[56.35, 99.7, 82.59, 97.13, 82.43, 92.58, 86.78, 87.51, 84.12, 83.95]` ms
+* `zigrep --uring`: `[110.68, 133.16, 118.67, 100.77, 102.84, 104.58, 105.17, 95.25, 117.34, 103.97]` ms
+* `ripgrep`: `[91.02, 130.88, 106.98, 95.46, 128.92, 118.18, 95.61, 94.23, 100.96, 124.48]` ms
+* `GNU grep`: `[501.52, 544.32, 490.76, 544.3, 561.85, 509.97, 542.71, 549.01, 591.99, 521.96]` ms
 
-### Escenario 9: Invert Match `-v` (`assembly`, 655 MB)
-* `zigrep`: `[1.21, 5.55, 1.20, 1.47, 14.75, 1.36, 5.39, 1.51, 5.04, 7.55] ms` ($\mu = 4.50\text{ ms}$, $\sigma = 4.30$)
-* `zigrep --uring`: `[1.51, 1.38, 0.93, 2.15, 0.94, 3.22, 5.29, 2.90, 2.39, 2.39] ms` ($\mu = 2.31\text{ ms}$, $\sigma = 1.31$)
-* `ripgrep`: `[469.44, 429.87, 468.28, 453.05, 460.37, 438.54, 482.58, 429.87, 436.61, 489.62] ms` ($\mu = 455.82\text{ ms}$, $\sigma = 21.71$)
-* `GNU grep`: `[1287.81, 1229.74, 1245.96, 1234.88, 1309.32, 1253.17, 1281.76, 1322.34, 1202.42, 1279.88] ms` ($\mu = 1,264.73\text{ ms}$, $\sigma = 37.78$)
+### Escenario 5: Regex DFA (pub\s+fn\s+ en assembly, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **95.63 ms** | 95.73 ms | 80.30 ms | 108.69 ms | 7.53 ms |
+| **`zigrep --uring`** | **120.05 ms** | 118.40 ms | 107.01 ms | 141.04 ms | 12.15 ms |
+| **`ripgrep 14.1.0`** | **120.33 ms** | 118.68 ms | 104.94 ms | 141.13 ms | 12.90 ms |
+| **`GNU grep 3.11`** | **1257.67 ms** | 1252.37 ms | 1231.07 ms | 1337.37 ms | 31.82 ms |
 
-### Escenario 10: Multi-Repo Real-World (BRE `\|` + 4 Globs `--include`)
-* `zigrep`: `[1.20, 1.22, 5.23, 6.58, 3.14, 1.36, 3.08, 4.31, 7.23, 2.30] ms` ($\mu = 3.57\text{ ms}$, $\sigma = 2.21$)
-* `zigrep --uring`: `[3.57, 5.65, 1.64, 4.96, 3.85, 1.29, 1.94, 1.55, 3.83, 6.78] ms` ($\mu = 3.51\text{ ms}$, $\sigma = 1.89$)
-* `ripgrep`: `[25.10, 28.33, 26.82, 27.06, 26.33, 20.21, 27.07, 30.27, 26.65, 26.97] ms` ($\mu = 26.48\text{ ms}$, $\sigma = 2.59$)
-* `GNU grep`: `[78.22, 80.82, 93.27, 116.25, 63.93, 63.30, 75.51, 67.63, 82.40, 84.03] ms` ($\mu = 80.54\text{ ms}$, $\sigma = 15.72$)
+* `zigrep`: `[80.3, 99.73, 89.1, 108.69, 96.19, 95.26, 97.88, 94.65, 93.16, 101.35]` ms
+* `zigrep --uring`: `[122.16, 113.04, 114.63, 133.26, 122.73, 107.18, 131.72, 107.74, 107.01, 141.04]` ms
+* `ripgrep`: `[107.17, 130.78, 129.38, 111.72, 104.94, 116.23, 106.76, 134.09, 141.13, 121.12]` ms
+* `GNU grep`: `[1256.41, 1236.33, 1252.65, 1277.83, 1337.37, 1264.22, 1252.1, 1234.61, 1231.07, 1234.07]` ms
+
+### Escenario 6: Early-Exit Silencioso -q (assembly, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **3.11 ms** | 1.81 ms | 1.02 ms | 7.05 ms | 2.19 ms |
+| **`zigrep --uring`** | **2.04 ms** | 1.71 ms | 0.95 ms | 3.57 ms | 0.83 ms |
+| **`ripgrep 14.1.0`** | **14.63 ms** | 13.70 ms | 8.45 ms | 25.97 ms | 5.74 ms |
+| **`GNU grep 3.11`** | **3.01 ms** | 2.67 ms | 1.70 ms | 6.10 ms | 1.35 ms |
+
+* `zigrep`: `[1.47, 4.44, 7.05, 1.58, 1.02, 6.1, 1.48, 1.74, 4.29, 1.88]` ms
+* `zigrep --uring`: `[2.9, 1.72, 2.04, 1.46, 3.57, 1.7, 1.54, 1.52, 2.97, 0.95]` ms
+* `ripgrep`: `[9.5, 23.06, 12.8, 8.45, 25.97, 10.63, 14.85, 11.06, 14.6, 15.39]` ms
+* `GNU grep`: `[1.89, 2.56, 6.1, 2.79, 2.97, 3.75, 2.45, 4.14, 1.7, 1.78]` ms
+
+### Escenario 7: Files Without Match -L (assembly, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **93.68 ms** | 90.11 ms | 77.03 ms | 108.22 ms | 10.30 ms |
+| **`zigrep --uring`** | **110.85 ms** | 111.49 ms | 94.32 ms | 124.67 ms | 9.45 ms |
+| **`ripgrep 14.1.0`** | **125.32 ms** | 123.82 ms | 106.77 ms | 149.93 ms | 12.41 ms |
+| **`GNU grep 3.11`** | **718.61 ms** | 701.53 ms | 670.58 ms | 843.05 ms | 55.75 ms |
+
+* `zigrep`: `[90.01, 97.95, 107.66, 90.21, 108.22, 103.49, 84.82, 89.74, 77.03, 87.64]` ms
+* `zigrep --uring`: `[116.54, 107.41, 110.87, 113.4, 121.09, 97.38, 110.7, 112.11, 124.67, 94.32]` ms
+* `ripgrep`: `[127.41, 115.98, 131.57, 118.07, 122.97, 106.77, 117.11, 124.67, 138.7, 149.93]` ms
+* `GNU grep`: `[670.58, 744.05, 686.89, 677.49, 672.98, 720.59, 716.17, 775.1, 843.05, 679.22]` ms
+
+### Escenario 8: Max Count -m 1 (assembly, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **95.92 ms** | 97.45 ms | 73.98 ms | 116.41 ms | 13.83 ms |
+| **`zigrep --uring`** | **117.71 ms** | 113.03 ms | 90.66 ms | 157.62 ms | 18.05 ms |
+| **`ripgrep 14.1.0`** | **126.65 ms** | 123.50 ms | 106.15 ms | 150.70 ms | 15.84 ms |
+| **`GNU grep 3.11`** | **678.69 ms** | 671.31 ms | 627.42 ms | 775.08 ms | 41.36 ms |
+
+* `zigrep`: `[73.98, 110.67, 93.65, 116.41, 97.07, 101.15, 104.32, 74.57, 97.82, 89.59]` ms
+* `zigrep --uring`: `[112.85, 90.66, 112.08, 117.57, 104.1, 113.22, 157.62, 135.14, 112.46, 121.43]` ms
+* `ripgrep`: `[111.41, 123.98, 120.34, 147.66, 123.01, 150.7, 106.15, 109.74, 132.49, 141.01]` ms
+* `GNU grep`: `[655.07, 715.97, 673.82, 627.42, 684.1, 650.63, 668.8, 654.52, 775.08, 681.52]` ms
+
+### Escenario 9: Invert Match -v (assembly, 655 MB)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **482.19 ms** | 473.70 ms | 432.25 ms | 563.69 ms | 41.88 ms |
+| **`zigrep --uring`** | **514.64 ms** | 503.35 ms | 474.11 ms | 578.10 ms | 38.56 ms |
+| **`ripgrep 14.1.0`** | **500.22 ms** | 481.16 ms | 432.26 ms | 607.00 ms | 54.10 ms |
+| **`GNU grep 3.11`** | **1213.38 ms** | 1220.40 ms | 1159.30 ms | 1267.06 ms | 34.24 ms |
+
+* `zigrep`: `[507.77, 563.69, 467.42, 535.47, 452.13, 482.52, 449.29, 479.98, 432.25, 451.38]` ms
+* `zigrep --uring`: `[519.78, 544.96, 578.1, 573.78, 474.11, 482.87, 504.67, 502.04, 484.25, 481.83]` ms
+* `ripgrep`: `[490.06, 512.11, 471.35, 432.26, 472.26, 500.11, 470.66, 466.04, 607.0, 580.35]` ms
+* `GNU grep`: `[1220.32, 1190.0, 1226.3, 1220.49, 1234.55, 1247.39, 1159.3, 1201.9, 1166.5, 1267.06]` ms
+
+### Escenario 10: Multi-Repo Real-World (BRE \| + 4 Globs --include)
+| Herramienta | Media (μ) | Mediana | Mínimo | Máximo | Desv. Est. (σ) |
+|---|---:|---:|---:|---:|---:|
+| **`zigrep` (Kamikaze)** | **32.33 ms** | 34.67 ms | 16.17 ms | 47.39 ms | 10.55 ms |
+| **`zigrep --uring`** | **35.67 ms** | 36.23 ms | 25.08 ms | 46.09 ms | 7.48 ms |
+| **`ripgrep 14.1.0`** | **23.90 ms** | 22.60 ms | 16.80 ms | 32.26 ms | 5.97 ms |
+| **`GNU grep 3.11`** | **68.88 ms** | 67.48 ms | 58.08 ms | 85.68 ms | 8.71 ms |
+
+* `zigrep`: `[16.17, 34.64, 17.23, 46.82, 34.85, 35.99, 26.36, 47.39, 29.17, 34.7]` ms
+* `zigrep --uring`: `[46.09, 25.08, 32.2, 36.5, 38.32, 27.99, 35.96, 41.96, 45.33, 27.25]` ms
+* `ripgrep`: `[22.37, 16.8, 18.3, 18.93, 32.17, 31.61, 23.31, 20.39, 22.82, 32.26]` ms
+* `GNU grep`: `[60.26, 64.24, 70.72, 58.08, 77.9, 74.73, 70.92, 63.36, 62.94, 85.68]` ms
+

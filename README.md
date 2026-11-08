@@ -31,16 +31,16 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 
 | Escenario de Prueba | Tamaño / Archivos | `zigrep` (Kamikaze) | `zigrep --uring` | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
 |---|---|---:|---:|---:|---:|---:|---:|
-| **Micro-árbol (`corpus_50`)** | 50 archivos (1.6 MB) | **3.11 ms** | **2.49 ms** | 15.73 ms | 8.06 ms | **5.06× más rápido** | **2.59× más rápido** |
-| **Árbol medio (`corpus_1000`)** | 1,000 archivos (32.8 MB) | **2.90 ms** | 3.25 ms | 25.23 ms | 25.20 ms | **8.70× más rápido** | **8.70× más rápido** |
-| **Árbol sintético (`synthetic`)** | 254 archivos (131 MB) | **2.61 ms** | 2.86 ms | 38.05 ms | 45.62 ms | **14.56× más rápido** | **17.46× más rápido** |
-| **Monorepo Real (`assembly`)** | 5,338 archivos (655 MB) | **3.50 ms** | 4.29 ms | 117.75 ms | 520.08 ms | **33.67× más rápido** | **148.73× más rápido** |
-| **Regex DFA (`pub\s+fn\s+`)** | `assembly` (655 MB) | **2.59 ms** | **1.86 ms** | 106.29 ms | 1,246.12 ms | **41.05× más rápido** | **481.22× más rápido** |
-| **Early-Exit `-q` (Silencioso)** | `assembly` (655 MB) | **3.35 ms** | 3.49 ms | 15.66 ms | 6.31 ms | **4.68× más rápido** | **1.89× más rápido** |
-| **Files Without Match `-L`** | `assembly` (655 MB) | **3.38 ms** | 5.11 ms | 121.06 ms | 696.66 ms | **35.81× más rápido** | **206.05× más rápido** |
-| **Max Count `-m 1`** | `assembly` (655 MB) | **2.85 ms** | 3.60 ms | 118.30 ms | 679.18 ms | **41.58× más rápido** | **238.72× más rápido** |
-| **Invert Match `-v`** | `assembly` (655 MB) | **4.50 ms** | **2.31 ms** | 455.82 ms | 1,264.73 ms | **101.24× más rápido** | **280.90× más rápido** |
-| **Multi-Repo Real-World (BRE/Globs)** | 3 repositorios (124 MB) | **3.57 ms** | 3.51 ms | 26.48 ms | 80.54 ms | **7.43× más rápido** | **22.59× más rápido** |
+| **Micro-árbol (`corpus_50`)** | 50 archivos (1.6 MB) | **9.88 ms** | 11.91 ms | 13.47 ms | **7.08 ms** | **1.36× más rápido** | 1.39× más lento |
+| **Árbol medio (`corpus_1000`)** | 1,000 archivos (32.8 MB) | **23.41 ms** | 35.74 ms | **22.65 ms** | **22.30 ms** | ~Empate | ~Empate |
+| **Árbol sintético (`synthetic`)** | 254 archivos (131 MB) | 47.57 ms | 69.92 ms | **37.93 ms** | 51.56 ms | 1.25× más lento | **1.08× más rápido** |
+| **Monorepo Real (`assembly`)** | 5,338 archivos (655 MB) | **85.31 ms** | 109.24 ms | 108.67 ms | 535.84 ms | **1.27× más rápido** | **6.28× más rápido** |
+| **Regex DFA (`pub\s+fn\s+`)** | `assembly` (655 MB) | **95.63 ms** | 120.05 ms | 120.33 ms | 1,257.67 ms | **1.26× más rápido** | **13.15× más rápido** |
+| **Early-Exit `-q` (Silencioso)** | `assembly` (655 MB) | **3.11 ms** | **2.04 ms** | 14.63 ms | 3.01 ms | **4.71× más rápido** | **1.47× más rápido** |
+| **Files Without Match `-L`** | `assembly` (655 MB) | **93.68 ms** | 110.85 ms | 125.32 ms | 718.61 ms | **1.34× más rápido** | **7.67× más rápido** |
+| **Max Count `-m 1`** | `assembly` (655 MB) | **95.92 ms** | 117.71 ms | 126.65 ms | 678.69 ms | **1.32× más rápido** | **7.08× más rápido** |
+| **Invert Match `-v`** | `assembly` (655 MB) | **482.19 ms** | 514.64 ms | 500.22 ms | 1,213.38 ms | **1.04× más rápido** | **2.52× más rápido** |
+| **Multi-Repo Real (BRE/Globs)** | 3 repositorios (124 MB) | 32.33 ms | 35.67 ms | **23.90 ms** | 68.88 ms | 1.35× más lento | **2.13× más rápido** |
 
 > *El reporte exhaustivo de las 10 corridas individuales, desviaciones estándar y datos crudos está en [`PRUEBAS.md`](PRUEBAS.md).*
 
