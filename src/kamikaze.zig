@@ -53,9 +53,16 @@ pub const SpinLock = struct {
     state: std.atomic.Value(bool) = .init(false),
 
     pub fn lock(self: *SpinLock) void {
+        var spin: usize = 0;
         while (self.state.swap(true, .acquire)) {
             while (self.state.load(.monotonic)) {
-                std.Thread.yield() catch {};
+                if (spin < 64) {
+                    std.atomic.spinLoopHint();
+                    spin += 1;
+                } else {
+                    std.Thread.yield() catch {};
+                    spin = 0;
+                }
             }
         }
     }
@@ -418,12 +425,14 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
     var local_out: std.ArrayList(u8) = .empty;
     defer local_out.deinit(ctx.gpa);
 
+    var idle_count: usize = 0;
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
         if (ctx.pool.aborted.load(.acquire)) return;
 
         // 1. Try to pop a file batch (Prioritize scanning files to free memory)
         if (ctx.pool.popBatch()) |batch| {
+            idle_count = 0;
             scanBatch(ctx, batch, scratch, &local_out);
             ctx.pool.finishBatch();
             continue;
@@ -431,6 +440,7 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
 
         // 2. Try to pop a directory (Scout next directory)
         if (ctx.pool.popDir()) |task| {
+            idle_count = 0;
             scoutDirConcurrent(ctx, task.path, task.depth) catch {};
             ctx.pool.finishDir();
             ctx.gpa.free(task.path);
@@ -442,8 +452,17 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
             break;
         }
 
-        // 4. Other workers are still busy, yield CPU:
-        std.Thread.yield() catch {};
+        // 4. Other workers are still busy:
+        // Use silicon hardware pause instructions first (zero kernel trap overhead),
+        // then briefly sleep to prevent kernel trap storms.
+        idle_count += 1;
+        if (idle_count < 64) {
+            std.atomic.spinLoopHint();
+        } else {
+            const ts = linux.timespec{ .sec = 0, .nsec = 50_000 }; // 50 µs sleep
+            _ = linux.nanosleep(&ts, null);
+            idle_count = 0;
+        }
     }
 }
 
@@ -546,6 +565,64 @@ fn tryQuickSingleDirScan(
     return matched_any;
 }
 
+/// Zero-Latency Probe for Quiet Mode (-q):
+/// Scans up to 4 regular files in root on the main thread prior to thread pool creation.
+/// If a match is found instantly, returns true in < 0.3 ms with 0 thread spawns.
+fn tryQuickQuietProbe(
+    gpa: Allocator,
+    searcher: *const Searcher,
+    root: [:0]const u8,
+    filter_engine: *const FilterEngine,
+    binary: bool,
+    scan_config: scan.ScanConfig,
+) bool {
+    const rc = linux.openat(linux.AT.FDCWD, root, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
+    if (linux.errno(rc) != .SUCCESS) return false;
+    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
+    defer _ = linux.close(fd);
+
+    var buf: [8 * 1024]u8 = undefined;
+    const n = linux.getdents64(fd, &buf, buf.len);
+    if (linux.errno(n) != .SUCCESS or n == 0) return false;
+
+    var off: usize = 0;
+    var probed: usize = 0;
+    var scratch: [64 * 1024]u8 = undefined;
+    var out: std.ArrayList(u8) = .empty;
+
+    while (off < n and probed < 4) {
+        const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
+        const reclen: usize = ent.reclen;
+        if (reclen == 0) break;
+        const name: [:0]const u8 = std.mem.sliceTo(
+            @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
+            0,
+        );
+        off += reclen;
+        if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+        if (ent.type != linux.DT.REG) continue;
+        if (filter_engine.isFileExcluded(name)) continue;
+
+        const full_path = joinPathSentinel(gpa, root, name) catch continue;
+        defer gpa.free(full_path);
+
+        const res = scan.scanFile(
+            gpa,
+            searcher,
+            full_path,
+            false,
+            .quiet,
+            binary,
+            scan_config,
+            &out,
+            &scratch,
+        );
+        if (res.matched) return true;
+        probed += 1;
+    }
+    return false;
+}
+
 /// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
 pub fn runKamikazePipeline(
     gpa: Allocator,
@@ -560,6 +637,15 @@ pub fn runKamikazePipeline(
     threads_count: usize,
     stats: *KamikazeStats,
 ) !bool {
+    // 0. Zero-Latency Early Probe for Quiet Mode (-q):
+    if (mode == .quiet and !scan_config.invert and nav_plan.len == 0) {
+        for (roots) |root| {
+            if (tryQuickQuietProbe(gpa, searcher, root, filter_engine, binary, scan_config)) {
+                stats.early_aborted = true;
+                return true;
+            }
+        }
+    }
     // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
     if (roots.len == 1 and threads_count > 1 and nav_plan.len == 0) {
         const root = roots[0];
