@@ -137,6 +137,14 @@ const cases = [_]TestCase{
         .check_output = false,
     },
     .{
+        .name = "deterministic sorted mode --sort",
+        .zigrep_args = &.{ "--sort", "Searcher", "src" },
+        .grep_args = &.{ "-rnIF", "Searcher", "src" },
+        .rg_args = &.{ "-n", "-F", "--sort", "path", "Searcher", "src" },
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
         .name = "absent needle (exit 1)",
         .zigrep_args = &.{ "zzz_non_existent_token_xyz", "src" },
         .grep_args = &.{ "-rnIF", "zzz_non_existent_token_xyz", "src" },

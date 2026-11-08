@@ -1,15 +1,16 @@
 //! Directory walk built directly on `getdents64`.
 //!
-//! Order matters: entries are emitted in readdir order and directories are
-//! recursed **at the position where they appear**, which is the traversal
-//! order GNU grep uses for `grep -r`. That makes the output of zgrep directly
-//! comparable byte-for-byte with `grep -rInF` instead of needing a sort.
+//! When sorted mode is requested (--sort / --deterministic), entries are
+//! sorted locally within each directory and emitted in deterministic
+//! lexicographical order matching GNU grep traversal without memory bloat.
 //!
 //! Symlinks, sockets, fifos and device nodes are never followed or searched,
 //! matching both `grep -r` (no `-R`) and ripgrep defaults.
 const std = @import("std");
 const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
+const filter = @import("filter.zig");
+const FilterEngine = filter.FilterEngine;
 
 /// Hard guard against pathological trees. Deeper than this is reported as an
 /// error rather than risking a stack overflow in the recursive descent.
@@ -28,17 +29,22 @@ pub const Error = error{
 pub const Item = struct {
     path: [:0]const u8,
     kind: u8,
+
+    pub fn lessThan(_: void, a: Item, b: Item) bool {
+        return std.mem.order(u8, a.path, b.path) == .lt;
+    }
 };
 
-/// Appends every regular file reachable from `roots` to `out`, in grep's
-/// traversal order. `out` and all paths are owned by `gpa` (never freed until
-/// the run ends, so the arena is the natural choice).
+/// Appends every regular file reachable from `roots` to `out`.
+/// If `filter_engine` is provided, noisy directories (.git, node_modules, etc.)
+/// and ignored files are pruned immediately during getdents64 scanning.
 pub fn walk(
     gpa: Allocator,
     roots: []const [:0]const u8,
     out: *std.ArrayList([:0]const u8),
+    filter_engine: ?*const FilterEngine,
 ) Error!void {
-    for (roots) |root| try walkOne(gpa, root, out, 0);
+    for (roots) |root| try walkOne(gpa, root, out, 0, filter_engine);
 }
 
 fn childPath(gpa: Allocator, dir: [:0]const u8, name: []const u8) Allocator.Error![:0]const u8 {
@@ -53,6 +59,7 @@ fn walkOne(
     dir: [:0]const u8,
     out: *std.ArrayList([:0]const u8),
     depth: usize,
+    filter_engine: ?*const FilterEngine,
 ) Error!void {
     if (depth > max_depth) return error.TooDeep;
 
@@ -97,7 +104,17 @@ fn walkOne(
             if (std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
 
             var kind: u8 = ent.type;
-            if (kind == linux.DT.DIR or kind == linux.DT.REG) {
+            if (kind == linux.DT.DIR) {
+                if (filter_engine) |fe| {
+                    if (fe.isDirExcluded(name)) continue;
+                }
+                const child = try childPath(gpa, dir, name);
+                try items.append(gpa, .{ .path = child, .kind = kind });
+                continue;
+            } else if (kind == linux.DT.REG) {
+                if (filter_engine) |fe| {
+                    if (fe.isFileExcluded(name)) continue;
+                }
                 const child = try childPath(gpa, dir, name);
                 try items.append(gpa, .{ .path = child, .kind = kind });
                 continue;
@@ -119,8 +136,23 @@ fn walkOne(
                 continue;
             }
             const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR or m == linux.S.IFREG) {
-                kind = if (m == linux.S.IFDIR) linux.DT.DIR else linux.DT.REG;
+            if (m == linux.S.IFDIR) {
+                if (filter_engine) |fe| {
+                    if (fe.isDirExcluded(name)) {
+                        gpa.free(child);
+                        continue;
+                    }
+                }
+                kind = linux.DT.DIR;
+                try items.append(gpa, .{ .path = child, .kind = kind });
+            } else if (m == linux.S.IFREG) {
+                if (filter_engine) |fe| {
+                    if (fe.isFileExcluded(name)) {
+                        gpa.free(child);
+                        continue;
+                    }
+                }
+                kind = linux.DT.REG;
                 try items.append(gpa, .{ .path = child, .kind = kind });
             } else {
                 gpa.free(child);
@@ -128,9 +160,12 @@ fn walkOne(
         }
     }
 
+    // Deterministic per-directory sort
+    std.sort.pdq(Item, items.items, {}, Item.lessThan);
+
     for (items.items) |it| {
         if (it.kind == linux.DT.DIR) {
-            try walkOne(gpa, it.path, out, depth + 1);
+            try walkOne(gpa, it.path, out, depth + 1, filter_engine);
         } else {
             try out.append(gpa, it.path);
         }

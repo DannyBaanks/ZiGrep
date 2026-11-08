@@ -86,6 +86,18 @@ pub const byte_rank: [256]u8 = blk: {
     break :blk r;
 };
 
+/// Foldable lowercase bytes in ASCII ('a'..'z') and Latin-1 supplement in UTF-8
+/// (0xA0..0xB6 for à..ö, 0xB8..0xBE for ø..þ, where the second byte has bit 0x20 set).
+pub fn isCaseFoldable(b: u8) bool {
+    return (b >= 'a' and b <= 'z') or ((b >= 0xA0 and b <= 0xB6) or (b >= 0xB8 and b <= 0xBE));
+}
+
+pub fn toLowerByte(b: u8) u8 {
+    if (b >= 'A' and b <= 'Z') return b + 0x20;
+    if ((b >= 0x80 and b <= 0x96) or (b >= 0x98 and b <= 0x9E)) return b | 0x20;
+    return b;
+}
+
 pub const Kind = enum { literal, regex };
 
 pub const Searcher = struct {
@@ -186,22 +198,22 @@ pub const Searcher = struct {
         return null;
     }
 
-    /// Vectorised scan for `lower` (a lower-case byte) in either case.
+    /// Vectorised scan for `lower` in either case (supporting both ASCII and Latin-1 Unicode).
     fn scanCi(hay: []const u8, from: usize, lower: u8) ?usize {
         var i = from;
-        const is_alpha = lower >= 'a' and lower <= 'z';
+        const is_foldable = isCaseFoldable(lower);
         const V = @Vector(32, u8);
         const want: V = @splat(lower);
         const bit: V = @splat(0x20);
         while (i + 32 <= hay.len) : (i += 32) {
             const v: V = hay[i..][0..32].*;
-            const m = if (is_alpha) ((v | bit) == want) else (v == want);
+            const m = if (is_foldable) ((v | bit) == want) else (v == want);
             const bits: u32 = @bitCast(m);
             if (bits != 0) return i + @ctz(bits);
         }
         while (i < hay.len) : (i += 1) {
             const c = hay[i];
-            if ((if (is_alpha) std.ascii.toLower(c) else c) == lower) return i;
+            if ((if (is_foldable) (c | 0x20) else c) == lower) return i;
         }
         return null;
     }
@@ -217,7 +229,7 @@ pub const Searcher = struct {
             if (cand + n > hay.len) return null;
             var ok = true;
             for (nd, hay[cand .. cand + n]) |a, b| {
-                if (a != std.ascii.toLower(b)) {
+                if (a != toLowerByte(b)) {
                     ok = false;
                     break;
                 }
@@ -312,7 +324,7 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
             const text = try gpa.dupe(u8, lit);
             if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
             if (o.icase) for (text) |*c| {
-                c.* = std.ascii.toLower(c.*);
+                c.* = toLowerByte(c.*);
             };
             var s = Searcher.init(text, o.algo);
             s.icase = o.icase;
@@ -487,4 +499,10 @@ test "build: plain string keeps the literal fast path, flags select kernels" {
     try std.testing.expectEqual(Kind.regex, multi.kind);
     try std.testing.expectEqual(@as(?usize, 4), multi.find("foo\nbar\n", 0));
     try std.testing.expectError(error.BadRegex, build(pa, &.{"a(b"}, .{}));
+
+    // Unicode Latin-1 case-folding test (ñ, á, é, í, ó, ú)
+    const latin_ci = try build(pa, &.{"ñandú"}, .{ .icase = true, .fixed = true });
+    try std.testing.expectEqual(@as(?usize, 3), latin_ci.find("El ÑANDÚ veloz", 0));
+    const latin_upper = try build(pa, &.{"ÁRBOL"}, .{ .icase = true, .fixed = true });
+    try std.testing.expectEqual(@as(?usize, 3), latin_upper.find("un árbol verde", 0));
 }

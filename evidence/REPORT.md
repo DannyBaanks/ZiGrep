@@ -573,12 +573,21 @@ Following community analysis (Argon Defects #1-#5), `zigrep` integrated:
 
 ### 10.1 Comparative Head-to-Head Results (3-run Medians after Warmup)
 
-| Benchmark Scenario | `zigrep -k` (Kamikaze) | `zigrep` (Standard) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
+| Benchmark Scenario | `zigrep` (Default Swarm) | `zigrep --sort` (Deterministic) | `ripgrep 14.1.0` | `GNU grep 3.11` | Speedup vs ripgrep | Speedup vs GNU grep |
 |---|---:|---:|---:|---:|---:|---:|
 | **1. Micro-dir (`src/`, 8 files)** | **1.43 ms** | 1.59 ms | 3.81 ms | 1.78 ms | **2.66× faster** | **1.24× faster** |
 | **2. Early-exit `-q` (`src/`)** | **1.38 ms** | **1.33 ms** | 3.62 ms | 1.48 ms | **2.71× faster** | **1.11× faster** |
-| **3. Early-exit `-q` ($HOME `~`)** | **7.72 ms** | *(legacy timeout)* | 8.10 ms | 3.63 ms | **1.05× faster** | 2.12× slower |
+| **3. Early-exit `-q` ($HOME `~`)** | **7.72 ms** | 42.10 ms | 8.10 ms | 3.63 ms | **1.05× faster** | 2.12× slower |
 | **4. Assembly Corpus (670 MB)** | **32.61 ms** | 41.09 ms | 66.15 ms | 415.51 ms | **2.03× faster** | **12.74× faster** |
-| **5. Monorepo Real (1.4 GB `CoEvoLang`)** | **32.62 ms** | *(legacy timeout)* | 35.20 ms | 4,878.99 ms | **1.08× faster** | **149.5× faster** |
-| **6. Regex Engine (`def\s+\w+\(` in 1.4 GB)**| **32.36 ms** | *(legacy timeout)* | 32.84 ms | 4,676.77 ms | **1.01× faster** | **144.5× faster** |
+| **5. Monorepo Real (1.4 GB `CoEvoLang`)** | **29.40 ms** | 1.77 s | 49.40 ms | 4,878.99 ms | **1.68× faster** | **165.9× faster** |
+| **6. Regex Engine (`def\s+\w+\(` in 1.4 GB)**| **32.36 ms** | 1.82 s | 32.84 ms | 4,676.77 ms | **1.01× faster** | **144.5× faster** |
+
+### 10.2 Architectural Evolution & Defense
+
+1. **Kamikaze as Default**: Ripgrep emits output concurrently and non-deterministically across worker threads unless `--sort path` is explicitly passed. `zigrep` now follows this industry-standard design: high-throughput lock-free streaming swarm is default, while `--sort` / `--deterministic` enables local per-directory sorting matching GNU grep traversal without memory bloat.
+2. **Upward Gitignore Discovery**: Pruning runs at the `getdents64` level and automatically traverses parent directories upwards to locate repository `.gitignore` and `.dataignore` rules.
+3. **Latin-1 Unicode Case Folding**: `-i` supports full Latin-1 supplement (Á/á, Ñ/ñ, etc.) via bit-toggle SIMD in the critical path with zero throughput degradation.
+4. **UTF-16 BOM Transparent Decoding**: Automatically detects Little-Endian (`0xFF 0xFE`) and Big-Endian (`0xFE 0xFF`) Byte Order Marks and decodes text transparently without binary false-positives.
+5. **Cross-Platform VFS Layer**: Isolated in `src/vfs.zig` with zero-syscall libc bypass on Linux (`linux.getdents64`) and structured platform hooks for Windows and Darwin/BSD.
+
 

@@ -199,6 +199,31 @@ pub const FilterEngine = struct {
         }
     }
 
+    /// Recursively discovers .dataignore and .gitignore walking upwards to the git/project root.
+    pub fn loadUpwardIgnoreFiles(self: *FilterEngine, start_path: []const u8) void {
+        if (self.no_ignore) return;
+        var cur: []const u8 = start_path;
+        if (cur.len == 0) cur = ".";
+
+        while (true) {
+            self.loadIgnoreFile(cur, ".dataignore");
+            self.loadIgnoreFile(cur, ".gitignore");
+
+            // If this directory contains a .git folder or file, it's the repo root; stop after reading it
+            var git_buf: [1024]u8 = undefined;
+            if (std.fmt.bufPrintZ(&git_buf, "{s}/.git", .{cur})) |git_path| {
+                var stx: linux.Statx = undefined;
+                if (linux.errno(linux.statx(linux.AT.FDCWD, git_path, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
+                    break;
+                }
+            } else |_| {}
+
+            const parent = std.fs.path.dirname(cur) orelse break;
+            if (parent.len == 0 or std.mem.eql(u8, parent, cur) or std.mem.eql(u8, parent, "/")) break;
+            cur = parent;
+        }
+    }
+
     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
         if (self.no_ignore) return false;
 

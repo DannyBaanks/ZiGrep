@@ -11,4 +11,6 @@ test {
     _ = @import("walk.zig");
     _ = @import("scan.zig");
     _ = @import("kamikaze.zig");
+    _ = @import("filter.zig");
+    _ = @import("vfs.zig");
 }

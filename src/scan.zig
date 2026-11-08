@@ -29,6 +29,36 @@ pub const Mode = enum {
 /// first-block check and ripgrep's default heuristic.
 pub const binary_probe_bytes = 8192;
 
+/// Checks for UTF-16 Byte Order Marks (BOM):
+/// 0xFF 0xFE = Little-Endian, 0xFE 0xFF = Big-Endian.
+pub fn isUtf16Bom(bytes: []const u8) ?enum { le, be } {
+    if (bytes.len < 2) return null;
+    if (bytes[0] == 0xFF and bytes[1] == 0xFE) return .le;
+    if (bytes[0] == 0xFE and bytes[1] == 0xFF) return .be;
+    return null;
+}
+
+/// Decodes UTF-16 text to UTF-8 without treating it as binary.
+pub fn decodeUtf16ToUtf8(gpa: Allocator, raw: []const u8, is_le: bool) Allocator.Error![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(gpa);
+    var i: usize = 2; // skip 2-byte BOM
+    while (i + 1 < raw.len) : (i += 2) {
+        const u = if (is_le)
+            @as(u16, raw[i]) | (@as(u16, raw[i + 1]) << 8)
+        else
+            @as(u16, raw[i + 1]) | (@as(u16, raw[i]) << 8);
+        if (u < 0x80) {
+            try out.append(gpa, @intCast(u));
+        } else {
+            var buf: [4]u8 = undefined;
+            const len = std.unicode.utf8Encode(@intCast(u), &buf) catch 0;
+            if (len > 0) try out.appendSlice(gpa, buf[0..len]);
+        }
+    }
+    return out.toOwnedSlice(gpa);
+}
+
 /// mmap below this size is rarely a win over a plain read; the read path
 /// exists mainly as a fallback for mappings the kernel refuses.
 pub const mmap_threshold = 64 * 1024;
@@ -189,15 +219,29 @@ pub fn scanFile(
             }
             const data = sbuf[0..got];
             const probe = @min(data.len, binary_probe_bytes);
-            const is_binary = !binary and std.mem.findScalar(u8, data[0..probe], 0) != null;
+            const utf16_bom = isUtf16Bom(data);
+            const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
             if (!is_binary) {
-                const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
-                    res.err = .NOMEM;
-                    return res;
-                };
-                res.matched = br.matched;
-                res.lines = br.lines;
-                res.bytes = data.len;
+                if (utf16_bom) |bom| {
+                    if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
+                        defer gpa.free(decoded);
+                        const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, out) catch {
+                            res.err = .NOMEM;
+                            return res;
+                        };
+                        res.matched = br.matched;
+                        res.lines = br.lines;
+                        res.bytes = data.len;
+                    } else |_| {}
+                } else {
+                    const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
+                        res.err = .NOMEM;
+                        return res;
+                    };
+                    res.matched = br.matched;
+                    res.lines = br.lines;
+                    res.bytes = data.len;
+                }
             }
             if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
             return res;
@@ -268,15 +312,29 @@ pub fn scanFile(
     // `-a` disables it; otherwise a NUL in the first block means the file is
     // skipped entirely (grep `-I`, ripgrep default).
     const probe = @min(data.len, binary_probe_bytes);
-    const is_binary = !binary and std.mem.findScalar(u8, data[0..probe], 0) != null;
+    const utf16_bom = isUtf16Bom(data);
+    const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
     if (!is_binary) {
-        const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
-            res.err = .NOMEM;
-            return res;
-        };
-        res.matched = br.matched;
-        res.lines = br.lines;
-        res.bytes = data.len;
+        if (utf16_bom) |bom| {
+            if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
+                defer gpa.free(decoded);
+                const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, out) catch {
+                    res.err = .NOMEM;
+                    return res;
+                };
+                res.matched = br.matched;
+                res.lines = br.lines;
+                res.bytes = data.len;
+            } else |_| {}
+        } else {
+            const br = scanBuffer(gpa, data, searcher, path, show_path, mode, out) catch {
+                res.err = .NOMEM;
+                return res;
+            };
+            res.matched = br.matched;
+            res.lines = br.lines;
+            res.bytes = data.len;
+        }
     }
 
     // --- modes that emit once per file ------------------------------------
@@ -404,4 +462,21 @@ test "scanBuffer: line cursor survives long gaps between matches" {
     const got = try run(data.items, "MARKER", .lines, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("42:MARKER\n500:MARKER\n", got);
+}
+
+test "utf16: BOM detection and LE decoding" {
+    // UTF-16 LE: BOM (0xFF, 0xFE) followed by "Hello\n"
+    const utf16_sample = [_]u8{
+        0xFF, 0xFE, // BOM LE
+        'H',  0x00,
+        'e',  0x00,
+        'l',  0x00,
+        'l',  0x00,
+        'o',  0x00,
+        '\n', 0x00,
+    };
+    try std.testing.expectEqual(isUtf16Bom(&utf16_sample), .le);
+    const decoded = try decodeUtf16ToUtf8(std.testing.allocator, &utf16_sample, true);
+    defer std.testing.allocator.free(decoded);
+    try std.testing.expectEqualStrings("Hello\n", decoded);
 }

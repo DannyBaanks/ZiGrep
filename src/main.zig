@@ -47,7 +47,9 @@ const usage =
     \\  -a                treat binary files as text
     \\  -j, --threads N   worker threads (default: number of CPUs)
     \\  -k, --kamikaze, --dataflow
-    \\                    streaming dataflow with concurrent kamikaze swarm
+    \\                    streaming dataflow with concurrent kamikaze swarm (default)
+    \\      --sort, --deterministic
+    \\                    emit results in deterministic order by path (disables streaming)
     \\      --exclude-dir=DIR
     \\                    skip directory matching DIR (comma-separated or globs)
     \\      --exclude-ext=EXT
@@ -85,7 +87,8 @@ pub const Options = struct {
     show_path: ?bool = null,
     show_stats: bool = false,
     binary: bool = false,
-    kamikaze: bool = false,
+    kamikaze: bool = true,
+    sort: bool = false,
     no_ignore: bool = false,
     no_default_ignore: bool = false,
     exclude_dirs: [32][]const u8 = undefined,
@@ -321,6 +324,10 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 };
             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
                 opts.kamikaze = true;
+                opts.sort = false;
+            } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+                opts.sort = true;
+                opts.kamikaze = false;
             } else if (std.mem.eql(u8, body, "ignore-case")) {
                 opts.ignore_case = true;
             } else if (std.mem.eql(u8, body, "word-regexp")) {
@@ -396,7 +403,10 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
                 'w' => opts.word = true,
-                'k' => opts.kamikaze = true,
+                'k' => {
+                    opts.kamikaze = true;
+                    opts.sort = false;
+                },
                 'c' => opts.mode = .count,
                 'l' => opts.mode = .files,
                 'q' => opts.mode = .quiet,
@@ -545,11 +555,8 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     }
 
-    // --- Kamikaze Scout & Streaming Dataflow Path -------------------------
-    if (opts.kamikaze or opts.exclude_dirs_count > 0 or opts.skip_hidden or
-        opts.exclude_exts_count > 0 or opts.include_exts_count > 0 or
-        opts.exclude_patterns_count > 0 or opts.include_patterns_count > 0 or
-        opts.no_ignore or opts.no_default_ignore)
+    // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
+    if (!opts.sort)
     {
         var k_stats: kamikaze.KamikazeStats = .{};
         var filter_engine = filter.FilterEngine.init(gpa);
@@ -575,13 +582,11 @@ pub fn main(init: std.process.Init) !void {
             try filter_engine.addIncludedPattern(p);
         }
 
-        // Look for .dataignore and .gitignore in current dir and search roots:
+        // Discover .dataignore and .gitignore in current dir and search roots (walking upwards to repo root):
         if (!opts.no_ignore) {
-            filter_engine.loadIgnoreFile(".", ".dataignore");
-            filter_engine.loadIgnoreFile(".", ".gitignore");
+            filter_engine.loadUpwardIgnoreFiles(".");
             for (valid_operands.items) |root| {
-                filter_engine.loadIgnoreFile(root, ".dataignore");
-                filter_engine.loadIgnoreFile(root, ".gitignore");
+                filter_engine.loadUpwardIgnoreFiles(root);
             }
         }
 
@@ -628,14 +633,44 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(1);
     }
 
-    // --- collect the file list (standard sequential walk) -----------------
+    // --- collect the file list (deterministic sorted walk with filter engine) -
+    var filter_engine = filter.FilterEngine.init(gpa);
+    defer filter_engine.deinit();
+
+    filter_engine.no_ignore = opts.no_ignore;
+    filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+    filter_engine.skip_hidden = opts.skip_hidden;
+
+    for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+        try filter_engine.addExcludedDirs(d);
+    }
+    for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+        try filter_engine.addExcludedExts(e);
+    }
+    for (opts.include_exts[0..opts.include_exts_count]) |e| {
+        try filter_engine.addIncludedExts(e);
+    }
+    for (opts.exclude_patterns[0..opts.exclude_patterns_count]) |p| {
+        try filter_engine.addExcludedPattern(p);
+    }
+    for (opts.include_patterns[0..opts.include_patterns_count]) |p| {
+        try filter_engine.addIncludedPattern(p);
+    }
+
+    if (!opts.no_ignore) {
+        filter_engine.loadUpwardIgnoreFiles(".");
+        for (valid_operands.items) |root| {
+            filter_engine.loadUpwardIgnoreFiles(root);
+        }
+    }
+
     var files: std.ArrayList([:0]const u8) = .empty;
     for (valid_operands.items) |op| {
         var stx: linux.Statx = undefined;
         _ = linux.statx(linux.AT.FDCWD, op, 0, .{ .TYPE = true }, &stx);
         const m = stx.mode & linux.S.IFMT;
         if (m == linux.S.IFDIR) {
-            walk.walk(arena, &.{op}, &files) catch |err| {
+            walk.walk(arena, &.{op}, &files, &filter_engine) catch |err| {
                 std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
                 had_error = true;
             };
@@ -910,6 +945,20 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.sort);
+        try std.testing.expect(!o.kamikaze);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.sort);
+        try std.testing.expect(!o.kamikaze);
     }
 }
 
