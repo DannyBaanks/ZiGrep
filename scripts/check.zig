@@ -141,18 +141,23 @@ pub fn main(init: std.process.Init) !void {
 
     std.debug.print("{s}", .{report.items});
     if (save) |dir| {
-        common.makePath(arena, dir) catch {};
+        common.makePath(init.io, dir) catch {
+            std.debug.print("check: failed to create {s}\n", .{dir});
+            std.process.exit(2);
+        };
         for (results) |r| {
             const stem = try common.sanitizeLabel(arena, r.label);
-            const op = try std.fmt.allocPrintSentinel(arena, "{s}/{s}.out", .{ dir, stem }, 0);
-            const ep = try std.fmt.allocPrintSentinel(arena, "{s}/{s}.err", .{ dir, stem }, 0);
-            if (!common.writeFile(op, r.stdout) or !common.writeFile(ep, r.stderr)) {
+            const out_name = try std.fmt.allocPrint(arena, "{s}.out", .{stem});
+            const err_name = try std.fmt.allocPrint(arena, "{s}.err", .{stem});
+            const op = try std.fs.path.join(arena, &.{ dir, out_name });
+            const ep = try std.fs.path.join(arena, &.{ dir, err_name });
+            if (!common.writeFile(init.io, op, r.stdout) or !common.writeFile(init.io, ep, r.stderr)) {
                 std.debug.print("check: failed to save under {s}\n", .{dir});
                 std.process.exit(2);
             }
         }
-        const rp = try std.fmt.allocPrintSentinel(arena, "{s}/report.txt", .{dir}, 0);
-        if (!common.writeFile(rp, report.items)) {
+        const rp = try std.fs.path.join(arena, &.{ dir, "report.txt" });
+        if (!common.writeFile(init.io, rp, report.items)) {
             std.debug.print("check: failed to write {s}\n", .{rp});
             std.process.exit(2);
         }

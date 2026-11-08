@@ -18,7 +18,7 @@
 //! Everything is driven by a single seeded PRNG, so the same arguments always
 //! produce byte-identical files.
 const std = @import("std");
-const linux = std.os.linux;
+const common = @import("common.zig");
 const Allocator = std.mem.Allocator;
 
 pub const planted = "ZGREP_PLANTED_TOKEN";
@@ -28,22 +28,22 @@ pub const absent = "ZGREP_ABSENT_TOKEN";
 /// Every word is <= 14 bytes, which bounds a generated line (12 words + one
 /// planted marker) at ~210 bytes so the output buffer guard is exact.
 const words = [_][]const u8{
-    "const",      "fn",         "struct",     "pub",        "return",     "error",      "allocator",  "memory",
-    "buffer",     "pointer",    "value",      "result",     "index",      "count",      "length",     "search",
-    "pattern",    "engine",     "target",     "source",     "system",     "module",     "package",    "interface",
-    "implementation", "process", "thread",    "signal",     "handle",     "context",    "state",      "status",
-    "command",    "output",     "input",      "stream",     "socket",     "network",    "protocol",   "encoding",
-    "format",     "parser",     "lexer",      "token",      "symbol",     "table",      "entry",      "record",
-    "field",      "object",     "array",      "slice",      "vector",     "matrix",     "graph",      "node",
-    "edge",       "tree",       "branch",     "commit",     "version",    "release",    "build",      "test",
-    "debug",      "trace",      "log",        "level",      "query",      "cache",      "store",      "flush",
-    "close",      "open",       "start",      "stop",       "pause",      "resume",     "queue",      "worker",
-    "manager",    "service",    "client",     "server",     "request",    "response",   "header",     "body",
-    "method",     "route",      "filter",     "policy",     "rule",       "check",      "valid",      "type",
-    "size",       "path",       "file",       "dir",        "line",       "byte",       "word",       "text",
-    "data",       "info",       "note",       "plan",       "step",       "goal",       "task",       "work",
-    "code",       "lock",       "key",        "map",        "set",        "list",       "item",       "unit",
-    "case",       "mode",       "kind",       "name",       "flag",       "opt",        "arg",        "param",
+    "const",          "fn",      "struct", "pub",    "return",  "error",    "allocator", "memory",
+    "buffer",         "pointer", "value",  "result", "index",   "count",    "length",    "search",
+    "pattern",        "engine",  "target", "source", "system",  "module",   "package",   "interface",
+    "implementation", "process", "thread", "signal", "handle",  "context",  "state",     "status",
+    "command",        "output",  "input",  "stream", "socket",  "network",  "protocol",  "encoding",
+    "format",         "parser",  "lexer",  "token",  "symbol",  "table",    "entry",     "record",
+    "field",          "object",  "array",  "slice",  "vector",  "matrix",   "graph",     "node",
+    "edge",           "tree",    "branch", "commit", "version", "release",  "build",     "test",
+    "debug",          "trace",   "log",    "level",  "query",   "cache",    "store",     "flush",
+    "close",          "open",    "start",  "stop",   "pause",   "resume",   "queue",     "worker",
+    "manager",        "service", "client", "server", "request", "response", "header",    "body",
+    "method",         "route",   "filter", "policy", "rule",    "check",    "valid",     "type",
+    "size",           "path",    "file",   "dir",    "line",    "byte",     "word",      "text",
+    "data",           "info",    "note",   "plan",   "step",    "goal",     "task",      "work",
+    "code",           "lock",    "key",    "map",    "set",     "list",     "item",      "unit",
+    "case",           "mode",    "kind",   "name",   "flag",    "opt",      "arg",       "param",
 };
 
 const usage =
@@ -95,55 +95,12 @@ fn parse(args: []const [:0]const u8, cfg: *Config) !void {
     if (cfg.files == 0 or cfg.size < 256 or cfg.deep == 0 or cfg.top == 0) return error.BadArg;
 }
 
-/// Creates every path prefix of `path`, POSIX-style. Existing dirs are fine.
-fn makePath(arena: Allocator, path: []const u8) Allocator.Error!void {
-    if (path.len == 0) return;
-    var i: usize = 1;
-    while (i <= path.len) : (i += 1) {
-        if (i == path.len or path[i] == '/') {
-            const prefix = try std.fmt.allocPrintSentinel(arena, "{s}", .{path[0..i]}, 0);
-            _ = linux.mkdirat(linux.AT.FDCWD, prefix, 0o755);
-        }
-    }
-}
-
-fn writeFile(path: [:0]const u8, data: []const u8) bool {
-    const rc = linux.openat(
-        linux.AT.FDCWD,
-        path,
-        .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true },
-        0o644,
-    );
-    if (linux.errno(rc) != .SUCCESS) return false;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
-    var off: usize = 0;
-    while (off < data.len) {
-        const w = linux.write(fd, data.ptr + off, data.len - off);
-        const e = linux.errno(w);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or w == 0) return false;
-        off += w;
-    }
-    return true;
-}
-
+/// Creates the output tree using native path joining. Existing dirs are fine.
 fn appendWord(buf: []u8, pos: *usize, word: []const u8) void {
     buf[pos.*] = ' ';
     pos.* += 1;
     @memcpy(buf[pos.*..][0..word.len], word);
     pos.* += word.len;
-}
-
-/// Monotonic milliseconds. `std.time` exposes only constants in Zig 0.16, so
-/// the vdso-accelerated clock is read directly, as in `src/main.zig`.
-fn nowMs() u64 {
-    var ts: linux.timespec = undefined;
-    if (linux.clock_gettime(.MONOTONIC, &ts) != 0) return 0;
-    if (ts.sec < 0 or ts.nsec < 0) return 0;
-    const sec: u64 = @intCast(ts.sec);
-    const nsec: u64 = @intCast(ts.nsec);
-    return sec * std.time.ms_per_s + nsec / 1_000_000;
 }
 
 const FileStats = struct {
@@ -197,22 +154,22 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     };
 
-    const t0 = nowMs();
+    const t0 = common.nowNs(init.io) / std.time.ns_per_ms;
 
-    try makePath(arena, cfg.out);
+    try common.makePath(init.io, cfg.out);
     var t: usize = 0;
     while (t < cfg.top) : (t += 1) {
-        const top_dir = try std.fmt.allocPrintSentinel(arena, "{s}/sub{d:0>2}", .{ cfg.out, t }, 0);
-        _ = linux.mkdirat(linux.AT.FDCWD, top_dir, 0o755);
+        const top_name = try std.fmt.allocPrint(arena, "sub{d:0>2}", .{t});
+        const top_dir = try std.fs.path.join(arena, &.{ cfg.out, top_name });
+        try common.makePath(init.io, top_dir);
         var d: usize = 0;
         while (d < cfg.deep) : (d += 1) {
-            const leaf = try std.fmt.allocPrintSentinel(
+            const deep_name = try std.fmt.allocPrint(arena, "deep{d:0>2}", .{d});
+            const leaf = try std.fs.path.join(
                 arena,
-                "{s}/sub{d:0>2}/deep{d:0>2}",
-                .{ cfg.out, t, d },
-                0,
+                &.{ top_dir, deep_name },
             );
-            _ = linux.mkdirat(linux.AT.FDCWD, leaf, 0o755);
+            try common.makePath(init.io, leaf);
         }
     }
 
@@ -232,21 +189,23 @@ pub fn main(init: std.process.Init) !void {
 
     var i: usize = 0;
     while (i < cfg.files) : (i += 1) {
-        const path: [:0]const u8 = if (i % 8 == 7)
-            try std.fmt.allocPrintSentinel(arena, "{s}/f{d:0>5}.txt", .{ cfg.out, i }, 0)
+        const file_name = try std.fmt.allocPrint(arena, "f{d:0>5}.txt", .{i});
+        const path = if (i % 8 == 7)
+            try std.fs.path.join(arena, &.{ cfg.out, file_name })
         else blk: {
             const tt = i % cfg.top;
             const dd = (i / cfg.top) % cfg.deep;
-            break :blk try std.fmt.allocPrintSentinel(
+            const top_name = try std.fmt.allocPrint(arena, "sub{d:0>2}", .{tt});
+            const deep_name = try std.fmt.allocPrint(arena, "deep{d:0>2}", .{dd});
+            const parent = try std.fs.path.join(arena, &.{ cfg.out, top_name, deep_name });
+            break :blk try std.fs.path.join(
                 arena,
-                "{s}/sub{d:0>2}/deep{d:0>2}/f{d:0>5}.txt",
-                .{ cfg.out, tt, dd, i },
-                0,
+                &.{ parent, file_name },
             );
         };
 
         const st = generate(rnd, buf, cfg.size, i, i < cfg.rare_files);
-        if (!writeFile(path, buf[0..st.bytes])) {
+        if (!common.writeFile(init.io, path, buf[0..st.bytes])) {
             std.debug.print("zgrep: failed to write {s}\n", .{path});
             std.process.exit(2);
         }
@@ -259,9 +218,8 @@ pub fn main(init: std.process.Init) !void {
         if (st.rare > 0) rare_files += 1;
     }
 
-    const truth_path = try std.fmt.allocPrintSentinel(arena, "{s}.truth", .{cfg.out}, 0);
-    const truth = try std.fmt.allocPrint(
-        arena,
+    const truth_path = try std.fmt.allocPrint(arena, "{s}.truth", .{cfg.out});
+    const truth = try std.fmt.allocPrint(arena,
         \\# zgrep synthetic corpus ground truth
         \\# generated by scripts/gen_corpus.zig; do not edit by hand
         \\out={s}
@@ -299,12 +257,12 @@ pub fn main(init: std.process.Init) !void {
         rare_files,
         absent,
     });
-    if (!writeFile(truth_path, truth)) {
+    if (!common.writeFile(init.io, truth_path, truth)) {
         std.debug.print("zgrep: failed to write {s}\n", .{truth_path});
         std.process.exit(2);
     }
 
-    const elapsed = nowMs() -| t0;
+    const elapsed = common.nowNs(init.io) / std.time.ns_per_ms -| t0;
     std.debug.print(
         "gen_corpus: files={d} bytes={d} lines={d} needle_lines={d} rare_lines={d} in {d} ms\n",
         .{ written, total_bytes, total_lines, needle_lines, rare_lines, elapsed },

@@ -6,6 +6,8 @@
 
 **Ultra-fast, zero-libc, grep-compatible search engine written in pure Zig 0.16.**
 
+The Linux build keeps its direct-syscall fast path. Windows uses native Zig I/O for directory traversal, file reads, memory mapping, clocks, and output; it does not require WSL. Native Windows correctness is checked in CI against GNU grep and ripgrep. The benchmark results below are Linux-only and do not claim Windows performance parity.
+
 `ZiGrep` (`zigrep` / `zgrep`) combines direct Linux kernel syscalls (`getdents64`), lock-free work-stealing swarms, rarest-byte SIMD vectorization, Latin-1 Unicode case-folding, and a linear regex engine with lazy DFA caching to achieve state-of-the-art search throughput across tiny folders, massive monorepos, and whole drives.
 
 ```sh
@@ -88,7 +90,7 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 ## 📦 Installation & Build
 
 ### Prerequisites
-* [Zig](https://ziglang.org/download/) **0.16.0+**
+* [Zig](https://ziglang.org/download/) **0.16.0**
 
 ### Compile & Install
 ```sh
@@ -98,14 +100,14 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (50/50)
+# Run all unit tests (52/52 on native Windows, Zig 0.16.0)
 zig build test --summary all
 
-# Run pure Zig differential oracle against GNU grep & ripgrep (25/25)
+# Run pure Zig differential oracle against GNU grep & ripgrep (24/24 on native Windows)
 zig build oracle
 ```
 
-Binaries are installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
+Binaries are installed at `zig-out/bin/zigrep` (and `zgrep`; on Windows both are `.exe` files).
 
 ---
 
@@ -172,8 +174,9 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 50/50 tests covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts.
-* **Differential Oracle (`zig build oracle`)**: 25 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input).
+* **Unit Tests**: 52/52 tests on native Windows (Zig 0.16.0), covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), and SIMD shifts.
+* **Differential Oracle (`zig build oracle`)**: 24/24 automated multi-way verification checks on native Windows against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, invert match `-v`, non-matching file listings `-L`, and match caps `-m NUM`). The POSIX-only piped-stdin case is skipped on Windows (it needs `sh -c`); Linux runs the full 25 checks.
+* **Native Windows job**: builds ReleaseFast, runs the same unit tests and differential oracle, then smoke-tests Unicode/space-containing paths and `.gitignore` filtering.
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 

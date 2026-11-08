@@ -1,7 +1,6 @@
 //! Shared helpers for the benchmark scripts. Standalone `zig run` scripts
 //! import this with a relative path, so there is no build wiring involved.
 const std = @import("std");
-const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 
 pub const Group = struct {
@@ -10,85 +9,46 @@ pub const Group = struct {
 };
 
 // ---------------------------------------------------------------------------
-// Files and directories (raw syscalls, same style as src/)
+// Files, directories, clocks, and output
 // ---------------------------------------------------------------------------
 
-/// Creates every POSIX path prefix of `path`. Existing directories are fine.
-pub fn makePath(arena: Allocator, path: []const u8) Allocator.Error!void {
-    if (path.len == 0) return;
-    var i: usize = 1;
-    while (i <= path.len) : (i += 1) {
-        if (i == path.len or path[i] == '/') {
-            const prefix = try std.fmt.allocPrintSentinel(arena, "{s}", .{path[0..i]}, 0);
-            _ = linux.mkdirat(linux.AT.FDCWD, prefix, 0o755);
-        }
-    }
+pub fn makePath(io: std.Io, path: []const u8) !void {
+    try std.Io.Dir.cwd().createDirPath(io, path);
 }
 
-pub fn writeFile(path: [:0]const u8, data: []const u8) bool {
-    const rc = linux.openat(
-        linux.AT.FDCWD,
-        path,
-        .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true },
-        0o644,
-    );
-    if (linux.errno(rc) != .SUCCESS) return false;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
-    var off: usize = 0;
-    while (off < data.len) {
-        const w = linux.write(fd, data.ptr + off, data.len - off);
-        const e = linux.errno(w);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or w == 0) return false;
-        off += w;
-    }
+pub fn writeFile(io: std.Io, path: []const u8, data: []const u8) bool {
+    const file = std.Io.Dir.cwd().createFile(io, path, .{}) catch return false;
+    defer file.close(io);
+    file.writeStreamingAll(io, data) catch return false;
     return true;
 }
 
-/// Reads a whole small file, e.g. `/proc/loadavg`.
-pub fn readFile(arena: Allocator, path: [:0]const u8) ?[]const u8 {
-    const rc = linux.openat(linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return null;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+pub fn readFile(io: std.Io, arena: Allocator, path: []const u8) ?[]const u8 {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return null;
+    defer file.close(io);
     var buf: [128]u8 = undefined;
-    const r = linux.read(fd, &buf, buf.len);
-    if (linux.errno(r) != .SUCCESS or r == 0) return null;
+    const r = file.readPositional(io, &.{&buf}, 0) catch return null;
+    if (r == 0) return null;
     const n = std.mem.trimEnd(u8, buf[0..r], "\n");
     return std.fmt.allocPrint(arena, "{s}", .{n}) catch null;
 }
 
-// ---------------------------------------------------------------------------
-// Clock — std.time exposes only constants in Zig 0.16
-// ---------------------------------------------------------------------------
-
-pub fn nowNs() u64 {
-    var ts: linux.timespec = undefined;
-    if (linux.clock_gettime(.MONOTONIC, &ts) != 0) return 0;
-    if (ts.sec < 0 or ts.nsec < 0) return 0;
-    const sec: u64 = @intCast(ts.sec);
-    const nsec: u64 = @intCast(ts.nsec);
-    return sec * 1_000_000_000 + nsec;
-}
-
-pub fn nowMs() u64 {
-    return nowNs() / 1_000_000;
+pub fn nowNs(io: std.Io) u64 {
+    const ns = std.Io.Clock.now(.awake, io).nanoseconds;
+    return if (ns <= 0) 0 else @intCast(ns);
 }
 
 /// Formats into a stack buffer and writes to stdout. `std.debug.print` targets
 /// stderr in Zig 0.16, which is right for diagnostics but not for reports.
-pub fn printOut(comptime fmt: []const u8, args: anytype) void {
+pub fn printOut(io: std.Io, comptime fmt: []const u8, args: anytype) void {
     var buf: [64 * 1024]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, fmt, args) catch return;
-    var off: usize = 0;
-    while (off < s.len) {
-        const w = linux.write(linux.STDOUT_FILENO, s.ptr + off, s.len - off);
-        const e = linux.errno(w);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or w == 0) return;
-        off += w;
-    }
+    const s = std.fmt.bufPrint(&buf, fmt, args) catch |err| {
+        std.debug.print("script output formatting failed: {s}\n", .{@errorName(err)});
+        return;
+    };
+    std.Io.File.stdout().writeStreamingAll(io, s) catch |err| {
+        std.debug.print("script stdout write failed: {s}\n", .{@errorName(err)});
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -134,15 +94,34 @@ pub fn countNewlines(text: []const u8) usize {
 
 /// Splits `text` into lines (one trailing newline optional) and sorts them
 /// byte-wise, giving an order-independent view for comparison. Byte-identical
-/// duplicates land adjacent, so the result is canonical regardless of the
-/// underlying search order.
+/// duplicates land adjacent. Windows line endings and path separators are
+/// normalized so native tools can be compared independent of their rendering.
 pub fn sortLines(arena: Allocator, text: []const u8) Allocator.Error![]const []const u8 {
     var body = text;
     if (body.len > 0 and body[body.len - 1] == '\n') body = body[0 .. body.len - 1];
     var list: std.ArrayList([]const u8) = .empty;
     if (body.len == 0) return list.items;
     var it = std.mem.splitScalar(u8, body, '\n');
-    while (it.next()) |line| try list.append(arena, line);
+    while (it.next()) |line| {
+        var end = line.len;
+        if (end > 0 and line[end - 1] == '\r') end -= 1;
+        const normalized = try arena.dupe(u8, line[0..end]);
+        var path_end = normalized.len;
+        var i: usize = 0;
+        while (i < normalized.len) : (i += 1) {
+            if (normalized[i] != ':') continue;
+            var digit_end = i + 1;
+            while (digit_end < normalized.len and std.ascii.isDigit(normalized[digit_end])) : (digit_end += 1) {}
+            if (digit_end > i + 1 and (digit_end == normalized.len or normalized[digit_end] == ':')) {
+                path_end = i;
+                break;
+            }
+        }
+        for (normalized[0..path_end]) |*byte| {
+            if (byte.* == '\\') byte.* = '/';
+        }
+        try list.append(arena, normalized);
+    }
     std.sort.pdq([]const u8, list.items, {}, lessThanBytes);
     return list.items;
 }

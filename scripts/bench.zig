@@ -10,7 +10,7 @@
 //! hot), then timed `--runs` times around `spawn` → `wait`. Warm-up and timed
 //! runs are **interleaved across groups** in rotating order, so a busy host
 //! penalises every group equally instead of whichever runs last. The child's
-//! stdout goes to `/dev/null`, which is what a real `grep | wc` pipeline costs
+//! stdout is discarded, which is what a real `grep | wc` pipeline costs
 //! too.
 //!
 //! A Markdown table plus the raw samples go to stdout, so the evidence pack
@@ -80,7 +80,7 @@ fn summarize(arena: Allocator, samples: []const u64) !Summary {
 }
 
 fn runOnce(io: std.Io, argv: []const []const u8) !struct { ns: u64, code: u8 } {
-    const t0 = common.nowNs();
+    const t0 = common.nowNs(io);
     var child = try std.process.spawn(io, .{
         .argv = argv,
         .stdin = .ignore,
@@ -88,7 +88,7 @@ fn runOnce(io: std.Io, argv: []const []const u8) !struct { ns: u64, code: u8 } {
         .stderr = .inherit,
     });
     const term = try child.wait(io);
-    return .{ .ns = common.nowNs() -| t0, .code = common.termCode(term) };
+    return .{ .ns = common.nowNs(io) -| t0, .code = common.termCode(term) };
 }
 
 fn appendJsonString(list: *std.ArrayList(u8), arena: Allocator, s: []const u8) Allocator.Error!void {
@@ -162,10 +162,10 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     };
 
-    const load = common.readFile(arena, "/proc/loadavg") orelse "n/a";
+    const load = common.readFile(init.io, arena, "/proc/loadavg") orelse "n/a";
     const nproc = std.Thread.getCpuCount() catch 0;
 
-    common.printOut("bench: runs={d} warmup={d} corpus_bytes={d} nproc={d} loadavg={s}\n\n", .{ runs, warmup, bytes, nproc, load });
+    common.printOut(init.io, "bench: runs={d} warmup={d} corpus_bytes={d} nproc={d} loadavg={s}\n\n", .{ runs, warmup, bytes, nproc, load });
 
     const results = try arena.alloc(Result, groups.len);
     for (groups, 0..) |g, gi| {
@@ -212,10 +212,10 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // --- report ------------------------------------------------------------
-    common.printOut("| {s:<14} | {s:>10} | {s:>10} | {s:>10} | {s:>10} | {s:>11} | {s:>10} | {s:>5} |\n", .{
+    common.printOut(init.io, "| {s:<14} | {s:>10} | {s:>10} | {s:>10} | {s:>10} | {s:>11} | {s:>10} | {s:>5} |\n", .{
         "label", "median ms", "min ms", "max ms", "mean ms", "stddev ms", "MB/s", "exit",
     });
-    common.printOut("|{s}|{s}|{s}|{s}|{s}|{s}|{s}|{s}|\n", .{
+    common.printOut(init.io, "|{s}|{s}|{s}|{s}|{s}|{s}|{s}|{s}|\n", .{
         "---",
         "---:",
         "---:",
@@ -241,7 +241,7 @@ pub fn main(init: std.process.Init) !void {
             (std.fmt.bufPrint(&code_buf, "{d}", .{r.codes[0]}) catch unreachable)
         else
             "varies";
-        common.printOut("| {s:<14} | {d:>10.3} | {d:>10.3} | {d:>10.3} | {d:>10.3} | {d:>11.3} | {d:>10.1} | {s:>5} |\n", .{
+        common.printOut(init.io, "| {s:<14} | {d:>10.3} | {d:>10.3} | {d:>10.3} | {d:>10.3} | {d:>11.3} | {d:>10.1} | {s:>5} |\n", .{
             r.group.label,
             @as(f64, @floatFromInt(r.summary.median_ns)) / 1e6,
             @as(f64, @floatFromInt(r.summary.min_ns)) / 1e6,
@@ -253,20 +253,20 @@ pub fn main(init: std.process.Init) !void {
         });
     }
 
-    common.printOut("\n", .{});
+    common.printOut(init.io, "\n", .{});
     for (results) |r| {
-        common.printOut("raw {s}:", .{r.group.label});
-        for (r.samples) |s| common.printOut(" {d}", .{s});
-        common.printOut("\n", .{});
+        common.printOut(init.io, "raw {s}:", .{r.group.label});
+        for (r.samples) |s| common.printOut(init.io, " {d}", .{s});
+        common.printOut(init.io, "\n", .{});
     }
 
-    common.printOut("cmd {s}", .{results[0].group.label});
-    for (results[0].group.argv) |tok| common.printOut(" {s}", .{tok});
-    common.printOut("\n", .{});
+    common.printOut(init.io, "cmd {s}", .{results[0].group.label});
+    for (results[0].group.argv) |tok| common.printOut(init.io, " {s}", .{tok});
+    common.printOut(init.io, "\n", .{});
     for (results[1..]) |r| {
-        common.printOut("cmd {s}", .{r.group.label});
-        for (r.group.argv) |tok| common.printOut(" {s}", .{tok});
-        common.printOut("\n", .{});
+        common.printOut(init.io, "cmd {s}", .{r.group.label});
+        for (r.group.argv) |tok| common.printOut(init.io, " {s}", .{tok});
+        common.printOut(init.io, "\n", .{});
     }
 
     // --- JSON ---------------------------------------------------------------
@@ -311,11 +311,10 @@ pub fn main(init: std.process.Init) !void {
         }
         jput(&j, arena, "]}}\n", .{});
 
-        const op = try std.fmt.allocPrintSentinel(arena, "{s}", .{path}, 0);
-        if (!common.writeFile(op, j.items)) {
+        if (!common.writeFile(init.io, path, j.items)) {
             std.debug.print("bench: failed to write {s}\n", .{path});
             std.process.exit(2);
         }
-        common.printOut("json {s} ({d} bytes)\n", .{ path, j.items.len });
+        common.printOut(init.io, "json {s} ({d} bytes)\n", .{ path, j.items.len });
     }
 }

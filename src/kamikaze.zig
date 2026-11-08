@@ -4,7 +4,7 @@
 //!   1. Work-Stealing Unified Swarm:
 //!      Workers are hybrid: they simultaneously act as Directory Scouts ("Abuelo/Padres")
 //!      and File Scanners ("Hijos/Nietos"). Any free worker pops pending directories
-//!      from `WorkPool.dir_queue` and walks them with raw `linux.getdents64`.
+//!      from `WorkPool.dir_queue` and walks them through the VFS adapter.
 //!      Discovered subdirectories are pushed back to the pool, while regular files
 //!      are batched into `WorkPool.batch_queue`.
 //!
@@ -17,7 +17,8 @@
 //!      In `-q` (quiet) or `-l` (files with match) mode, the first hit flips an
 //!      atomic flag and aborts the entire swarm immediately.
 const std = @import("std");
-const linux = std.os.linux;
+const platform = @import("platform.zig");
+const vfs = @import("vfs.zig");
 const Allocator = std.mem.Allocator;
 const search = @import("search.zig");
 const scan = @import("scan.zig");
@@ -200,16 +201,11 @@ pub const WorkPool = struct {
 };
 
 pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Allocator.Error![:0]const u8 {
-    if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
-        return std.fmt.allocPrintSentinel(gpa, "{s}", .{name}, 0);
-    }
-    if (dir[dir.len - 1] == '/') {
-        return std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ dir, name }, 0);
-    }
-    return std.fmt.allocPrintSentinel(gpa, "{s}/{s}", .{ dir, name }, 0);
+    return vfs.joinPathSentinel(gpa, dir, name);
 }
 
 pub const KamikazeContext = struct {
+    io: std.Io,
     gpa: Allocator,
     pool: *WorkPool,
     searcher: *const Searcher,
@@ -225,15 +221,8 @@ pub const KamikazeContext = struct {
     stats_mutex: SpinLock = .{},
 };
 
-fn flushToStdout(bytes: []const u8) void {
-    var off: usize = 0;
-    while (off < bytes.len) {
-        const r = linux.write(linux.STDOUT_FILENO, bytes.ptr + off, bytes.len - off);
-        const e = linux.errno(r);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or r == 0) break;
-        off += r;
-    }
+fn flushToStdout(io: std.Io, bytes: []const u8) void {
+    _ = platform.writeStdout(io, bytes);
 }
 
 fn scoutDirConcurrent(
@@ -250,11 +239,8 @@ fn scoutDirConcurrent(
         ctx.stats_mutex.unlock();
     }
 
-    const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-    const open_err = linux.errno(rc);
-    if (open_err != .SUCCESS) return;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+    var stream = vfs.DirStream.open(ctx.io, dir) catch return;
+    defer stream.close();
 
     var subdirs: std.ArrayList([:0]const u8) = .empty;
     errdefer {
@@ -270,61 +256,27 @@ fn scoutDirConcurrent(
 
     const scan_files = ctx.nav_plan.shouldScanFiles(depth);
     const recurse_subdirs = ctx.nav_plan.shouldRecurseSubdirs(depth);
-
-    var buf: [32 * 1024]u8 = undefined;
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
         if (ctx.pool.aborted.load(.acquire)) break;
 
-        const n = linux.getdents64(fd, &buf, buf.len);
-        const rd_err = linux.errno(n);
-        if (rd_err == .INTR) continue;
-        if (rd_err != .SUCCESS or n == 0) break;
+        const maybe_entry = stream.next() catch break;
+        const entry = maybe_entry orelse break;
+        var kind = entry.kind;
+        if (kind == .unknown) {
+            const full_path = try joinPathSentinel(ctx.gpa, dir, entry.name);
+            defer ctx.gpa.free(full_path);
+            kind = if (vfs.stat(ctx.io, full_path, false)) |info| info.kind else .other;
+        }
 
-        var off: usize = 0;
-        while (off < n) {
-            const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-            const reclen: usize = ent.reclen;
-            if (reclen == 0) break;
-            const name: [:0]const u8 = std.mem.sliceTo(
-                @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-                0,
-            );
-            off += reclen;
-
-            if (name.len == 0) continue;
-            if (std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
-
-            const kind = ent.type;
-            if (kind == linux.DT.DIR) {
-                if (!recurse_subdirs) continue;
-                if (ctx.filter.isDirExcluded(name)) continue;
-                const child = try joinPathSentinel(ctx.gpa, dir, name);
-                try subdirs.append(ctx.gpa, child);
-            } else if (kind == linux.DT.REG) {
-                if (!scan_files) continue;
-                if (ctx.filter.isFileExcluded(name)) continue;
-                const child_name = try ctx.gpa.dupeZ(u8, name);
-                try files.append(ctx.gpa, child_name);
-            } else if (kind == linux.DT.UNKNOWN) {
-                const full_p = try joinPathSentinel(ctx.gpa, dir, name);
-                defer ctx.gpa.free(full_p);
-                var stx: linux.Statx = undefined;
-                if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true }, &stx)) == .SUCCESS) {
-                    const m = stx.mode & linux.S.IFMT;
-                    if (m == linux.S.IFDIR) {
-                        if (recurse_subdirs and !ctx.filter.isDirExcluded(name)) {
-                            const child = try ctx.gpa.dupeZ(u8, full_p);
-                            try subdirs.append(ctx.gpa, child);
-                        }
-                    } else if (m == linux.S.IFREG) {
-                        if (scan_files and !ctx.filter.isFileExcluded(name)) {
-                            const child_name = try ctx.gpa.dupeZ(u8, name);
-                            try files.append(ctx.gpa, child_name);
-                        }
-                    }
-                }
-            }
+        if (kind == .directory) {
+            if (!recurse_subdirs) continue;
+            if (ctx.filter.isDirExcluded(entry.name)) continue;
+            try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, entry.name));
+        } else if (kind == .file) {
+            if (!scan_files) continue;
+            if (ctx.filter.isFileExcluded(entry.name)) continue;
+            try files.append(ctx.gpa, try ctx.gpa.dupeZ(u8, entry.name));
         }
     }
 
@@ -369,6 +321,7 @@ fn scanBatch(
         defer ctx.gpa.free(full_path);
 
         const res = scan.scanFile(
+            ctx.io,
             ctx.gpa,
             ctx.searcher,
             full_path,
@@ -397,7 +350,7 @@ fn scanBatch(
     if (local_out.items.len > 0 and ctx.mode != .quiet) {
         ctx.out_mutex.lock();
         defer ctx.out_mutex.unlock();
-        flushToStdout(local_out.items);
+        flushToStdout(ctx.io, local_out.items);
         local_out.clearRetainingCapacity();
     }
 
@@ -449,6 +402,7 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
 
 /// Zero-Spawn Fast Path for small single directories (e.g. src/ with <= 64 files).
 fn tryQuickSingleDirScan(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     dir: [:0]const u8,
@@ -459,10 +413,8 @@ fn tryQuickSingleDirScan(
     scan_config: scan.ScanConfig,
     stats: *KamikazeStats,
 ) ?bool {
-    const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return null;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+    var stream = vfs.DirStream.open(io, dir) catch return null;
+    defer stream.close();
 
     var files: std.ArrayList([:0]const u8) = .empty;
     defer {
@@ -470,35 +422,23 @@ fn tryQuickSingleDirScan(
         files.deinit(gpa);
     }
 
-    var buf: [32 * 1024]u8 = undefined;
     while (true) {
-        const n = linux.getdents64(fd, &buf, buf.len);
-        if (linux.errno(n) != .SUCCESS or n == 0) break;
+        const maybe_entry = stream.next() catch return null;
+        const entry = maybe_entry orelse break;
+        var kind = entry.kind;
+        if (kind == .unknown) {
+            const full_path = joinPathSentinel(gpa, dir, entry.name) catch return null;
+            defer gpa.free(full_path);
+            kind = if (vfs.stat(io, full_path, false)) |info| info.kind else .other;
+        }
 
-        var off: usize = 0;
-        while (off < n) {
-            const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-            const reclen: usize = ent.reclen;
-            if (reclen == 0) break;
-            const name: [:0]const u8 = std.mem.sliceTo(
-                @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-                0,
-            );
-            off += reclen;
-
-            if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
-
-            const kind = ent.type;
-            if (kind == linux.DT.DIR) {
-                if (!filter_engine.isDirExcluded(name)) return null; // Subdirectory present -> use parallel swarm!
-            } else if (kind == linux.DT.REG) {
-                if (filter_engine.isFileExcluded(name)) continue;
-                if (files.items.len >= 64) return null; // Large directory -> use parallel swarm!
-                const child_name = gpa.dupeZ(u8, name) catch return null;
-                files.append(gpa, child_name) catch return null;
-            } else {
-                return null;
-            }
+        if (kind == .directory) {
+            if (!filter_engine.isDirExcluded(entry.name)) return null;
+        } else if (kind == .file) {
+            if (filter_engine.isFileExcluded(entry.name)) continue;
+            if (files.items.len >= 64) return null;
+            const child_name = gpa.dupeZ(u8, entry.name) catch return null;
+            files.append(gpa, child_name) catch return null;
         }
     }
 
@@ -517,6 +457,7 @@ fn tryQuickSingleDirScan(
         defer gpa.free(full_path);
 
         const res = scan.scanFile(
+            io,
             gpa,
             searcher,
             full_path,
@@ -540,7 +481,7 @@ fn tryQuickSingleDirScan(
     }
 
     if (local_out.items.len > 0 and mode != .quiet) {
-        flushToStdout(local_out.items);
+        flushToStdout(io, local_out.items);
     }
 
     return matched_any;
@@ -548,6 +489,7 @@ fn tryQuickSingleDirScan(
 
 /// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
 pub fn runKamikazePipeline(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     roots: []const [:0]const u8,
@@ -563,11 +505,9 @@ pub fn runKamikazePipeline(
     // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
     if (roots.len == 1 and threads_count > 1 and nav_plan.len == 0) {
         const root = roots[0];
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-            const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR) {
-                if (tryQuickSingleDirScan(gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, stats)) |matched| {
+        if (vfs.stat(io, root, true)) |info| {
+            if (info.kind == .directory) {
+                if (tryQuickSingleDirScan(io, gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, stats)) |matched| {
                     return matched;
                 }
             }
@@ -581,6 +521,7 @@ pub fn runKamikazePipeline(
     var found = std.atomic.Value(bool).init(false);
 
     var ctx = KamikazeContext{
+        .io = io,
         .gpa = gpa,
         .pool = &pool,
         .searcher = searcher,
@@ -596,12 +537,10 @@ pub fn runKamikazePipeline(
 
     // Seed root directories / files into the pool
     for (roots) |root| {
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-            const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR) {
+        if (vfs.stat(io, root, true)) |info| {
+            if (info.kind == .directory) {
                 try pool.pushRoot(root);
-            } else if (m == linux.S.IFREG) {
+            } else if (info.kind == .file) {
                 try pool.pushSingleFile(root);
             }
         }

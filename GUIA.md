@@ -3,6 +3,23 @@
 Guía operativa para una persona o agente que usa `zigrep` a mano. El detalle técnico y
 la evidencia están en `README.md` y `evidence/REPORT.md`.
 
+## El comando de Windows
+
+```powershell
+.\zig-out\bin\zigrep.exe -l -F Searcher src
+```
+
+Salida real:
+
+```text
+src\kamikaze.zig
+src\main.zig
+src\scan.zig
+src\search.zig
+```
+
+`-l` lista los archivos con coincidencias; quítalo para mostrar las líneas.
+
 ---
 
 ## 1. Compilar
@@ -10,8 +27,8 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 49/49 tests passed
-zig build oracle                      # oráculo diferencial puro Zig (25/25 tests passed)
+zig build test --summary all          # 52/52 tests passed (native Windows)
+zig build oracle                      # oráculo diferencial puro Zig (24/24 en native Windows)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -158,7 +175,12 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 **No lo uses cuando:**
 
 * necesites backreferences o lookaround en regex (no soportados por diseño para garantizar $O(N)$);
-* corras en Windows/macOS: el pipeline de kernel `getdents64` directo está optimizado para Linux x86_64.
+* el trabajo sea **salida muy voluminosa sobre árboles pequeños** (cientos de
+  miles de líneas de salida en < 150 MB): ahí `rg` es 2,2× más rápido y
+  `grep` 1,3× más rápido que `zgrep`;
+* vayas a comparar `-c` con `rg`: las semánticas de archivos binarios
+  difieren (sección 3);
+* corras en macOS: sigue sin probarse en ese sistema.
 
 ---
 
@@ -177,8 +199,8 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 49/49 tests passed
-zig build oracle                 # 25/25 differential oracle tests passed
+zig build test --summary all     # 52/52 tests passed (native Windows)
+zig build oracle                 # 24/24 differential oracle tests passed (native Windows)
 ```
 
 ---
@@ -226,5 +248,96 @@ Un patrón sin metacaracteres usa el kernel literal rápido de siempre. `-F` fue
 
 1. `-v, --invert-match`: Muestra o cuenta las líneas que **no** coinciden con el patrón.
 2. `-L, --files-without-match`: Lista únicamente los archivos que **no** contienen coincidencias.
-3. `stdin`: Lectura por tubería o descriptor estándar cuando no se especifican rutas o cuando la ruta es `"-"` (`cat log.txt | zigrep error` o `zigrep error -`).
+3. `stdin`: Lectura por tubería o descriptor estándar cuando no se especifican rutas o cuando la ruta es `"-"` (`cat log.txt | zigrep error` o `zigrep error -`). Funciona igual en Windows nativo.
 4. `-m NUM, --max-count=NUM`: Detiene la búsqueda tras `NUM` coincidencias por archivo. Se desambigua automáticamente con la navegación 2D Befunge: si el valor es numérico (`-m 5`), actúa como `--max-count`; si contiene vectores Befunge (`-m v^`), navega por el espacio vectorial 2D. También se puede usar explícitamente `--max-count=NUM` y `--nav=SPEC`.
+
+## 8. Windows nativo (probado 2026-11-08)
+
+El Linux conserva la ruta de syscalls; Windows usa I/O nativo de Zig. No
+requiere WSL. Verificado con Zig 0.16.0 en Windows 11 build 26200.
+
+```powershell
+# Zig 0.16.0 (la versión que fija el CI). Si ya está en el PATH:
+$z = (Get-Command zig).Source
+# Si no, descomprime el tarball oficial en una carpeta fija y apunta ahí:
+# $z = "$env:LOCALAPPDATA\zig\zig-x86_64-windows-0.16.0\zig.exe"
+
+& $z build -Doptimize=ReleaseFast --summary all
+```
+
+Salida:
+
+```text
+Build Summary: 7/7 steps succeeded
+```
+
+```powershell
+& $z build test --summary all
+```
+
+Salida:
+
+```text
+Build Summary: 3/3 steps succeeded; 52/52 tests passed
+test success
+```
+
+```powershell
+# Requiere GNU grep y ripgrep en el PATH (en Windows: Git for Windows + ripgrep)
+& $z build -Doptimize=ReleaseFast oracle --summary all
+```
+
+Salida:
+
+```text
+Results: 24 PASSED, 0 FAILED (total 24)
+Build Summary: 10/10 steps succeeded
+oracle success
+```
+
+El caso `stdin pipeline (pipe -> zigrep)` del oráculo se salta en Windows: usa
+`sh -c` y `printf`, que no están garantizados en el PATH nativo; en Linux son
+25 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+
+El smoke test usó un directorio con espacios y Unicode y un `.gitignore` que
+excluía `skip.txt`:
+
+```powershell
+$root = Join-Path $env:TEMP 'zigrep windows 高速'
+New-Item -ItemType Directory -Force -Path $root | Out-Null
+[IO.File]::WriteAllText((Join-Path $root '.gitignore'), "skip.txt`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $root 'keep 你好.txt'), "needle`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $root 'skip.txt'), "needle`n", [Text.UTF8Encoding]::new($false))
+$result = & .\zig-out\bin\zigrep.exe -H -F needle $root
+$result
+```
+
+Salida:
+
+```text
+C:\Users\progr\AppData\Local\Temp\zigrep windows 高速\keep 你好.txt:1:needle
+```
+
+Stdin en Windows (mismo resultado que GNU grep):
+
+```powershell
+"alpha`nbeta`ngamma" | & .\zig-out\bin\zigrep.exe -n beta
+```
+
+Salida:
+
+```text
+2:beta
+```
+
+Sobre el Xeon E5-2678 v3 (24 procesadores lógicos), Windows 11 build 26200,
+un corpus sintético caliente de 500 archivos / 16,397,281 bytes dio medianas
+de 40.133 ms (ZiGrep), 253.389 ms (GNU grep 3.0) y 43.361 ms (ripgrep
+15.0.0). Son las corridas capturadas en `evidence/windows-port/`, tomadas sobre
+el árbol del port Windows antes de fusionar el trabajo de upstream; no son una
+afirmación general de rendimiento en Windows. El job `windows-native` está
+configurado en GitHub Actions; su primera ejecución remota queda
+NOT_DEMONSTRATED hasta que el CI publique el resultado.
+
+Trampas: `--sort` hace determinista el orden; la CLI muestra separadores
+nativos (`\`) pero el oráculo normaliza separadores y CRLF al comparar.

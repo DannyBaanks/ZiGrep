@@ -14,12 +14,14 @@
 //!   * `ready`       — release/acquire flag per file slot.
 const std = @import("std");
 const linux = std.os.linux;
+const platform = @import("platform.zig");
 const search = @import("search.zig");
 const walk = @import("walk.zig");
 const scan = @import("scan.zig");
 const kamikaze = @import("kamikaze.zig");
 const filter = @import("filter.zig");
 const nav = @import("nav.zig");
+const vfs = @import("vfs.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -150,6 +152,7 @@ const Slot = struct {
 };
 
 const Ctx = struct {
+    io: std.Io,
     files: []const [:0]const u8,
     slots: []Slot,
     searcher: *const search.Searcher,
@@ -169,6 +172,7 @@ const default_scratch_bytes = 128 * 1024; // 128 KB covers ~97% of files
 fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     const slot = &ctx.slots[idx];
     const res = scan.scanFile(
+        ctx.io,
         ctx.gpa,
         ctx.searcher,
         ctx.files[idx],
@@ -202,7 +206,7 @@ fn worker(ctx: *Ctx) void {
         while (idx -| ctx.emit_cursor.load(.acquire) >= ctx.window) {
             spins += 1;
             if (spins >= 16) {
-                sleepBrief();
+                sleepBrief(ctx.io);
                 spins = 0;
             } else {
                 std.Thread.yield() catch {};
@@ -212,12 +216,12 @@ fn worker(ctx: *Ctx) void {
     }
 }
 
-fn sleepBrief() void {
-    const ts = linux.timespec{ .sec = 0, .nsec = 50_000 }; // 50 µs
-    _ = linux.nanosleep(&ts, null);
+fn sleepBrief(io: std.Io) void {
+    platform.sleepBrief(io);
 }
 
 const Out = struct {
+    io: std.Io,
     buf: [1 << 16]u8 = undefined,
     len: usize = 0,
     err: ?linux.E = null,
@@ -227,17 +231,8 @@ const Out = struct {
             self.len = 0;
             return;
         }
-        var off: usize = 0;
-        while (off < self.len) {
-            const r = linux.write(linux.STDOUT_FILENO, self.buf[0..].ptr + off, self.len - off);
-            const e = linux.errno(r);
-            if (e == .INTR) continue;
-            if (e != .SUCCESS or r == 0) {
-                self.err = if (e == .SUCCESS) .IO else e;
-                self.len = 0;
-                return;
-            }
-            off += r;
+        if (!platform.writeStdout(self.io, self.buf[0..self.len])) {
+            self.err = .IO;
         }
         self.len = 0;
     }
@@ -260,13 +255,8 @@ const Out = struct {
     }
 };
 
-fn nowMonotonicNs() u64 {
-    var ts: linux.timespec = undefined;
-    if (linux.clock_gettime(.MONOTONIC, &ts) != 0) return 0;
-    if (ts.sec < 0 or ts.nsec < 0) return 0;
-    const sec: u64 = @intCast(ts.sec);
-    const nsec: u64 = @intCast(ts.nsec);
-    return sec * 1_000_000_000 + nsec;
+fn nowMonotonicNs(io: std.Io) u64 {
+    return platform.nowNs(io);
 }
 
 fn eName(err: linux.E) []const u8 {
@@ -674,7 +664,23 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         }
     }
-    const t0 = nowMonotonicNs();
+    // No path operand means "read standard input" (GNU grep semantics, added
+    // upstream with the Grupo 1 work). When stdin is an interactive terminal
+    // there is nothing to read, so report the usage error instead of hanging.
+    if (operands.len == 0) {
+        const stdin_is_tty = std.Io.File.stdin().isTty(init.io) catch false;
+        if (stdin_is_tty) {
+            std.debug.print("{s}zgrep: no path\n", .{usage});
+            std.process.exit(2);
+        }
+    }
+
+    const show_path: bool = if (opts.show_path) |v|
+        v
+    else
+        !(operands.len == 1 and isRegularFile(init.io, operands[0]));
+
+    const t0 = nowMonotonicNs(init.io);
 
     const searcher = search.build(gpa, pattern_list, .{
         .algo = opts.algo,
@@ -697,17 +703,15 @@ pub fn main(init: std.process.Init) !void {
         var stdin_buf: std.ArrayList(u8) = .empty;
         defer stdin_buf.deinit(gpa);
         // Pre-reserve capacity if stdin is redirected from a file with known size
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.STDIN_FILENO, "", @intCast(linux.AT.EMPTY_PATH), .{ .SIZE = true }, &stx)) == .SUCCESS and stx.size > 0) {
-            stdin_buf.ensureTotalCapacity(gpa, @intCast(stx.size)) catch {};
+        if (std.Io.File.stdin().stat(init.io) catch null) |st| {
+            if (st.size > 0) stdin_buf.ensureTotalCapacity(gpa, @intCast(st.size)) catch {};
         }
 
+        const stdin_file = std.Io.File.stdin();
         var chunk: [128 * 1024]u8 = undefined;
         while (true) {
-            const rr = linux.read(linux.STDIN_FILENO, &chunk, chunk.len);
-            const e = linux.errno(rr);
-            if (e == .INTR) continue;
-            if (e != .SUCCESS or rr == 0) break;
+            const rr = stdin_file.readStreaming(init.io, &.{chunk[0..]}) catch break;
+            if (rr == 0) break;
             // Zero-latency early abort for quiet mode:
             if (opts.mode == .quiet and !opts.invert_match) {
                 if (searcher.find(chunk[0..rr], 0) != null) {
@@ -768,24 +772,13 @@ pub fn main(init: std.process.Init) !void {
         }
 
         if (out.items.len > 0 and opts.mode != .quiet) {
-            var off: usize = 0;
-            while (off < out.items.len) {
-                const r = linux.write(linux.STDOUT_FILENO, out.items.ptr + off, out.items.len - off);
-                const e = linux.errno(r);
-                if (e == .INTR) continue;
-                if (e != .SUCCESS or r == 0) break;
-                off += r;
-            }
+            _ = platform.writeStdout(init.io, out.items);
         }
 
         const is_hit = if (opts.mode == .files_without_match) !br.matched else br.matched;
         std.process.exit(if (is_hit) 0 else 1);
     }
 
-    const show_path: bool = if (opts.show_path) |v|
-        v
-    else
-        !(operands.len == 1 and isRegularFile(operands[0]));
     const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
     const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads) else cpu_count;
 
@@ -793,13 +786,12 @@ pub fn main(init: std.process.Init) !void {
     var valid_operands: std.ArrayList([:0]const u8) = .empty;
     var had_error = false;
     for (operands) |op| {
-        var stx: linux.Statx = undefined;
-        const se = linux.errno(linux.statx(linux.AT.FDCWD, op, 0, .{ .TYPE = true }, &stx));
-        if (se != .SUCCESS) {
-            std.debug.print("zgrep: {s}: {s}\n", .{ op, eName(se) });
+        const info = vfs.statFile(init.io, op, .{}) catch |err| {
+            std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
             had_error = true;
             continue;
-        }
+        };
+        if (info.kind != .directory and info.kind != .file) continue;
         try valid_operands.append(arena, op);
     }
 
@@ -808,8 +800,7 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
-    if (!opts.sort)
-    {
+    if (!opts.sort) {
         var k_stats: kamikaze.KamikazeStats = .{};
         var filter_engine = filter.FilterEngine.init(gpa);
         defer filter_engine.deinit();
@@ -836,9 +827,9 @@ pub fn main(init: std.process.Init) !void {
 
         // Discover .dataignore and .gitignore in current dir and search roots (walking upwards to repo root):
         if (!opts.no_ignore) {
-            filter_engine.loadUpwardIgnoreFiles(".");
+            filter_engine.loadUpwardIgnoreFiles(init.io, ".");
             for (valid_operands.items) |root| {
-                filter_engine.loadUpwardIgnoreFiles(root);
+                filter_engine.loadUpwardIgnoreFiles(init.io, root);
             }
         }
 
@@ -848,6 +839,7 @@ pub fn main(init: std.process.Init) !void {
         };
 
         const matched = kamikaze.runKamikazePipeline(
+            init.io,
             gpa,
             &searcher,
             valid_operands.items,
@@ -864,7 +856,7 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         };
 
-        const t1 = nowMonotonicNs();
+        const t1 = nowMonotonicNs(init.io);
         if (opts.show_stats) {
             const elapsed_ns: u64 = if (t1 > t0) @intCast(t1 - t0) else 1;
             const elapsed_s: f64 = @as(f64, @floatFromInt(elapsed_ns)) / 1e9;
@@ -917,23 +909,25 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (!opts.no_ignore) {
-        filter_engine.loadUpwardIgnoreFiles(".");
+        filter_engine.loadUpwardIgnoreFiles(init.io, ".");
         for (valid_operands.items) |root| {
-            filter_engine.loadUpwardIgnoreFiles(root);
+            filter_engine.loadUpwardIgnoreFiles(init.io, root);
         }
     }
 
     var files: std.ArrayList([:0]const u8) = .empty;
     for (valid_operands.items) |op| {
-        var stx: linux.Statx = undefined;
-        _ = linux.statx(linux.AT.FDCWD, op, 0, .{ .TYPE = true }, &stx);
-        const m = stx.mode & linux.S.IFMT;
-        if (m == linux.S.IFDIR) {
-            walk.walk(arena, &.{op}, &files, &filter_engine, opts.nav_plan) catch |err| {
+        const info = vfs.statFile(init.io, op, .{}) catch |err| {
+            std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
+            had_error = true;
+            continue;
+        };
+        if (info.kind == .directory) {
+            walk.walk(init.io, arena, &.{op}, &files, &filter_engine, opts.nav_plan) catch |err| {
                 std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
                 had_error = true;
             };
-        } else if (m == linux.S.IFREG) {
+        } else if (info.kind == .file) {
             files.append(arena, op) catch {
                 std.debug.print("zgrep: {s}: {s}\n", .{ op, eName(.NOMEM) });
                 had_error = true;
@@ -955,6 +949,7 @@ pub fn main(init: std.process.Init) !void {
     const window: usize = if (opts.mode == .quiet) std.math.maxInt(usize) else 128;
 
     var ctx: Ctx = .{
+        .io = init.io,
         .files = files.items,
         .slots = slots,
         .searcher = &searcher,
@@ -969,7 +964,7 @@ pub fn main(init: std.process.Init) !void {
         .window = window,
     };
 
-    var out: Out = .{};
+    var out: Out = .{ .io = init.io };
     const main_scratch = gpa.alloc(u8, default_scratch_bytes) catch null;
     defer if (main_scratch) |s| gpa.free(s);
 
@@ -1032,7 +1027,7 @@ pub fn main(init: std.process.Init) !void {
                 }
                 miss += 1;
                 if (miss >= 8) {
-                    sleepBrief();
+                    sleepBrief(init.io);
                     miss = 0;
                 } else {
                     std.Thread.yield() catch {};
@@ -1071,7 +1066,7 @@ pub fn main(init: std.process.Init) !void {
         s.buf = .empty;
     }
 
-    const t1 = nowMonotonicNs();
+    const t1 = nowMonotonicNs(init.io);
     if (opts.show_stats) {
         const elapsed_ns: u64 = t1 -| t0;
         const secs = @as(f64, @floatFromInt(elapsed_ns)) / 1e9;
@@ -1096,10 +1091,9 @@ fn walkErrName(err: walk.Error) []const u8 {
     };
 }
 
-fn isRegularFile(path: [:0]const u8) bool {
-    var stx: linux.Statx = undefined;
-    if (linux.errno(linux.statx(linux.AT.FDCWD, path, 0, .{ .TYPE = true }, &stx)) != .SUCCESS) return false;
-    return (stx.mode & linux.S.IFMT) == linux.S.IFREG;
+fn isRegularFile(io: std.Io, path: [:0]const u8) bool {
+    const info = vfs.statFile(io, path, .{}) catch return false;
+    return info.kind == .file;
 }
 
 // ---------------------------------------------------------------------------
@@ -1195,7 +1189,7 @@ test "parseArgs: missing pattern is a usage error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var o: Options = .{};
-    const a = [_][:0]const u8{ "zgrep" };
+    const a = [_][:0]const u8{"zgrep"};
     try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
 }
 

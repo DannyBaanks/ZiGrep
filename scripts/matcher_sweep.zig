@@ -29,7 +29,6 @@
 //!     --samples=12 --runs=3
 //! ```
 const std = @import("std");
-const linux = std.os.linux;
 const common = @import("common.zig");
 // Provided as an anonymous import by build.zig — it points at the real
 // src/search.zig, so this sweep measures the shipped matchers, not a copy.
@@ -58,10 +57,9 @@ const usage =
     \\
 ;
 
-const map_failed: usize = @bitCast(@as(isize, -1));
-
 const Map = struct {
-    ptr: [*]align(1) const u8,
+    file: std.Io.File,
+    memory: std.Io.File.MemoryMap,
     len: usize,
 };
 
@@ -70,29 +68,24 @@ const Haystack = struct {
     bytes: usize,
 };
 
-fn mapFile(path: []const u8, maxfile: usize) ?Map {
-    const pz = std.fmt.allocPrintSentinel(std.heap.page_allocator, "{s}", .{path}, 0) catch return null;
-    defer std.heap.page_allocator.free(pz);
-    const rc = linux.openat(linux.AT.FDCWD, pz, .{ .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return null;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
-
-    const szr = linux.lseek(fd, 0, linux.SEEK.END);
-    if (linux.errno(szr) != .SUCCESS) return null;
-    const full: usize = @intCast(@as(isize, @bitCast(szr)));
-    _ = linux.lseek(fd, 0, linux.SEEK.SET);
+fn mapFile(io: std.Io, path: []const u8, maxfile: usize) ?Map {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return null;
+    errdefer file.close(io);
+    const stat = file.stat(io) catch return null;
+    const full = std.math.cast(usize, stat.size) orelse return null;
     // Cap the mapping: a handful of 48 MB CSVs must not swamp the haystack.
     const size: usize = if (maxfile != 0 and full > maxfile) maxfile else full;
     if (size == 0) return null;
 
-    const mrc = linux.mmap(null, size, .{ .READ = true }, .{ .TYPE = .PRIVATE }, fd, 0);
-    if (mrc == map_failed) return null;
-    return .{ .ptr = @ptrFromInt(mrc), .len = size };
+    const memory = std.Io.File.MemoryMap.create(io, file, .{
+        .len = size,
+        .protection = .{ .read = true, .write = false },
+    }) catch return null;
+    return .{ .file = file, .memory = memory, .len = size };
 }
 
 fn view(m: Map) []const u8 {
-    return m.ptr[0..m.len];
+    return m.memory.memory[0..m.len];
 }
 
 /// Full exhaustive count of the needle in `data`, starting at `start`.
@@ -120,12 +113,12 @@ fn medianNs(samples: []const u64) u64 {
 }
 
 /// Times one (needle, algo) as the median of `runs` full haystack traversals.
-fn timeOne(hay: *const Haystack, needle: []const u8, algo: Algo, runs: usize) u64 {
+fn timeOne(io: std.Io, hay: *const Haystack, needle: []const u8, algo: Algo, runs: usize) u64 {
     var samples: [32]u64 = undefined;
     const n = @min(runs, samples.len);
     var k: usize = 0;
     while (k < n) : (k += 1) {
-        const t0 = common.nowNs();
+        const t0 = common.nowNs(io);
         var acc: usize = 0;
         var m: usize = 0;
         while (m < hay.maps.items.len) : (m += 1) {
@@ -134,7 +127,7 @@ fn timeOne(hay: *const Haystack, needle: []const u8, algo: Algo, runs: usize) u6
             acc +%= countAll(&searcher, view(hay.maps.items[m]), 0);
         }
         std.mem.doNotOptimizeAway(acc);
-        samples[k] = common.nowNs() -| t0;
+        samples[k] = common.nowNs(io) -| t0;
     }
     return medianNs(samples[0..n]);
 }
@@ -153,21 +146,8 @@ fn line(gpa: Allocator, out: *std.ArrayList(u8), comptime fmt: []const u8, args:
     out.appendSlice(gpa, s) catch {};
 }
 
-fn sendFile(path: []const u8, data: []const u8) void {
-    const cpath = std.fmt.allocPrintSentinel(std.heap.page_allocator, "{s}", .{path}, 0) catch return;
-    defer std.heap.page_allocator.free(cpath);
-    const rc = linux.openat(linux.AT.FDCWD, cpath, .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true, .CLOEXEC = true }, 0o644);
-    if (linux.errno(rc) != .SUCCESS) return;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
-    var off: usize = 0;
-    while (off < data.len) {
-        const wr = linux.write(fd, data.ptr + off, data.len - off);
-        const e = linux.errno(wr);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or wr == 0) return;
-        off += wr;
-    }
+fn sendFile(io: std.Io, path: []const u8, data: []const u8) bool {
+    return common.writeFile(io, path, data);
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -187,7 +167,7 @@ pub fn main(init: std.process.Init) !void {
     while (i < args.len) : (i += 1) {
         const a = args[i];
         if (std.mem.eql(u8, a, "--help")) {
-            common.printOut("{s}", .{usage});
+            common.printOut(init.io, "{s}", .{usage});
             std.process.exit(0);
         } else if (std.mem.startsWith(u8, a, "--dir=")) {
             dir = a["--dir=".len..];
@@ -212,7 +192,7 @@ pub fn main(init: std.process.Init) !void {
             }
             lengths_n = n;
         } else {
-            common.printOut("scripts/matcher_sweep.zig: unknown option '{s}'\n{s}", .{ a, usage });
+            common.printOut(init.io, "scripts/matcher_sweep.zig: unknown option '{s}'\n{s}", .{ a, usage });
             std.process.exit(2);
         }
     }
@@ -221,6 +201,10 @@ pub fn main(init: std.process.Init) !void {
 
     // --- build the haystack: largest text files first, up to the budget -----
     var hay: Haystack = .{ .maps = .empty, .bytes = 0 };
+    defer for (hay.maps.items) |*mapping| {
+        mapping.memory.destroy(init.io);
+        mapping.file.close(init.io);
+    };
     var sizes: std.ArrayList(struct { path: []const u8, size: usize }) = .empty;
     defer sizes.deinit(gpa);
 
@@ -230,15 +214,20 @@ pub fn main(init: std.process.Init) !void {
     defer files.deinit(gpa);
     const rootz = std.fmt.allocPrintSentinel(gpa, "{s}", .{dir}, 0) catch
         std.process.exit(2);
-    walk.walk(gpa, &.{rootz}, &files, null, null) catch |err| {
-        common.printOut("matcher_sweep: walk '{s}' failed: {s}\n", .{ dir, @errorName(err) });
+    walk.walk(init.io, gpa, &.{rootz}, &files, null, null) catch |err| {
+        common.printOut(init.io, "matcher_sweep: walk '{s}' failed: {s}\n", .{ dir, @errorName(err) });
         std.process.exit(1);
     };
 
     for (files.items) |path| {
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, path, 0, .{ .TYPE = true }, &stx)) != .SUCCESS) continue;
-        try sizes.append(gpa, .{ .path = path, .size = @intCast(stx.size) });
+        const file = std.Io.Dir.cwd().openFile(init.io, path, .{}) catch continue;
+        const stat = file.stat(init.io) catch {
+            file.close(init.io);
+            continue;
+        };
+        file.close(init.io);
+        const size = std.math.cast(usize, stat.size) orelse continue;
+        try sizes.append(gpa, .{ .path = path, .size = size });
     }
     std.sort.pdq(@TypeOf(sizes.items[0]), sizes.items, {}, struct {
         fn lt(_: void, a: @TypeOf(sizes.items[0]), b: @TypeOf(sizes.items[0])) bool {
@@ -249,12 +238,13 @@ pub fn main(init: std.process.Init) !void {
     for (sizes.items) |e| {
         if (hay.bytes >= budget) break;
         if (e.size < 64) continue;
-        const m = mapFile(e.path, maxfile) orelse continue;
+        var m = mapFile(init.io, e.path, maxfile) orelse continue;
         const data = view(m);
         // zgrep's binary rule: skip a file with a NUL in the first 8192 bytes.
         const probe = @min(data.len, 8192);
         if (std.mem.findScalar(u8, data[0..probe], 0) != null) {
-            _ = linux.munmap(@ptrCast(data.ptr), data.len);
+            m.memory.destroy(init.io);
+            m.file.close(init.io);
             continue;
         }
         try hay.maps.append(gpa, m);
@@ -262,13 +252,13 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (hay.bytes == 0 or hay.maps.items.len == 0) {
-        common.printOut("matcher_sweep: no text bytes under '{s}' (budget={d})\n", .{ dir, budget });
+        common.printOut(init.io, "matcher_sweep: no text bytes under '{s}' (budget={d})\n", .{ dir, budget });
         std.process.exit(1);
     }
 
     var prng = std.Random.DefaultPrng.init(0x9e37_79b9_7f4a_7c15);
     const rnd = prng.random();
-    const loadavg = common.readFile(gpa, "/proc/loadavg") orelse "?";
+    const loadavg = common.readFile(init.io, gpa, "/proc/loadavg") orelse "?";
 
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(gpa);
@@ -316,8 +306,8 @@ pub fn main(init: std.process.Init) !void {
             total_samples += 1;
             if (cb != cm) misalign += 1;
 
-            try bmh_ns.append(gpa, timeOne(&hay, needle, .bmh, runs));
-            try mc_ns.append(gpa, timeOne(&hay, needle, .memchr, runs));
+            try bmh_ns.append(gpa, timeOne(init.io, &hay, needle, .bmh, runs));
+            try mc_ns.append(gpa, timeOne(init.io, &hay, needle, .memchr, runs));
         }
 
         const bmh_mbps = mbpsFrom(hay.bytes, medianNs(bmh_ns.items));
@@ -333,6 +323,11 @@ pub fn main(init: std.process.Init) !void {
         \\
     , .{ total_samples, misalign });
 
-    common.printOut("{s}", .{out.items});
-    if (out_path) |p| sendFile(p, out.items);
+    common.printOut(init.io, "{s}", .{out.items});
+    if (out_path) |p| {
+        if (!sendFile(init.io, p, out.items)) {
+            common.printOut(init.io, "matcher_sweep: failed to write {s}\n", .{p});
+            std.process.exit(2);
+        }
+    }
 }

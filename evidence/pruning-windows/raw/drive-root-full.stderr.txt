@@ -1,0 +1,2 @@
+zgrep: C:\.: ACCES
+zgrep-stats: files=0 bytes=0 matched_files=0 matched_lines=0 errors=0 threads=24 elapsed_s=0.0715 throughput_MBps=0.0

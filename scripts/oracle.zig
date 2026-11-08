@@ -15,6 +15,7 @@
 //! Usage:
 //!   zig run scripts/oracle.zig [--target=DIR]
 const std = @import("std");
+const builtin = @import("builtin");
 const common = @import("common.zig");
 const Allocator = std.mem.Allocator;
 
@@ -80,7 +81,9 @@ const cases = [_]TestCase{
     .{
         .name = "regex digits '[0-9]{2,}'",
         .zigrep_args = &.{ "[0-9]{2,}", "src" },
-        .grep_args = &.{ "-rnIE", "[0-9]{2,}", "src" },
+        // Git for Windows' GNU grep 3.0 misparses this interval expression.
+        // The equivalent ERE below keeps the differential check meaningful.
+        .grep_args = &.{ "-rnIE", "[0-9][0-9]+", "src" },
         .rg_args = &.{ "-n", "[0-9]{2,}", "src" },
         .expected_exit = 0,
     },
@@ -210,7 +213,7 @@ const cases = [_]TestCase{
     },
 };
 
-fn runCmd(arena: Allocator, io: anytype, argv: []const []const u8) !struct { code: u8, stdout: []const u8 } {
+fn runCmd(arena: Allocator, io: anytype, argv: []const []const u8) !struct { code: u8, stdout: []const u8, stderr: []const u8 } {
     const limit = std.Io.Limit.limited(16 << 20);
     const r = std.process.run(arena, io, .{
         .argv = argv,
@@ -223,6 +226,7 @@ fn runCmd(arena: Allocator, io: anytype, argv: []const []const u8) !struct { cod
     return .{
         .code = common.termCode(r.term),
         .stdout = r.stdout,
+        .stderr = r.stderr,
     };
 }
 
@@ -233,18 +237,18 @@ pub fn main(init: std.process.Init) !void {
 
     // Resolve binary path: prefer zig-out/bin/zigrep, fallback to zig-out/bin/zgrep
     const exe = blk: {
-        const rc1 = std.os.linux.faccessat(std.os.linux.AT.FDCWD, "zig-out/bin/zigrep", 0, 0);
-        if (std.os.linux.errno(rc1) == .SUCCESS) break :blk "zig-out/bin/zigrep";
-        const rc2 = std.os.linux.faccessat(std.os.linux.AT.FDCWD, "zig-out/bin/zgrep", 0, 0);
-        if (std.os.linux.errno(rc2) == .SUCCESS) break :blk "zig-out/bin/zgrep";
+        const zigrep = if (builtin.os.tag == .windows) "zig-out/bin/zigrep.exe" else "zig-out/bin/zigrep";
+        const zgrep = if (builtin.os.tag == .windows) "zig-out/bin/zgrep.exe" else "zig-out/bin/zgrep";
+        if (std.Io.Dir.cwd().access(init.io, zigrep, .{})) |_| break :blk zigrep else |_| {}
+        if (std.Io.Dir.cwd().access(init.io, zgrep, .{})) |_| break :blk zgrep else |_| {}
         std.debug.print("Error: zig-out/bin/zigrep not found. Run 'zig build' first.\n", .{});
         std.process.exit(2);
     };
 
-    common.printOut("===============================================================================\n", .{});
-    common.printOut("  zigrep Differential Oracle Suite (pure Zig runner)\n", .{});
-    common.printOut("  Testing {s} against GNU grep and ripgrep\n", .{exe});
-    common.printOut("===============================================================================\n\n", .{});
+    common.printOut(init.io, "===============================================================================\n", .{});
+    common.printOut(init.io, "  zigrep Differential Oracle Suite (pure Zig runner)\n", .{});
+    common.printOut(init.io, "  Testing {s} against GNU grep and ripgrep\n", .{exe});
+    common.printOut(init.io, "===============================================================================\n\n", .{});
 
     var passed: usize = 0;
     var failed: usize = 0;
@@ -261,13 +265,15 @@ pub fn main(init: std.process.Init) !void {
         try g_argv.appendSlice(arena, c.grep_args);
 
         // Run zigrep
-        const z_res = runCmd(arena, init.io, z_argv.items) catch {
+        const z_res = runCmd(arena, init.io, z_argv.items) catch |err| {
+            common.printOut(init.io, "  [FAIL] {s:<42} failed to run zigrep: {s}\n", .{ c.name, @errorName(err) });
             failed += 1;
             continue;
         };
 
         // Run grep
-        const g_res = runCmd(arena, init.io, g_argv.items) catch {
+        const g_res = runCmd(arena, init.io, g_argv.items) catch |err| {
+            common.printOut(init.io, "  [FAIL] {s:<42} failed to run grep: {s}\n", .{ c.name, @errorName(err) });
             failed += 1;
             continue;
         };
@@ -302,41 +308,58 @@ pub fn main(init: std.process.Init) !void {
             try r_argv.append(arena, "rg");
             try r_argv.appendSlice(arena, c.rg_args.?);
 
-            if (runCmd(arena, init.io, r_argv.items)) |r_res| {
-                if (r_res.code != c.expected_exit) {
+            const r_res = runCmd(arena, init.io, r_argv.items) catch |err| {
+                common.printOut(init.io, "  [FAIL] {s:<42} failed to run rg: {s}\n", .{ c.name, @errorName(err) });
+                failed += 1;
+                continue;
+            };
+            if (r_res.code != c.expected_exit) {
+                ok = false;
+                reason = "RG_EXIT_MISMATCH";
+            } else if (c.check_output) {
+                const z_lines = try common.sortLines(arena, z_res.stdout);
+                const r_lines = try common.sortLines(arena, r_res.stdout);
+                if (z_lines.len != r_lines.len) {
                     ok = false;
-                    reason = "RG_EXIT_MISMATCH";
-                } else if (c.check_output) {
-                    const z_lines = try common.sortLines(arena, z_res.stdout);
-                    const r_lines = try common.sortLines(arena, r_res.stdout);
-                    if (z_lines.len != r_lines.len) {
-                        ok = false;
-                        reason = "RG_LINE_COUNT_MISMATCH";
+                    reason = "RG_LINE_COUNT_MISMATCH";
+                } else {
+                    for (z_lines, r_lines) |zl, rl| {
+                        if (!std.mem.eql(u8, zl, rl)) {
+                            ok = false;
+                            reason = "RG_CONTENT_MISMATCH";
+                            break;
+                        }
                     }
                 }
-            } else |_| {}
+            }
         }
 
         if (ok) {
             passed += 1;
-            common.printOut("  [PASS] {s:<42} (exit {d}, lines {d})\n", .{
+            common.printOut(init.io, "  [PASS] {s:<42} (exit {d}, lines {d})\n", .{
                 c.name,
                 z_res.code,
                 common.countNewlines(z_res.stdout),
             });
         } else {
             failed += 1;
-            common.printOut("  [FAIL] {s:<42} reason={s} (zigrep code={d}, grep code={d})\n", .{
+            common.printOut(init.io, "  [FAIL] {s:<42} reason={s} (zigrep code={d}, grep code={d})\n", .{
                 c.name,
                 reason,
                 z_res.code,
                 g_res.code,
             });
+            if (g_res.stderr.len > 0) common.printOut(init.io, "         grep stderr: {s}", .{g_res.stderr});
+            if (z_res.stderr.len > 0) common.printOut(init.io, "         zigrep stderr: {s}", .{z_res.stderr});
         }
     }
 
-    // Stdin pipeline differential test (pipe -> zigrep vs pipe -> grep -n)
-    {
+    // Stdin pipeline differential test (pipe -> zigrep vs pipe -> grep -n).
+    // POSIX-only: it relies on `sh -c` and `printf`, which the native Windows
+    // build cannot assume on PATH, so it is skipped there explicitly.
+    var total_tests = cases.len;
+    if (builtin.os.tag != .windows) {
+        total_tests += 1;
         const test_name = "stdin pipeline (pipe -> zigrep)";
         const cmd_z = try std.fmt.allocPrint(arena, "printf 'alpha\\nbeta\\ngamma\\n' | {s} 'beta'", .{exe});
         const cmd_g = "printf 'alpha\\nbeta\\ngamma\\n' | grep -n 'beta'";
@@ -344,17 +367,16 @@ pub fn main(init: std.process.Init) !void {
         const g_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_g }) catch null;
         if (z_res != null and g_res != null and z_res.?.code == 0 and g_res.?.code == 0 and std.mem.eql(u8, z_res.?.stdout, g_res.?.stdout)) {
             passed += 1;
-            common.printOut("  [PASS] {s:<42} (exit 0, lines 1)\n", .{test_name});
+            common.printOut(init.io, "  [PASS] {s:<42} (exit 0, lines 1)\n", .{test_name});
         } else {
             failed += 1;
-            common.printOut("  [FAIL] {s:<42} reason=STDIN_MISMATCH\n", .{test_name});
+            common.printOut(init.io, "  [FAIL] {s:<42} reason=STDIN_MISMATCH\n", .{test_name});
         }
     }
 
-    const total_tests = cases.len + 1;
-    common.printOut("\n-------------------------------------------------------------------------------\n", .{});
-    common.printOut("Results: {d} PASSED, {d} FAILED (total {d})\n", .{ passed, failed, total_tests });
-    common.printOut("-------------------------------------------------------------------------------\n", .{});
+    common.printOut(init.io, "\n-------------------------------------------------------------------------------\n", .{});
+    common.printOut(init.io, "Results: {d} PASSED, {d} FAILED (total {d})\n", .{ passed, failed, total_tests });
+    common.printOut(init.io, "-------------------------------------------------------------------------------\n", .{});
 
     if (failed > 0) {
         std.process.exit(1);
