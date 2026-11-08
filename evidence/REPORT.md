@@ -513,3 +513,52 @@ to GNU grep in raw emission order. `zgrep_k` matches both GNU grep and ripgrep
    runs as a single thread feeding the bounded ring buffer (`QueueCapacity = 512`).
    On pathological directory structures with deep nesting and few files per folder,
    the scout thread can bottleneck worker thread ingestion.
+
+---
+
+## 9. Concurrent Swarm ("Abuelo/Padres/Hijos") & Universal FilterEngine (2026-11-08)
+
+### 9.1 Concurrent Swarm & WorkPool
+
+To address the single-producer scout bottleneck (§8.4 item 5), `src/kamikaze.zig`
+was redesigned into a unified work-stealing hybrid swarm (`WorkPool`):
+* Any idle worker thread simultaneously acts as a **Directory Scout** ("Padre/Hijo")
+  or a **File Scanner** ("Nieto").
+* Subdirectories are enqueued onto a concurrent LIFO stack (`dir_queue`), while
+  file batches are enqueued onto `batch_queue`.
+* Traversal is depth-first per branch, maximizing CPU L1/L2 cache locality and
+  minimizing peak memory usage.
+* Termination is lock-free and deterministic via atomic in-flight counters
+  (`dirs_in_flight == 0 and batches_in_flight == 0`).
+
+### 9.2 Zero-Spawn Fast Path for Micro-Directories
+
+To address the thread creation overhead on small trees (§8.4 item 3):
+* If the search root is a single small directory ($\le 64$ files, 0 subdirectories),
+  `zigrep` executes the scan entirely within the main thread with 0 thread spawns.
+* Benchmark on `src/` (8 files, 20 timed runs):
+  * `zigrep -k`: **1.281 ms** (min **1.018 ms**)
+  * `GNU grep`: **1.543 ms**
+  * `ripgrep`: **4.442 ms**
+  * **Result**: `zigrep` is **1.20× faster than GNU grep** and **3.47× faster than ripgrep**
+    even on tiny directories!
+
+### 9.3 Universal FilterEngine & `.dataignore` / `.gitignore` Support
+
+To solve the monorepo whole-tree filtering defect (§8.4 item 2), `src/filter.zig`
+was implemented:
+* **Built-in Noisy Defaults**: Automatically prunes `.git`, `.zig-cache`, `__pycache__`,
+  `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode`, and file
+  extensions `.pyc`, `.pyo`, `.o`, `.a`, `.so`, `.dylib`, `.dll`, `.class`, `.jar`,
+  `.log`, `.min.js`, `.min.css`, `.map`, `.lock`, `.swp`, `.DS_Store`.
+* **Native `.dataignore` and `.gitignore` parsing**: Automatically loaded from
+  execution root and subdirectories.
+* **CLI Chaining**:
+  * `--exclude-dir=DIR1,DIR2` (comma-separated or globs)
+  * `--exclude-ext=EXT1,EXT2` (e.g. `log,tmp,lock`)
+  * `--include-ext=EXT1,EXT2` (e.g. `zig,rs,py`)
+  * `--exclude=GLOB` / `--include=GLOB`
+  * `--no-ignore`: Disables `.dataignore`, `.gitignore`, and built-in defaults for raw search.
+  * `--no-default-ignore`: Disables only built-in defaults while preserving `.dataignore`.
+* **Official Binary**: Installed as both `zigrep` and `zgrep` on PATH.
+* **Tests**: 31/31 unit tests pass in 86 ms.

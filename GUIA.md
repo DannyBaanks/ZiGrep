@@ -1,6 +1,6 @@
-# GUIA.md — guía de uso de `zgrep`
+# GUIA.md — guía de uso de `zigrep` (antes `zgrep`)
 
-Guía operativa para una persona que usa `zgrep` a mano. El detalle técnico y
+Guía operativa para una persona o agente que usa `zigrep` a mano. El detalle técnico y
 la evidencia están en `README.md` y `evidence/REPORT.md`.
 
 ---
@@ -9,8 +9,8 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
-zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep
-zig build test --summary all          # debe decir 24/24 tests passed
+zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
+zig build test --summary all          # debe decir 31/31 tests passed
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -18,6 +18,7 @@ Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
 Para dejarlo en el PATH:
 
 ```sh
+ln -sf "$PWD/zig-out/bin/zgrep" ~/.local/bin/zigrep
 ln -sf "$PWD/zig-out/bin/zgrep" ~/.local/bin/zgrep
 ```
 
@@ -26,27 +27,57 @@ ln -sf "$PWD/zig-out/bin/zgrep" ~/.local/bin/zgrep
 ## 2. Uso básico
 
 ```sh
-zgrep PATRÓN RUTA...          # siempre recursivo, siempre con número de línea
+zigrep PATRÓN RUTA...          # siempre recursivo, siempre con número de línea
 ```
 
 Ejemplos reales:
 
 ```sh
-# buscar en todo un árbol
-zgrep -F "const" workspace/assembly
+# buscar en todo un árbol con el enjambre concurrente kamikaze
+zigrep -k "const" workspace/assembly
 
 # solo los nombres de los archivos que coinciden
-zgrep -l -F "const" workspace/assembly
+zigrep -l "const" workspace/assembly
 
 # contar coincidencias por archivo (una línea por archivo, incluidos los :0)
-zgrep -c -F "const" workspace/assembly
+zigrep -c "const" workspace/assembly
 
 # silencioso: solo el código de salida (0 = hubo coincidencia, 1 = no)
-zgrep -q -F "const" workspace/assembly && echo "existe"
+zigrep -q "const" workspace/assembly && echo "existe"
 
-# modo Kamikaze Dataflow (streaming continuo + scout de carpetas en repositorios masivos)
-zgrep -k --exclude-dir=.git --exclude-dir=.zig-cache "patrón" /ruta/al/repo
+# modo Kamikaze con filtrado de extensiones (ej: solo código Zig)
+zigrep -k --include-ext=zig "Searcher" .
+
+# excluir extensiones ruidosas o pesadas
+zigrep -k --exclude-ext=log,tmp,lock,min.js "token" .
+
+# excluir carpetas personalizadas
+zigrep -k --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 ```
+
+---
+
+## 3. Sistema de Filtrado e Ignore (`.dataignore`)
+
+`zigrep` incluye un **FilterEngine universal**:
+
+1. **Exclusiones por defecto (Out of the box):**
+   * Carpetas omitidas automáticamente: `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode`.
+   * Extensiones omitidas automáticamente: `.pyc`, `.pyo`, `.o`, `.a`, `.so`, `.dylib`, `.dll`, `.class`, `.jar`, `.log`, `.min.js`, `.min.css`, `.map`, `.lock`, `.swp`, `.DS_Store`.
+
+2. **Archivos `.dataignore` y `.gitignore`:**
+   * `zigrep` busca y respeta automáticamente archivos `.dataignore` y `.gitignore` presentes en el directorio raíz o de ejecución.
+   * En `.dataignore` puedes escribir patrones estilo glob (`*.csv`, `logs/`, `temp_*`).
+
+3. **Anulación para escaneo en bruto (`--no-ignore`):**
+   * Si necesitas buscar en absolutamente todo (incluyendo `.git`, binarios, cachés y `.dataignore`):
+     ```sh
+     zigrep -k --no-ignore "patrón" .
+     ```
+   * Si solo quieres desactivar las listas internas por defecto pero seguir respetando tu `.dataignore`:
+     ```sh
+     zigrep -k --no-default-ignore "patrón" .
+     ```
 
 ### Cómo se interpreta el resultado
 

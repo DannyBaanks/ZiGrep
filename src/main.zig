@@ -18,6 +18,7 @@ const search = @import("search.zig");
 const walk = @import("walk.zig");
 const scan = @import("scan.zig");
 const kamikaze = @import("kamikaze.zig");
+const filter = @import("filter.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -26,7 +27,7 @@ const Allocator = std.mem.Allocator;
 const version = "0.1.0";
 
 const usage =
-    \\zgrep — grep-compatible fixed-string search, written in Zig
+    \\zgrep — grep-compatible fixed-string search with concurrent kamikaze swarm, written in Zig
     \\
     \\usage: zgrep [OPTIONS] PATTERN [PATH...]
     \\
@@ -42,9 +43,20 @@ const usage =
     \\  -a                treat binary files as text
     \\  -j, --threads N   worker threads (default: number of CPUs)
     \\  -k, --kamikaze, --dataflow
-    \\                    streaming dataflow with kamikaze directory scout
+    \\                    streaming dataflow with concurrent kamikaze swarm
     \\      --exclude-dir=DIR
-    \\                    skip directory matching DIR (e.g. .git, .zig-cache)
+    \\                    skip directory matching DIR (comma-separated or globs)
+    \\      --exclude-ext=EXT
+    \\                    skip file extensions (e.g. log,tmp,lock)
+    \\      --include-ext=EXT
+    \\                    only search file extensions (e.g. zig,rs,py)
+    \\      --exclude=GLOB
+    \\                    skip files matching GLOB (e.g. *.min.js)
+    \\      --include=GLOB
+    \\                    only search files matching GLOB
+    \\      --no-ignore   do not read .dataignore / .gitignore or apply defaults
+    \\      --no-default-ignore
+    \\                    do not apply built-in default ignore lists
     \\      --no-hidden   skip hidden files and directories
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
@@ -68,8 +80,18 @@ pub const Options = struct {
     show_stats: bool = false,
     binary: bool = false,
     kamikaze: bool = false,
-    exclude_dirs: [16][]const u8 = undefined,
+    no_ignore: bool = false,
+    no_default_ignore: bool = false,
+    exclude_dirs: [32][]const u8 = undefined,
     exclude_dirs_count: usize = 0,
+    exclude_exts: [32][]const u8 = undefined,
+    exclude_exts_count: usize = 0,
+    include_exts: [32][]const u8 = undefined,
+    include_exts_count: usize = 0,
+    exclude_patterns: [32][]const u8 = undefined,
+    exclude_patterns_count: usize = 0,
+    include_patterns: [32][]const u8 = undefined,
+    include_patterns_count: usize = 0,
     skip_hidden: bool = false,
     /// Set when `parseArgs` fails so the caller can print one clean message.
     /// `parseArgs` itself never writes to a stream, which keeps it testable.
@@ -290,6 +312,10 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 opts.kamikaze = true;
             } else if (std.mem.eql(u8, body, "no-hidden")) {
                 opts.skip_hidden = true;
+            } else if (std.mem.eql(u8, body, "no-ignore")) {
+                opts.no_ignore = true;
+            } else if (std.mem.eql(u8, body, "no-default-ignore")) {
+                opts.no_default_ignore = true;
             } else if (std.mem.startsWith(u8, body, "exclude-dir=")) {
                 if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
                     opts.exclude_dirs[opts.exclude_dirs_count] = body["exclude-dir=".len..];
@@ -304,6 +330,26 @@ pub fn parseArgs(args: []const [:0]const u8, opts: *Options) usage_error!Parsed 
                 if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
                     opts.exclude_dirs[opts.exclude_dirs_count] = args[i];
                     opts.exclude_dirs_count += 1;
+                }
+            } else if (std.mem.startsWith(u8, body, "exclude-ext=")) {
+                if (opts.exclude_exts_count < opts.exclude_exts.len) {
+                    opts.exclude_exts[opts.exclude_exts_count] = body["exclude-ext=".len..];
+                    opts.exclude_exts_count += 1;
+                }
+            } else if (std.mem.startsWith(u8, body, "include-ext=")) {
+                if (opts.include_exts_count < opts.include_exts.len) {
+                    opts.include_exts[opts.include_exts_count] = body["include-ext=".len..];
+                    opts.include_exts_count += 1;
+                }
+            } else if (std.mem.startsWith(u8, body, "exclude=")) {
+                if (opts.exclude_patterns_count < opts.exclude_patterns.len) {
+                    opts.exclude_patterns[opts.exclude_patterns_count] = body["exclude=".len..];
+                    opts.exclude_patterns_count += 1;
+                }
+            } else if (std.mem.startsWith(u8, body, "include=")) {
+                if (opts.include_patterns_count < opts.include_patterns.len) {
+                    opts.include_patterns[opts.include_patterns_count] = body["include=".len..];
+                    opts.include_patterns_count += 1;
                 }
             } else {
                 opts.fail = .{ .what = "unrecognized option", .arg = a };
@@ -428,17 +474,50 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // --- Kamikaze Scout & Streaming Dataflow Path -------------------------
-    if (opts.kamikaze or opts.exclude_dirs_count > 0 or opts.skip_hidden) {
+    if (opts.kamikaze or opts.exclude_dirs_count > 0 or opts.skip_hidden or
+        opts.exclude_exts_count > 0 or opts.include_exts_count > 0 or
+        opts.exclude_patterns_count > 0 or opts.include_patterns_count > 0 or
+        opts.no_ignore or opts.no_default_ignore)
+    {
         var k_stats: kamikaze.KamikazeStats = .{};
-        const k_conf = kamikaze.ScoutConfig{
-            .exclude_dirs = opts.exclude_dirs[0..opts.exclude_dirs_count],
-            .skip_hidden = opts.skip_hidden,
-        };
+        var filter_engine = filter.FilterEngine.init(gpa);
+        defer filter_engine.deinit();
+
+        filter_engine.no_ignore = opts.no_ignore;
+        filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+        filter_engine.skip_hidden = opts.skip_hidden;
+
+        for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+            try filter_engine.addExcludedDirs(d);
+        }
+        for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+            try filter_engine.addExcludedExts(e);
+        }
+        for (opts.include_exts[0..opts.include_exts_count]) |e| {
+            try filter_engine.addIncludedExts(e);
+        }
+        for (opts.exclude_patterns[0..opts.exclude_patterns_count]) |p| {
+            try filter_engine.addExcludedPattern(p);
+        }
+        for (opts.include_patterns[0..opts.include_patterns_count]) |p| {
+            try filter_engine.addIncludedPattern(p);
+        }
+
+        // Look for .dataignore and .gitignore in current dir and search roots:
+        if (!opts.no_ignore) {
+            filter_engine.loadIgnoreFile(".", ".dataignore");
+            filter_engine.loadIgnoreFile(".", ".gitignore");
+            for (valid_operands.items) |root| {
+                filter_engine.loadIgnoreFile(root, ".dataignore");
+                filter_engine.loadIgnoreFile(root, ".gitignore");
+            }
+        }
+
         const matched = kamikaze.runKamikazePipeline(
             gpa,
             &searcher,
             valid_operands.items,
-            k_conf,
+            &filter_engine,
             opts.mode,
             opts.binary,
             show_path,
@@ -735,5 +814,16 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         try std.testing.expect(o.skip_hidden);
         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
         try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+        _ = try parseArgs(&a, &o);
+        try std.testing.expect(o.no_ignore);
+        try std.testing.expect(o.no_default_ignore);
+        try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+        try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+        try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+        try std.testing.expectEqualStrings("zig", o.include_exts[0]);
     }
 }

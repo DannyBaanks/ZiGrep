@@ -14,6 +14,13 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
+    // Also install under the official name "zigrep"
+    const zigrep_exe = b.addExecutable(.{
+        .name = "zigrep",
+        .root_module = exe.root_module,
+    });
+    b.installArtifact(zigrep_exe);
+
     // The matcher sweep imports src/search.zig directly (as an anonymous
     // import), so it can never drift from the matchers the binary ships.
     const sweep_mod = b.createModule(.{

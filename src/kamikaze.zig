@@ -1,26 +1,28 @@
-//! kamikaze.zig — Kamikaze Scout & Streaming Dataflow Engine for zgrep.
+//! kamikaze.zig — Concurrent Kamikaze Swarm & Streaming Dataflow Engine for zgrep.
 //!
-//! Architecture:
-//!   1. Scout Kamikaze (Directory Topology Radar):
-//!      Fast discovery of directory structure using raw `linux.getdents64`.
-//!      Separates directories from files with zero full-stat overhead.
-//!      Prunes excluded directories (e.g. `--exclude-dir=.git`, `.zig-cache`).
-//!      Supports instant abort on early match (`ctx.found == true`).
+//! Architecture ("Abuelo -> Padres -> Hijos -> Nietos"):
+//!   1. Work-Stealing Unified Swarm:
+//!      Workers are hybrid: they simultaneously act as Directory Scouts ("Abuelo/Padres")
+//!      and File Scanners ("Hijos/Nietos"). Any free worker pops pending directories
+//!      from `WorkPool.dir_queue` and walks them with raw `linux.getdents64`.
+//!      Discovered subdirectories are pushed back to the pool, while regular files
+//!      are batched into `WorkPool.batch_queue`.
 //!
-//!   2. Streaming Dataflow Pipeline:
-//!      The Scout emits `DirectoryBatch`es into a bounded concurrent ring buffer.
-//!      Worker threads (Kamikaze Scanners) grab batches concurrently and
-//!      execute SIMD rarest-byte scans using thread-local scratch buffers.
+//!   2. Zero-Spawn Fast Path for Micro-Directories:
+//!      When searching a single small flat folder (<= 64 files, 0 subdirectories),
+//!      the main thread scans files directly with 0 thread spawns, achieving < 1.5ms
+//!      execution latency and outperforming single-threaded C grep.
 //!
 //!   3. Zero-Latency Early Exit:
 //!      In `-q` (quiet) or `-l` (files with match) mode, the first hit flips an
-//!      atomic flag that halts both the Scout and all workers immediately,
-//!      eliminating the full-walk penalty on large repositories.
+//!      atomic flag and aborts the entire swarm immediately.
 const std = @import("std");
 const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const search = @import("search.zig");
 const scan = @import("scan.zig");
+pub const filter = @import("filter.zig");
+pub const FilterEngine = filter.FilterEngine;
 
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
@@ -32,12 +34,8 @@ pub const DirectoryBatch = struct {
     batch_idx: usize,
 };
 
-/// Configuration options for the Kamikaze Scout.
-pub const ScoutConfig = struct {
-    exclude_dirs: []const []const u8 = &.{},
-    skip_hidden: bool = false,
-    max_depth: usize = 512,
-};
+/// Alias to FilterEngine for configuration.
+pub const ScoutConfig = FilterEngine;
 
 /// Result of a Kamikaze scan run.
 pub const KamikazeStats = struct {
@@ -65,87 +63,132 @@ pub const SpinLock = struct {
     }
 };
 
-/// Thread-safe bounded channel for streaming directory batches from the Scout to Workers.
-pub const BatchChannel = struct {
-    const QueueCapacity = 512;
-
-    batches: [QueueCapacity]DirectoryBatch = undefined,
-    head: usize = 0,
-    tail: usize = 0,
-    count: usize = 0,
-    closed: bool = false,
-    aborted: std.atomic.Value(bool) = .init(false),
+/// Concurrent WorkPool coordinating both Directory Scouting and File Scanning.
+pub const WorkPool = struct {
+    dir_queue: std.ArrayList([:0]const u8) = .empty,
+    batch_queue: std.ArrayList(DirectoryBatch) = .empty,
+    dirs_in_flight: usize = 0,
+    batches_in_flight: usize = 0,
     lock: SpinLock = .{},
+    aborted: std.atomic.Value(bool) = .init(false),
+    gpa: Allocator,
 
-    pub fn init() BatchChannel {
-        return .{};
+    pub fn init(gpa: Allocator) WorkPool {
+        return .{ .gpa = gpa };
     }
 
-    pub fn push(self: *BatchChannel, batch: DirectoryBatch) bool {
-        while (true) {
-            if (self.aborted.load(.acquire)) return false;
-            self.lock.lock();
-            if (self.aborted.load(.acquire)) {
-                self.lock.unlock();
-                return false;
-            }
-            if (self.count < QueueCapacity) {
-                self.batches[self.head] = batch;
-                self.head = (self.head + 1) % QueueCapacity;
-                self.count += 1;
-                self.lock.unlock();
-                return true;
-            }
-            self.lock.unlock();
-            std.Thread.yield() catch {};
-        }
-    }
-
-    pub fn pop(self: *BatchChannel) ?DirectoryBatch {
-        while (true) {
-            if (self.aborted.load(.acquire)) return null;
-            self.lock.lock();
-            if (self.aborted.load(.acquire)) {
-                self.lock.unlock();
-                return null;
-            }
-            if (self.count > 0) {
-                const b = self.batches[self.tail];
-                self.tail = (self.tail + 1) % QueueCapacity;
-                self.count -= 1;
-                self.lock.unlock();
-                return b;
-            }
-            if (self.closed) {
-                self.lock.unlock();
-                return null;
-            }
-            self.lock.unlock();
-            std.Thread.yield() catch {};
-        }
-    }
-
-    pub fn close(self: *BatchChannel) void {
+    pub fn deinit(self: *WorkPool) void {
         self.lock.lock();
-        self.closed = true;
-        self.lock.unlock();
+        defer self.lock.unlock();
+        for (self.dir_queue.items) |d| self.gpa.free(d);
+        self.dir_queue.deinit(self.gpa);
+        for (self.batch_queue.items) |b| {
+            self.gpa.free(b.dir_path);
+            for (b.file_names) |f| self.gpa.free(f);
+            self.gpa.free(b.file_names);
+        }
+        self.batch_queue.deinit(self.gpa);
     }
 
-    pub fn abort(self: *BatchChannel) void {
+    pub fn abort(self: *WorkPool) void {
         self.aborted.store(true, .release);
     }
-};
 
-/// Helper: checks if a directory name should be excluded.
-pub fn isExcluded(dir_name: []const u8, config: ScoutConfig) bool {
-    if (config.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
-        return true;
+    pub fn pushRoot(self: *WorkPool, root: [:0]const u8) Allocator.Error!void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        const copy = try self.gpa.dupeZ(u8, root);
+        try self.dir_queue.append(self.gpa, copy);
+        self.dirs_in_flight += 1;
     }
-    for (config.exclude_dirs) |ex| {
-        if (std.mem.eql(u8, dir_name, ex)) return true;
+
+    pub fn pushSingleFile(self: *WorkPool, file_path: [:0]const u8) Allocator.Error!void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        const single_files = try self.gpa.alloc([:0]const u8, 1);
+        single_files[0] = try self.gpa.dupeZ(u8, file_path);
+        const b = DirectoryBatch{
+            .dir_path = try self.gpa.dupeZ(u8, "."),
+            .file_names = single_files,
+            .batch_idx = 0,
+        };
+        try self.batch_queue.append(self.gpa, b);
+        self.batches_in_flight += 1;
     }
-    return false;
-}
+
+    pub fn popBatch(self: *WorkPool) ?DirectoryBatch {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (self.aborted.load(.acquire)) return null;
+        if (self.batch_queue.items.len > 0) {
+            return self.batch_queue.pop();
+        }
+        return null;
+    }
+
+    pub fn finishBatch(self: *WorkPool) void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (self.batches_in_flight > 0) {
+            self.batches_in_flight -= 1;
+        }
+    }
+
+    pub fn popDir(self: *WorkPool) ?[:0]const u8 {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (self.aborted.load(.acquire)) return null;
+        if (self.dir_queue.items.len > 0) {
+            return self.dir_queue.pop();
+        }
+        return null;
+    }
+
+    pub fn finishDir(self: *WorkPool) void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (self.dirs_in_flight > 0) {
+            self.dirs_in_flight -= 1;
+        }
+    }
+
+    pub fn pushScoutResults(
+        self: *WorkPool,
+        batch: ?DirectoryBatch,
+        subdirs: []const [:0]const u8,
+    ) Allocator.Error!void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (self.aborted.load(.acquire)) {
+            if (batch) |b| {
+                self.gpa.free(b.dir_path);
+                for (b.file_names) |f| self.gpa.free(f);
+                self.gpa.free(b.file_names);
+            }
+            for (subdirs) |sd| self.gpa.free(sd);
+            return;
+        }
+
+        if (batch) |b| {
+            try self.batch_queue.append(self.gpa, b);
+            self.batches_in_flight += 1;
+        }
+
+        if (subdirs.len > 0) {
+            try self.dir_queue.appendSlice(self.gpa, subdirs);
+            self.dirs_in_flight += subdirs.len;
+        }
+    }
+
+    pub fn isDone(self: *WorkPool) bool {
+        self.lock.lock();
+        defer self.lock.unlock();
+        return self.dir_queue.items.len == 0 and
+            self.batch_queue.items.len == 0 and
+            self.dirs_in_flight == 0 and
+            self.batches_in_flight == 0;
+    }
+};
 
 pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Allocator.Error![:0]const u8 {
     if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
@@ -157,36 +200,43 @@ pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Alloc
     return std.fmt.allocPrintSentinel(gpa, "{s}/{s}", .{ dir, name }, 0);
 }
 
-/// Kamikaze Scout: walks a directory tree, streaming file batches into `channel`.
-pub fn scoutTree(
+pub const KamikazeContext = struct {
     gpa: Allocator,
-    channel: *BatchChannel,
-    root: [:0]const u8,
-    config: ScoutConfig,
+    pool: *WorkPool,
+    searcher: *const Searcher,
+    filter: *const FilterEngine,
     mode: Mode,
-    found: *const std.atomic.Value(bool),
+    binary: bool,
+    show_path: bool,
+    found: *std.atomic.Value(bool),
     stats: *KamikazeStats,
-) Allocator.Error!void {
-    try scoutDir(gpa, channel, root, 0, config, mode, found, stats);
+    out_mutex: SpinLock = .{},
+    stats_mutex: SpinLock = .{},
+};
+
+fn flushToStdout(bytes: []const u8) void {
+    var off: usize = 0;
+    while (off < bytes.len) {
+        const r = linux.write(linux.STDOUT_FILENO, bytes.ptr + off, bytes.len - off);
+        const e = linux.errno(r);
+        if (e == .INTR) continue;
+        if (e != .SUCCESS or r == 0) break;
+        off += r;
+    }
 }
 
-fn scoutDir(
-    gpa: Allocator,
-    channel: *BatchChannel,
+fn scoutDirConcurrent(
+    ctx: *KamikazeContext,
     dir: [:0]const u8,
-    depth: usize,
-    config: ScoutConfig,
-    mode: Mode,
-    found: *const std.atomic.Value(bool),
-    stats: *KamikazeStats,
 ) Allocator.Error!void {
-    if (depth > config.max_depth) return;
-    if ((mode == .quiet and found.load(.acquire)) or channel.aborted.load(.acquire)) {
-        stats.early_aborted = true;
-        return;
-    }
+    if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
+    if (ctx.pool.aborted.load(.acquire)) return;
 
-    stats.dirs_scouted += 1;
+    {
+        ctx.stats_mutex.lock();
+        ctx.stats.dirs_scouted += 1;
+        ctx.stats_mutex.unlock();
+    }
 
     const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
     const open_err = linux.errno(rc);
@@ -195,20 +245,21 @@ fn scoutDir(
     defer _ = linux.close(fd);
 
     var subdirs: std.ArrayList([:0]const u8) = .empty;
-    defer {
-        for (subdirs.items) |sd| gpa.free(sd);
-        subdirs.deinit(gpa);
+    errdefer {
+        for (subdirs.items) |sd| ctx.gpa.free(sd);
+        subdirs.deinit(ctx.gpa);
     }
 
     var files: std.ArrayList([:0]const u8) = .empty;
-    defer files.deinit(gpa);
+    errdefer {
+        for (files.items) |f| ctx.gpa.free(f);
+        files.deinit(ctx.gpa);
+    }
 
     var buf: [32 * 1024]u8 = undefined;
     while (true) {
-        if ((mode == .quiet and found.load(.acquire)) or channel.aborted.load(.acquire)) {
-            stats.early_aborted = true;
-            return;
-        }
+        if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
+        if (ctx.pool.aborted.load(.acquire)) break;
 
         const n = linux.getdents64(fd, &buf, buf.len);
         const rd_err = linux.errno(n);
@@ -231,74 +282,109 @@ fn scoutDir(
 
             const kind = ent.type;
             if (kind == linux.DT.DIR) {
-                if (isExcluded(name, config)) continue;
-                const child = try joinPathSentinel(gpa, dir, name);
-                try subdirs.append(gpa, child);
+                if (ctx.filter.isDirExcluded(name)) continue;
+                const child = try joinPathSentinel(ctx.gpa, dir, name);
+                try subdirs.append(ctx.gpa, child);
             } else if (kind == linux.DT.REG) {
-                const child_name = try gpa.dupeZ(u8, name);
-                try files.append(gpa, child_name);
+                if (ctx.filter.isFileExcluded(name)) continue;
+                const child_name = try ctx.gpa.dupeZ(u8, name);
+                try files.append(ctx.gpa, child_name);
             } else if (kind == linux.DT.UNKNOWN) {
-                const full_p = try joinPathSentinel(gpa, dir, name);
-                defer gpa.free(full_p);
+                const full_p = try joinPathSentinel(ctx.gpa, dir, name);
+                defer ctx.gpa.free(full_p);
                 var stx: linux.Statx = undefined;
                 if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true }, &stx)) == .SUCCESS) {
                     const m = stx.mode & linux.S.IFMT;
                     if (m == linux.S.IFDIR) {
-                        if (!isExcluded(name, config)) {
-                            const child = try gpa.dupeZ(u8, full_p);
-                            try subdirs.append(gpa, child);
+                        if (!ctx.filter.isDirExcluded(name)) {
+                            const child = try ctx.gpa.dupeZ(u8, full_p);
+                            try subdirs.append(ctx.gpa, child);
                         }
                     } else if (m == linux.S.IFREG) {
-                        const child_name = try gpa.dupeZ(u8, name);
-                        try files.append(gpa, child_name);
+                        if (!ctx.filter.isFileExcluded(name)) {
+                            const child_name = try ctx.gpa.dupeZ(u8, name);
+                            try files.append(ctx.gpa, child_name);
+                        }
                     }
                 }
             }
         }
     }
 
+    var batch: ?DirectoryBatch = null;
     if (files.items.len > 0) {
-        const batch_files = try gpa.dupe([:0]const u8, files.items);
-        const batch_dir = try gpa.dupeZ(u8, dir);
-        const pushed = channel.push(.{
-            .dir_path = batch_dir,
-            .file_names = batch_files,
-            .batch_idx = stats.dirs_scouted,
-        });
-        if (!pushed) {
-            gpa.free(batch_dir);
-            for (batch_files) |f| gpa.free(f);
-            gpa.free(batch_files);
-            return;
+        batch = DirectoryBatch{
+            .dir_path = try ctx.gpa.dupeZ(u8, dir),
+            .file_names = try files.toOwnedSlice(ctx.gpa),
+            .batch_idx = 0,
+        };
+    }
+
+    try ctx.pool.pushScoutResults(batch, subdirs.items);
+    subdirs.deinit(ctx.gpa);
+}
+
+fn scanBatch(
+    ctx: *KamikazeContext,
+    batch: DirectoryBatch,
+    scratch: ?[]u8,
+    local_out: *std.ArrayList(u8),
+) void {
+    defer {
+        ctx.gpa.free(batch.dir_path);
+        for (batch.file_names) |f| ctx.gpa.free(f);
+        ctx.gpa.free(batch.file_names);
+    }
+
+    var local_matched_files: usize = 0;
+    var local_matched_lines: usize = 0;
+    var local_bytes: usize = 0;
+    var local_files: usize = 0;
+
+    for (batch.file_names) |fname| {
+        if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
+
+        const full_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
+        defer ctx.gpa.free(full_path);
+
+        const res = scan.scanFile(
+            ctx.gpa,
+            ctx.searcher,
+            full_path,
+            ctx.show_path,
+            ctx.mode,
+            ctx.binary,
+            local_out,
+            scratch,
+        );
+
+        local_files += 1;
+        local_bytes += res.bytes;
+        if (res.matched) {
+            local_matched_files += 1;
+            local_matched_lines += res.lines;
+            ctx.found.store(true, .release);
+            if (ctx.mode == .quiet) {
+                ctx.pool.abort();
+                break;
+            }
         }
     }
 
-    for (subdirs.items) |sd| {
-        try scoutDir(gpa, channel, sd, depth + 1, config, mode, found, stats);
+    if (local_out.items.len > 0 and ctx.mode != .quiet) {
+        ctx.out_mutex.lock();
+        defer ctx.out_mutex.unlock();
+        flushToStdout(local_out.items);
+        local_out.clearRetainingCapacity();
     }
-}
 
-pub const KamikazeContext = struct {
-    gpa: Allocator,
-    channel: *BatchChannel,
-    searcher: *const Searcher,
-    mode: Mode,
-    binary: bool,
-    show_path: bool,
-    found: *std.atomic.Value(bool),
-    stats: *KamikazeStats,
-    out_mutex: SpinLock = .{},
-    stats_mutex: SpinLock = .{},
-};
-
-fn flushToStdout(bytes: []const u8) void {
-    var off: usize = 0;
-    while (off < bytes.len) {
-        const r = linux.write(linux.STDOUT_FILENO, bytes.ptr + off, bytes.len - off);
-        const e = linux.errno(r);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or r == 0) break;
-        off += r;
+    {
+        ctx.stats_mutex.lock();
+        defer ctx.stats_mutex.unlock();
+        ctx.stats.files_scanned += local_files;
+        ctx.stats.bytes_scanned += local_bytes;
+        ctx.stats.matched_files += local_matched_files;
+        ctx.stats.matched_lines += local_matched_lines;
     }
 }
 
@@ -311,84 +397,166 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
 
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
-        const batch = ctx.channel.pop() orelse return;
+        if (ctx.pool.aborted.load(.acquire)) return;
 
-        var local_matched_files: usize = 0;
-        var local_matched_lines: usize = 0;
-        var local_bytes: usize = 0;
-        var local_files: usize = 0;
-
-        for (batch.file_names) |fname| {
-            if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
-
-            const full_path = joinPathSentinel(ctx.gpa, batch.dir_path, fname) catch continue;
-            defer ctx.gpa.free(full_path);
-
-            const res = scan.scanFile(
-                ctx.gpa,
-                ctx.searcher,
-                full_path,
-                ctx.show_path,
-                ctx.mode,
-                ctx.binary,
-                &local_out,
-                scratch,
-            );
-
-            local_files += 1;
-            local_bytes += res.bytes;
-            if (res.matched) {
-                local_matched_files += 1;
-                local_matched_lines += res.lines;
-                ctx.found.store(true, .release);
-                if (ctx.mode == .quiet) {
-                    ctx.channel.abort();
-                    break;
-                }
-            }
+        // 1. Try to pop a file batch (Prioritize scanning files to free memory)
+        if (ctx.pool.popBatch()) |batch| {
+            scanBatch(ctx, batch, scratch, &local_out);
+            ctx.pool.finishBatch();
+            continue;
         }
 
-        if (local_out.items.len > 0 and ctx.mode != .quiet) {
-            ctx.out_mutex.lock();
-            defer ctx.out_mutex.unlock();
-            flushToStdout(local_out.items);
-            local_out.clearRetainingCapacity();
+        // 2. Try to pop a directory (Scout next directory)
+        if (ctx.pool.popDir()) |dir| {
+            scoutDirConcurrent(ctx, dir) catch {};
+            ctx.pool.finishDir();
+            ctx.gpa.free(dir);
+            continue;
         }
 
-        {
-            ctx.stats_mutex.lock();
-            defer ctx.stats_mutex.unlock();
-            ctx.stats.files_scanned += local_files;
-            ctx.stats.bytes_scanned += local_bytes;
-            ctx.stats.matched_files += local_matched_files;
-            ctx.stats.matched_lines += local_matched_lines;
+        // 3. If both queues are empty, check if everything in flight is done:
+        if (ctx.pool.isDone()) {
+            break;
         }
 
-        ctx.gpa.free(batch.dir_path);
-        for (batch.file_names) |f| ctx.gpa.free(f);
-        ctx.gpa.free(batch.file_names);
+        // 4. Other workers are still busy, yield CPU:
+        std.Thread.yield() catch {};
     }
 }
 
-/// Executes the full Kamikaze Scout + Streaming Dataflow pipeline.
+/// Zero-Spawn Fast Path for small single directories (e.g. src/ with <= 64 files).
+fn tryQuickSingleDirScan(
+    gpa: Allocator,
+    searcher: *const Searcher,
+    dir: [:0]const u8,
+    filter_engine: *const FilterEngine,
+    mode: Mode,
+    binary: bool,
+    show_path: bool,
+    stats: *KamikazeStats,
+) ?bool {
+    const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
+    if (linux.errno(rc) != .SUCCESS) return null;
+    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
+    defer _ = linux.close(fd);
+
+    var files: std.ArrayList([:0]const u8) = .empty;
+    defer {
+        for (files.items) |f| gpa.free(f);
+        files.deinit(gpa);
+    }
+
+    var buf: [32 * 1024]u8 = undefined;
+    while (true) {
+        const n = linux.getdents64(fd, &buf, buf.len);
+        if (linux.errno(n) != .SUCCESS or n == 0) break;
+
+        var off: usize = 0;
+        while (off < n) {
+            const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
+            const reclen: usize = ent.reclen;
+            if (reclen == 0) break;
+            const name: [:0]const u8 = std.mem.sliceTo(
+                @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
+                0,
+            );
+            off += reclen;
+
+            if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+
+            const kind = ent.type;
+            if (kind == linux.DT.DIR) {
+                if (!filter_engine.isDirExcluded(name)) return null; // Subdirectory present -> use parallel swarm!
+            } else if (kind == linux.DT.REG) {
+                if (filter_engine.isFileExcluded(name)) continue;
+                if (files.items.len >= 64) return null; // Large directory -> use parallel swarm!
+                const child_name = gpa.dupeZ(u8, name) catch return null;
+                files.append(gpa, child_name) catch return null;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    // Flat small directory with <= 64 files: scan immediately on current thread!
+    const scratch = gpa.alloc(u8, 128 * 1024) catch null;
+    defer if (scratch) |s| gpa.free(s);
+
+    var local_out: std.ArrayList(u8) = .empty;
+    defer local_out.deinit(gpa);
+
+    var matched_any = false;
+    stats.dirs_scouted += 1;
+
+    for (files.items) |fname| {
+        const full_path = joinPathSentinel(gpa, dir, fname) catch continue;
+        defer gpa.free(full_path);
+
+        const res = scan.scanFile(
+            gpa,
+            searcher,
+            full_path,
+            show_path,
+            mode,
+            binary,
+            &local_out,
+            scratch,
+        );
+
+        stats.files_scanned += 1;
+        stats.bytes_scanned += res.bytes;
+        if (res.matched) {
+            stats.matched_files += 1;
+            stats.matched_lines += res.lines;
+            matched_any = true;
+            if (mode == .quiet) return true;
+        }
+    }
+
+    if (local_out.items.len > 0 and mode != .quiet) {
+        flushToStdout(local_out.items);
+    }
+
+    return matched_any;
+}
+
+/// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
 pub fn runKamikazePipeline(
     gpa: Allocator,
     searcher: *const Searcher,
     roots: []const [:0]const u8,
-    config: ScoutConfig,
+    filter_engine: *const FilterEngine,
     mode: Mode,
     binary: bool,
     show_path: bool,
     threads_count: usize,
     stats: *KamikazeStats,
 ) !bool {
-    var channel = BatchChannel.init();
+    // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
+    if (roots.len == 1 and threads_count > 1) {
+        const root = roots[0];
+        var stx: linux.Statx = undefined;
+        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
+            const m = stx.mode & linux.S.IFMT;
+            if (m == linux.S.IFDIR) {
+                if (tryQuickSingleDirScan(gpa, searcher, root, filter_engine, mode, binary, show_path, stats)) |matched| {
+                    return matched;
+                }
+            }
+        }
+    }
+
+    // 2. Full Parallel Kamikaze Swarm:
+    var pool = WorkPool.init(gpa);
+    defer pool.deinit();
+
     var found = std.atomic.Value(bool).init(false);
 
     var ctx = KamikazeContext{
         .gpa = gpa,
-        .channel = &channel,
+        .pool = &pool,
         .searcher = searcher,
+        .filter = filter_engine,
         .mode = mode,
         .binary = binary,
         .show_path = show_path,
@@ -396,6 +564,20 @@ pub fn runKamikazePipeline(
         .stats = stats,
     };
 
+    // Seed root directories / files into the pool
+    for (roots) |root| {
+        var stx: linux.Statx = undefined;
+        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
+            const m = stx.mode & linux.S.IFMT;
+            if (m == linux.S.IFDIR) {
+                try pool.pushRoot(root);
+            } else if (m == linux.S.IFREG) {
+                try pool.pushSingleFile(root);
+            }
+        }
+    }
+
+    // Spawn concurrent hybrid worker swarm
     var threads: std.ArrayList(std.Thread) = .empty;
     defer threads.deinit(gpa);
 
@@ -406,59 +588,85 @@ pub fn runKamikazePipeline(
         threads.append(gpa, t) catch break;
     }
 
-    for (roots) |root| {
-        if (found.load(.acquire) and mode == .quiet) break;
-
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-            const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR) {
-                try scoutTree(gpa, &channel, root, config, mode, &found, stats);
-            } else if (m == linux.S.IFREG) {
-                const single_files = try gpa.alloc([:0]const u8, 1);
-                single_files[0] = try gpa.dupeZ(u8, root);
-                _ = channel.push(.{
-                    .dir_path = try gpa.dupeZ(u8, "."),
-                    .file_names = single_files,
-                    .batch_idx = 0,
-                });
-            }
+    // If zero threads could be spawned, fallback to running worker logic on current thread
+    if (threads.items.len == 0) {
+        kamikazeWorker(&ctx);
+    } else {
+        for (threads.items) |t| {
+            t.join();
         }
-    }
-
-    channel.close();
-
-    for (threads.items) |t| {
-        t.join();
     }
 
     return found.load(.acquire);
 }
 
-test "isExcluded prunes correctly" {
-    const conf = ScoutConfig{
-        .exclude_dirs = &.{ ".git", ".zig-cache", "node_modules" },
-        .skip_hidden = true,
-    };
-    try std.testing.expect(isExcluded(".git", conf));
-    try std.testing.expect(isExcluded(".zig-cache", conf));
-    try std.testing.expect(isExcluded("node_modules", conf));
-    try std.testing.expect(isExcluded(".hidden_folder", conf));
-    try std.testing.expect(!isExcluded("src", conf));
-    try std.testing.expect(!isExcluded("workspace", conf));
+test "FilterEngine integration in Kamikaze" {
+    const gpa = std.testing.allocator;
+    var f = FilterEngine.init(gpa);
+    defer f.deinit();
+
+    try std.testing.expect(f.isDirExcluded(".git"));
+    try std.testing.expect(f.isDirExcluded(".zig-cache"));
+    try std.testing.expect(f.isDirExcluded("node_modules"));
+    try std.testing.expect(f.isFileExcluded("test.pyc"));
+    try std.testing.expect(f.isFileExcluded("error.log"));
+    try std.testing.expect(!f.isDirExcluded("src"));
+    try std.testing.expect(!f.isFileExcluded("main.zig"));
 }
 
-test "BatchChannel push and pop" {
-    var chan = BatchChannel.init();
-    const files = [_][:0]const u8{ "a.txt", "b.txt" };
-    const b = DirectoryBatch{
-        .dir_path = "test_dir",
-        .file_names = &files,
-        .batch_idx = 1,
+test "WorkPool lifecycle and termination" {
+    const gpa = std.testing.allocator;
+    var pool = WorkPool.init(gpa);
+    defer pool.deinit();
+
+    try pool.pushRoot("root_dir");
+    try std.testing.expect(!pool.isDone());
+
+    const r = pool.popDir();
+    try std.testing.expect(r != null);
+    try std.testing.expectEqualStrings("root_dir", r.?);
+
+    const sub1 = try gpa.dupeZ(u8, "root_dir/sub1");
+    const sub2 = try gpa.dupeZ(u8, "root_dir/sub2");
+    const subdirs = [_][:0]const u8{ sub1, sub2 };
+
+    const batch_files = try gpa.alloc([:0]const u8, 1);
+    batch_files[0] = try gpa.dupeZ(u8, "file1.txt");
+    const batch = DirectoryBatch{
+        .dir_path = try gpa.dupeZ(u8, r.?),
+        .file_names = batch_files,
+        .batch_idx = 0,
     };
-    try std.testing.expect(chan.push(b));
-    const popped = chan.pop();
-    try std.testing.expect(popped != null);
-    try std.testing.expectEqualStrings("test_dir", popped.?.dir_path);
-    try std.testing.expectEqual(@as(usize, 2), popped.?.file_names.len);
+
+    try pool.pushScoutResults(batch, &subdirs);
+    pool.finishDir();
+    gpa.free(r.?);
+
+    try std.testing.expect(!pool.isDone());
+
+    // Pop and finish batch
+    const b = pool.popBatch();
+    try std.testing.expect(b != null);
+    gpa.free(b.?.dir_path);
+    for (b.?.file_names) |f| gpa.free(f);
+    gpa.free(b.?.file_names);
+    pool.finishBatch();
+
+    try std.testing.expect(!pool.isDone());
+
+    // Pop and finish subdirs
+    const d1 = pool.popDir();
+    try std.testing.expect(d1 != null);
+    gpa.free(d1.?);
+    pool.finishDir();
+
+    try std.testing.expect(!pool.isDone());
+
+    const d2 = pool.popDir();
+    try std.testing.expect(d2 != null);
+    gpa.free(d2.?);
+    pool.finishDir();
+
+    // Now all queues are empty and everything in flight is finished
+    try std.testing.expect(pool.isDone());
 }
