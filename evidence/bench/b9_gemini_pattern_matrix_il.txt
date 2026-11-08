@@ -1,0 +1,90 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=3.74 3.96 3.11 2/1968 20326
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep_const    |     41.726 |     37.775 |     49.671 |     42.394 |       3.578 |    16071.5 |     0 |
+| zgrep_pub      |     40.902 |     37.250 |     44.470 |     40.902 |       2.304 |    16395.4 |     0 |
+| zgrep_fn       |     40.130 |     37.977 |     47.053 |     41.631 |       3.371 |    16710.5 |     0 |
+| zgrep_async    |     38.843 |     35.884 |     45.427 |     38.813 |       2.822 |    17264.1 |     0 |
+| zgrep_struct   |     40.442 |     38.706 |     44.270 |     40.847 |       1.819 |    16581.8 |     0 |
+| zgrep_for      |     41.045 |     38.108 |     44.076 |     41.095 |       2.159 |    16338.1 |     0 |
+| zgrep_if       |     40.043 |     34.826 |     61.722 |     42.860 |       7.651 |    16746.9 |     0 |
+| bmh_const      |     83.285 |     79.342 |    105.150 |     86.478 |       8.614 |     8051.8 |     0 |
+| bmh_pub        |     95.445 |     91.861 |    124.060 |     97.830 |       9.558 |     7026.0 |     0 |
+| bmh_fn         |    125.008 |    116.381 |    161.712 |    133.406 |      16.848 |     5364.4 |     0 |
+| bmh_async      |     85.734 |     78.755 |    101.456 |     87.869 |       7.698 |     7821.8 |     0 |
+| bmh_struct     |     75.261 |     63.642 |     86.924 |     74.910 |       8.563 |     8910.3 |     0 |
+| bmh_for        |     99.085 |     93.920 |    127.709 |    105.663 |      13.203 |     6767.9 |     0 |
+| bmh_if         |    120.836 |    114.810 |    141.820 |    124.180 |       9.260 |     5549.7 |     0 |
+| grep_const     |    330.074 |    320.151 |    350.895 |    330.605 |       8.832 |     2031.7 |     0 |
+| grep_pub       |    391.655 |    377.740 |    409.724 |    393.599 |       9.016 |     1712.2 |     0 |
+| grep_fn        |    406.588 |    395.733 |    431.143 |    408.716 |      11.941 |     1649.3 |     0 |
+| grep_async     |    332.590 |    318.847 |    365.662 |    337.505 |      14.505 |     2016.3 |     0 |
+| grep_struct    |    359.347 |    345.285 |    378.607 |    361.255 |      11.503 |     1866.2 |     0 |
+| grep_for       |    390.749 |    373.899 |    438.768 |    393.277 |      18.473 |     1716.2 |     0 |
+| grep_if        |    410.457 |    396.236 |    420.943 |    409.758 |       8.591 |     1633.8 |     0 |
+| rg_const       |     59.365 |     57.128 |     69.541 |     60.261 |       3.852 |    11296.2 |     0 |
+| rg_pub         |     60.354 |     57.304 |     64.857 |     60.360 |       2.509 |    11111.0 |     0 |
+| rg_fn          |     61.570 |     55.742 |     63.312 |     60.523 |       2.475 |    10891.5 |     0 |
+| rg_async       |     64.691 |     54.122 |     69.946 |     63.471 |       4.804 |    10366.1 |     0 |
+| rg_struct      |     62.426 |     56.407 |     66.074 |     62.019 |       3.756 |    10742.3 |     0 |
+| rg_for         |     64.374 |     58.074 |     72.677 |     65.217 |       4.874 |    10417.2 |     0 |
+| rg_if          |     61.637 |     56.485 |     69.239 |     62.397 |       3.999 |    10879.7 |     0 |
+
+raw zgrep_const: 46364839 43412058 37775185 43501095 49670719 38526782 42144893 40189855 41306445 41045747
+raw zgrep_pub: 42457169 39482165 40909239 43290081 44470061 40299007 40893827 37799479 37250475 42166935
+raw zgrep_fn: 43111553 39194624 46895903 47052534 40442315 39097030 38867489 43854365 39818057 37976740
+raw zgrep_async: 45427423 39228879 37369044 39609700 35883946 36100857 39274572 40436279 36338425 38457856
+raw zgrep_struct: 44269934 40592970 39234575 39958277 40339812 42691089 38706386 39305240 42824439 40543327
+raw zgrep_for: 42307107 38107939 38883378 41288905 44075752 40598868 40800885 43673766 38341515 42874670
+raw zgrep_if: 38989663 61722023 38541807 38043179 46380027 34826282 39351199 42635071 40734715 47373551
+raw bmh_const: 83131859 105150095 80360085 81198600 83438605 83484033 82082244 79341962 98826954 87763350
+raw bmh_pub: 91861172 92848103 96895894 91971802 98492871 97449811 97711174 93015838 124059825 93994911
+raw bmh_fn: 121683493 116380654 122666948 154132943 155560541 130262874 125733995 121644089 161711910 124282450
+raw bmh_async: 101456420 100744541 82175211 78754734 86931021 90762928 86494260 84973556 84671958 81728642
+raw bmh_struct: 65419349 63641999 71002913 67412270 84060064 79519052 86923587 82328982 80159564 68627927
+raw bmh_for: 119803716 95418907 101588118 127708912 96389378 105180287 96581092 124457363 95586716 93919671
+raw bmh_if: 114810359 124201271 118213269 141819863 119752888 122492082 118576818 140265009 119785808 121885334
+raw grep_const: 329276621 320151015 327679583 320372863 350894595 330939189 330871772 335332712 325611449 334916266
+raw grep_pub: 388997442 388167851 389434027 377739867 409723853 393875138 397635589 403049905 388867126 398494919
+raw grep_fn: 399685089 395733323 410877961 403911450 426904985 408539830 404636843 431143390 409439295 396287604
+raw grep_async: 331122634 328365775 348908474 318846638 355488554 329119612 334056516 335359958 328115181 365662128
+raw grep_struct: 349513080 345284741 371315973 350991390 366414276 355587330 360534981 376137452 358158589 378607496
+raw grep_for: 387224662 373898933 405997018 374493228 391761531 393530471 385593660 438768410 391440591 390058034
+raw grep_if: 401549883 410985721 420943250 396236290 415814323 409929206 405062928 415431569 400957608 420665488
+raw rg_const: 58375527 57738245 57127581 59429731 69540551 59317785 59900031 57384370 59411822 64386476
+raw rg_pub: 59793314 57809260 61243909 59412172 57303711 57338540 60914707 62832048 62097185 64856693
+raw rg_fn: 56728011 61499717 61679917 61305048 59331271 55742283 61697199 63311764 61641055 62293406
+raw rg_async: 65988143 54121687 62840219 64793154 66177564 66198906 56145507 64588974 63913991 69945613
+raw rg_struct: 65566876 60260646 58403681 62042260 65556407 56406606 57253337 66073808 62809683 65815065
+raw rg_for: 70760506 61635016 58074036 60417251 64830928 63916591 69089414 72676872 68822569 61943732
+raw rg_if: 56484510 62898295 63565335 59677755 69239499 65415026 67184656 60376144 58850516 60279749
+cmd zgrep_const ./zig-out/bin/zgrep -rnF const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_pub ./zig-out/bin/zgrep -rnF pub  /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_fn ./zig-out/bin/zgrep -rnF fn  /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_async ./zig-out/bin/zgrep -rnF async /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_struct ./zig-out/bin/zgrep -rnF struct  /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_for ./zig-out/bin/zgrep -rnF for  /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_if ./zig-out/bin/zgrep -rnF if  /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_const ./zig-out/bin/zgrep --algo=bmh -rnF const /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_pub ./zig-out/bin/zgrep --algo=bmh -rnF pub  /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_fn ./zig-out/bin/zgrep --algo=bmh -rnF fn  /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_async ./zig-out/bin/zgrep --algo=bmh -rnF async /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_struct ./zig-out/bin/zgrep --algo=bmh -rnF struct  /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_for ./zig-out/bin/zgrep --algo=bmh -rnF for  /home/danny/Development/ISyCo/workspace/assembly
+cmd bmh_if ./zig-out/bin/zgrep --algo=bmh -rnF if  /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_const grep -rnIF const /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_pub grep -rnIF pub  /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_fn grep -rnIF fn  /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_async grep -rnIF async /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_struct grep -rnIF struct  /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_for grep -rnIF for  /home/danny/Development/ISyCo/workspace/assembly
+cmd grep_if grep -rnIF if  /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_const rg -n -F --no-ignore --hidden const /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_pub rg -n -F --no-ignore --hidden pub  /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_fn rg -n -F --no-ignore --hidden fn  /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_async rg -n -F --no-ignore --hidden async /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_struct rg -n -F --no-ignore --hidden struct  /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_for rg -n -F --no-ignore --hidden for  /home/danny/Development/ISyCo/workspace/assembly
+cmd rg_if rg -n -F --no-ignore --hidden if  /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b9_gemini_pattern_matrix_il.json (10367 bytes)

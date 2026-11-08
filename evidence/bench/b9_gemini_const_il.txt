@@ -1,0 +1,18 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=10.47 6.90 5.65 24/2095 43270
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep          |     43.723 |     40.668 |     51.174 |     44.338 |       2.765 |    15337.3 |     0 |
+| zgrep_bmh      |     87.280 |     83.757 |    111.385 |     93.957 |      11.185 |     7683.3 |     0 |
+| grep           |    343.359 |    339.543 |    358.456 |    345.884 |       6.336 |     1953.0 |     0 |
+| rg             |     63.079 |     58.836 |     73.743 |     64.164 |       4.463 |    10631.1 |     0 |
+
+raw zgrep: 43115665 45624899 43881036 43317956 51173667 42785102 45364257 43807126 43639440 40668125
+raw zgrep_bmh: 85121280 86459018 86473334 97795453 111385141 84916402 88086199 110475146 83756667 105096978
+raw grep: 343308657 352913479 342413147 351542203 358455669 341745002 345923418 339542851 343409488 339584777
+raw rg: 60324809 66662803 61770381 73743184 60566212 67985742 65593377 63532466 58835511 62625017
+cmd zgrep ./zig-out/bin/zgrep -rnF const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_bmh ./zig-out/bin/zgrep --algo=bmh -rnF const /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF const /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b9_gemini_const_il.json (1588 bytes)

@@ -1,0 +1,24 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=15.89 9.87 6.87 6/2096 45885
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| z_l            |     41.355 |     38.208 |     45.800 |     41.658 |       2.518 |    16215.5 |     0 |
+| r_l            |     56.906 |     52.238 |     65.922 |     57.766 |       4.001 |    11784.3 |     0 |
+| z_c            |     41.251 |     37.316 |     49.997 |     42.767 |       4.342 |    16256.4 |     0 |
+| r_c            |     63.461 |     55.646 |     69.495 |     64.125 |       4.778 |    10567.0 |     0 |
+| z_q            |     11.164 |     10.407 |     13.643 |     11.672 |       1.128 |    60067.1 |     0 |
+| r_q            |      4.120 |      3.880 |      4.577 |      4.199 |       0.270 |   162752.7 |     0 |
+
+raw z_l: 42236717 43370941 44801113 42619297 39923374 40217196 45799592 40473899 38207744 38929523
+raw r_l: 55032849 60974451 56163005 56826284 52237628 61460725 57674811 65921920 54379278 56985132
+raw z_c: 49996642 47264439 45385433 39610845 39399978 39459590 42891418 46913207 39429293 37316427
+raw r_c: 64317963 69403705 68261805 69494985 61206567 62604668 55646333 61545605 68973143 59791634
+raw z_q: 11222320 10815484 12850584 12679482 10715306 13643156 12475638 11105880 10407316 10809242
+raw r_q: 4100988 3891323 4432382 4483247 4139681 3958860 4576713 3880423 4488016 4035034
+cmd z_l ./zig-out/bin/zgrep -rlF const /home/danny/Development/ISyCo/workspace/assembly
+cmd r_l rg -F --no-ignore --hidden -l const /home/danny/Development/ISyCo/workspace/assembly
+cmd z_c ./zig-out/bin/zgrep -rcF const /home/danny/Development/ISyCo/workspace/assembly
+cmd r_c rg -c --include-zero --no-ignore --hidden -F const /home/danny/Development/ISyCo/workspace/assembly
+cmd z_q ./zig-out/bin/zgrep -rqF const /home/danny/Development/ISyCo/workspace/assembly
+cmd r_q rg -q --no-ignore --hidden -F const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b9_gemini_modes_il.json (2291 bytes)

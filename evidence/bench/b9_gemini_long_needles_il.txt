@@ -1,0 +1,28 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=12.90 7.72 5.95 5/2047 43961
+
+bench: WARNING 'z24' exited 1 on warmup (first argv: ./zig-out/bin/zgrep)
+bench: WARNING 'b24' exited 1 on warmup (first argv: ./zig-out/bin/zgrep)
+bench: WARNING 'z48' exited 1 on warmup (first argv: ./zig-out/bin/zgrep)
+bench: WARNING 'b48' exited 1 on warmup (first argv: ./zig-out/bin/zgrep)
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| z12            |     42.536 |     40.041 |     69.536 |     47.034 |       9.568 |    15765.3 |     0 |
+| b12            |     57.730 |     50.662 |     82.516 |     60.358 |      10.129 |    11616.1 |     0 |
+| z24            |     43.877 |     39.321 |     55.444 |     44.966 |       5.151 |    15283.6 |     1 |
+| b24            |     48.686 |     43.317 |     79.556 |     50.982 |      10.495 |    13774.0 |     1 |
+| z48            |     41.691 |     39.302 |     68.244 |     46.127 |       9.934 |    16084.9 |     1 |
+| b48            |     43.380 |     39.750 |     79.828 |     48.055 |      12.343 |    15458.5 |     1 |
+
+raw z12: 40454645 46210391 40041186 40839750 41696512 40332545 43375724 55441730 52406976 69535604
+raw b12: 60622264 53952758 50662302 51418716 62951018 51714543 54837643 65899709 82516092 69007289
+raw z24: 45921938 41592005 43114001 46273249 44639383 39627427 42176326 39321450 55443964 51547257
+raw b24: 49004622 44796178 51131055 43316703 48366540 43474439 49827731 48176160 52167946 79555759
+raw z48: 44588948 40017672 44979874 40049321 42755476 39301904 40626336 40427964 60280910 68244053
+raw b48: 43604706 39750288 43156271 41502447 45740406 40509698 41713435 46626754 79827951 58120613
+cmd z12 ./zig-out/bin/zgrep -rnF builtin = @i /home/danny/Development/ISyCo/workspace/assembly
+cmd b12 ./zig-out/bin/zgrep --algo=bmh -rnF builtin = @i /home/danny/Development/ISyCo/workspace/assembly
+cmd z24 ./zig-out/bin/zgrep -rnF lation.builtins;pub con /home/danny/Development/ISyCo/workspace/assembly
+cmd b24 ./zig-out/bin/zgrep --algo=bmh -rnF lation.builtins;pub con /home/danny/Development/ISyCo/workspace/assembly
+cmd z48 ./zig-out/bin/zgrep -rnF helpers;pub const ptrdiff_t = c_long;pub const /home/danny/Development/ISyCo/workspace/assembly
+cmd b48 ./zig-out/bin/zgrep --algo=bmh -rnF helpers;pub const ptrdiff_t = c_long;pub const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b9_gemini_long_needles_il.json (2430 bytes)

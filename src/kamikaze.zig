@@ -49,54 +49,86 @@ pub const KamikazeStats = struct {
     early_aborted: bool = false,
 };
 
+pub const SpinLock = struct {
+    state: std.atomic.Value(bool) = .init(false),
+
+    pub fn lock(self: *SpinLock) void {
+        while (self.state.swap(true, .acquire)) {
+            while (self.state.load(.monotonic)) {
+                std.Thread.yield() catch {};
+            }
+        }
+    }
+
+    pub fn unlock(self: *SpinLock) void {
+        self.state.store(false, .release);
+    }
+};
+
 /// Thread-safe bounded channel for streaming directory batches from the Scout to Workers.
 pub const BatchChannel = struct {
     const QueueCapacity = 512;
 
     batches: [QueueCapacity]DirectoryBatch = undefined,
-    head: std.atomic.Value(usize) = .init(0),
-    tail: std.atomic.Value(usize) = .init(0),
-    closed: std.atomic.Value(bool) = .init(false),
+    head: usize = 0,
+    tail: usize = 0,
+    count: usize = 0,
+    closed: bool = false,
     aborted: std.atomic.Value(bool) = .init(false),
+    lock: SpinLock = .{},
 
     pub fn init() BatchChannel {
         return .{};
     }
 
     pub fn push(self: *BatchChannel, batch: DirectoryBatch) bool {
-        while (!self.aborted.load(.acquire)) {
-            const h = self.head.load(.monotonic);
-            const t = self.tail.load(.acquire);
-            if (h - t < QueueCapacity) {
-                if (self.head.cmpxchgWeak(h, h + 1, .release, .monotonic) == null) {
-                    self.batches[h % QueueCapacity] = batch;
-                    return true;
-                }
-            } else {
-                std.Thread.yield() catch {};
+        while (true) {
+            if (self.aborted.load(.acquire)) return false;
+            self.lock.lock();
+            if (self.aborted.load(.acquire)) {
+                self.lock.unlock();
+                return false;
             }
+            if (self.count < QueueCapacity) {
+                self.batches[self.head] = batch;
+                self.head = (self.head + 1) % QueueCapacity;
+                self.count += 1;
+                self.lock.unlock();
+                return true;
+            }
+            self.lock.unlock();
+            std.Thread.yield() catch {};
         }
-        return false;
     }
 
     pub fn pop(self: *BatchChannel) ?DirectoryBatch {
         while (true) {
             if (self.aborted.load(.acquire)) return null;
-            const t = self.tail.load(.monotonic);
-            const h = self.head.load(.acquire);
-            if (t < h) {
-                if (self.tail.cmpxchgWeak(t, t + 1, .release, .monotonic) == null) {
-                    return self.batches[t % QueueCapacity];
-                }
-            } else {
-                if (self.closed.load(.acquire)) return null;
-                std.Thread.yield() catch {};
+            self.lock.lock();
+            if (self.aborted.load(.acquire)) {
+                self.lock.unlock();
+                return null;
             }
+            if (self.count > 0) {
+                const b = self.batches[self.tail];
+                self.tail = (self.tail + 1) % QueueCapacity;
+                self.count -= 1;
+                self.lock.unlock();
+                return b;
+            }
+            if (self.closed) {
+                self.lock.unlock();
+                return null;
+            }
+            self.lock.unlock();
+            std.Thread.yield() catch {};
         }
     }
 
     pub fn close(self: *BatchChannel) void {
-        self.closed.store(true, .release);
+        self.lock.lock();
+        self.closed = true;
+        self.lock.unlock();
     }
 
     pub fn abort(self: *BatchChannel) void {
@@ -131,10 +163,11 @@ pub fn scoutTree(
     channel: *BatchChannel,
     root: [:0]const u8,
     config: ScoutConfig,
+    mode: Mode,
     found: *const std.atomic.Value(bool),
     stats: *KamikazeStats,
 ) Allocator.Error!void {
-    try scoutDir(gpa, channel, root, 0, config, found, stats);
+    try scoutDir(gpa, channel, root, 0, config, mode, found, stats);
 }
 
 fn scoutDir(
@@ -143,11 +176,12 @@ fn scoutDir(
     dir: [:0]const u8,
     depth: usize,
     config: ScoutConfig,
+    mode: Mode,
     found: *const std.atomic.Value(bool),
     stats: *KamikazeStats,
 ) Allocator.Error!void {
     if (depth > config.max_depth) return;
-    if (found.load(.acquire) or channel.aborted.load(.acquire)) {
+    if ((mode == .quiet and found.load(.acquire)) or channel.aborted.load(.acquire)) {
         stats.early_aborted = true;
         return;
     }
@@ -171,7 +205,7 @@ fn scoutDir(
 
     var buf: [32 * 1024]u8 = undefined;
     while (true) {
-        if (found.load(.acquire) or channel.aborted.load(.acquire)) {
+        if ((mode == .quiet and found.load(.acquire)) or channel.aborted.load(.acquire)) {
             stats.early_aborted = true;
             return;
         }
@@ -240,25 +274,9 @@ fn scoutDir(
     }
 
     for (subdirs.items) |sd| {
-        try scoutDir(gpa, channel, sd, depth + 1, config, found, stats);
+        try scoutDir(gpa, channel, sd, depth + 1, config, mode, found, stats);
     }
 }
-
-pub const SpinLock = struct {
-    state: std.atomic.Value(bool) = .init(false),
-
-    pub fn lock(self: *SpinLock) void {
-        while (self.state.swap(true, .acquire)) {
-            while (self.state.load(.monotonic)) {
-                std.Thread.yield() catch {};
-            }
-        }
-    }
-
-    pub fn unlock(self: *SpinLock) void {
-        self.state.store(false, .release);
-    }
-};
 
 pub const KamikazeContext = struct {
     gpa: Allocator,
@@ -395,7 +413,7 @@ pub fn runKamikazePipeline(
         if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
             const m = stx.mode & linux.S.IFMT;
             if (m == linux.S.IFDIR) {
-                try scoutTree(gpa, &channel, root, config, &found, stats);
+                try scoutTree(gpa, &channel, root, config, mode, &found, stats);
             } else if (m == linux.S.IFREG) {
                 const single_files = try gpa.alloc([:0]const u8, 1);
                 single_files[0] = try gpa.dupeZ(u8, root);

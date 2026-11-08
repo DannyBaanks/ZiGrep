@@ -1,0 +1,27 @@
+# Matcher crossover sweep — bmh vs memchr
+
+- haystack dir: `/home/danny/Development/ISyCo/workspace/assembly`
+- collected: 64515332 text bytes in 3240 files (budget 67108864, maxfile 1048576)
+- 12 needle samples per length, median of 3 runs each, single-threaded
+- host loadavg: 4.33 6.46 5.26 10/2028 33583
+- matchers under test: imported from `src/search.zig`, not a copy
+
+| needle len | bmh MB/s | memchr MB/s | bmh / memchr | winner |
+|---:|---:|---:|---:|:--|
+| 1 | 372.4 | 4098.7 | 0.09× | memchr |
+| 2 | 734.5 | 6884.0 | 0.11× | memchr |
+| 3 | 1021.6 | 6725.2 | 0.15× | memchr |
+| 4 | 1345.5 | 5139.4 | 0.26× | memchr |
+| 5 | 1888.7 | 10078.4 | 0.19× | memchr |
+| 6 | 2246.1 | 10005.4 | 0.22× | memchr |
+| 8 | 2849.5 | 9588.6 | 0.30× | memchr |
+| 10 | 3306.7 | 10652.4 | 0.31× | memchr |
+| 12 | 3825.7 | 8169.1 | 0.47× | memchr |
+| 16 | 4733.8 | 14902.5 | 0.32× | memchr |
+| 20 | 5792.9 | 13062.0 | 0.44× | memchr |
+| 24 | 6668.5 | 15774.2 | 0.42× | memchr |
+| 32 | 8299.1 | 15599.9 | 0.53× | memchr |
+| 48 | 10144.1 | 13576.3 | 0.75× | memchr |
+| 64 | 11546.0 | 14173.6 | 0.81× | memchr |
+
+Alignment control: 180 samples recounted with both kernels, 0 disagreements (must be 0).

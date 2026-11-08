@@ -1,0 +1,74 @@
+# Verification of commit 5c89b40 (rarest-byte SIMD + scratch buffers + early exit)
+date: 2026-11-08T03:19:00-06:00
+host: Linux 7.0.0-42-generic cpus=12 loadavg=4.11 5.43 5.08
+zig: 0.16.0
+commit: 5c89b40ae5ab25b7590ce6cd2c8d18f12d39673d subject: perf: optimize zgrep with rarest-byte SIMD, thread scratch buffers, and early exit
+corpus census (regular files): files=5338 bytes=670595588 text_bytes=403710052 nul_in_first_8k=1139  path=/home/danny/Development/ISyCo/workspace/assembly
+
+=== 1. build + unit tests ===
+test success
++- run test 24 pass (24 total) 69ms MaxRSS:4M
+   +- compile test Debug native cached 8ms MaxRSS:34M
+
+
+=== 2. CLI control vs grep (scripts/cli_controls.sh) ===
+zgrep missing path             exit=2 | zgrep: /nonexistent/xyz: NOENT
+zgrep bad flag                 exit=2 | zgrep: unrecognized option: '-Z'<NL>try 'zgrep --help' for usage
+zgrep newline pattern          exit=2 | zgrep: patterns containing a newline are not supported
+zgrep -V                       exit=0 | zgrep 0.1.0
+
+=== 3. real corpus: zgrep vs grep byte-identity (-r) ===
+--- pattern [const] ---
+zgrep: 4102 lines, 2165901 bytes
+grep : 4102 lines, 2165901 bytes
+raw: IDENTICAL
+--- pattern [pub ] ---
+zgrep: 3042 lines, 569423 bytes
+grep : 3042 lines, 569423 bytes
+raw: IDENTICAL
+--- pattern [fn ] ---
+zgrep: 1338 lines, 241630 bytes
+grep : 1338 lines, 241630 bytes
+raw: IDENTICAL
+
+=== 4. real corpus: -c and -l byte-identity ===
+-c vs grep: IDENTICAL
+-l vs grep: IDENTICAL
+-l file counts: zgrep=343 grep=343 rg=343
+
+=== 5. algo x threads identity (9 combos + grep reference) ===
+auto -j1 sha256=827b5695d2cccad3
+auto -j2 sha256=827b5695d2cccad3
+auto -j12 sha256=827b5695d2cccad3
+bmh -j1 sha256=827b5695d2cccad3
+bmh -j2 sha256=827b5695d2cccad3
+bmh -j12 sha256=827b5695d2cccad3
+memchr -j1 sha256=827b5695d2cccad3
+memchr -j2 sha256=827b5695d2cccad3
+memchr -j12 sha256=827b5695d2cccad3
+grep    sha256=827b5695d2cccad3
+
+=== 6. 128 KB scratch-cutoff protection (match beyond the cutoff is found) ===
+file: /home/danny/Development/ISyCo/workspace/assembly/holographic/quine_analysis/quine_lutter/flow/out.csv  size=48600877
+needle [238.84526194892106] lives only in the last 64 KiB
+offset=48535488
+-l zgrep: 1 / grep: 1
+-r zgrep bytes: 57 / grep bytes: 57
+-q exit=0 (0=found)
+
+=== 7. synthetic corpus vs ground truth ===
+planted: zgrep=195467 truth=195467
+rare   : zgrep=3 truth=3
+-r vs grep: IDENTICAL
+
+=== 8. -q exit codes ===
+match  exit=0
+absent exit=1
+
+=== 9. --stats self-report ===
+zgrep-stats: files=5338 bytes=403710052 matched_files=343 matched_lines=4102 errors=0 threads=12 elapsed_s=0.0367 throughput_MBps=10999.0
+zgrep-stats: files=5338 bytes=403710052 matched_files=343 matched_lines=4102 errors=0 threads=12 elapsed_s=0.1010 throughput_MBps=3996.7
+
+Timing evidence (separate, median of 10 interleaved): evidence/bench/b9_gemini_const_il.txt,
+b9_gemini_pattern_matrix_il.txt, b9_gemini_long_needles_il.txt, b9_gemini_modes_il.txt,
+b9_matcher_sweep.txt

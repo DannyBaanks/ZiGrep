@@ -1,0 +1,18 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=5.83 6.31 6.41 3/1875 31564
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep_std      |     10.915 |     10.472 |     12.178 |     11.061 |       0.476 |    61440.7 |     0 |
+| zgrep_k        |      4.475 |      3.766 |      5.536 |      4.457 |       0.542 |   149870.0 |     0 |
+| grep           |      1.612 |      1.392 |      2.143 |      1.738 |       0.273 |   416011.5 |     0 |
+| rg             |      3.708 |      3.018 |      4.711 |      3.747 |       0.450 |   180849.6 |     0 |
+
+raw zgrep_std: 10877182 11079593 10951842 10873986 10729614 11349842 10471989 10755092 11343910 12178301
+raw zgrep_k: 4969563 4349506 5535829 3765978 4675961 3979950 4662004 4016620 4599527 4019265
+raw grep: 1391909 1849491 1565426 1584522 1525380 2014211 1539968 2143485 1639406 2125911
+raw rg: 3483586 3689784 3726274 3596849 4710947 3776598 3945917 3424245 4092974 3018321
+cmd zgrep_std zig-out/bin/zgrep -qF const /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_k zig-out/bin/zgrep -qF -k const /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rqIF const /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -q -F --no-ignore --hidden const /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b10_kamikaze_quiet.json (1509 bytes)

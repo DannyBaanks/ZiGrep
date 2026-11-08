@@ -1,0 +1,18 @@
+bench: runs=10 warmup=3 corpus_bytes=670595588 nproc=12 loadavg=6.22 6.41 6.45 2/1846 30268
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep_std      |     41.800 |     35.583 |     43.954 |     41.201 |       2.400 |    16043.0 |     0 |
+| zgrep_k        |     31.447 |     29.304 |     35.626 |     32.236 |       2.071 |    21324.8 |     0 |
+| grep           |    322.202 |    315.401 |    330.079 |    321.748 |       4.049 |     2081.3 |     0 |
+| rg             |     62.576 |     57.440 |     65.476 |     62.050 |       2.466 |    10716.5 |     0 |
+
+raw zgrep_std: 41540424 39077248 41770547 42939768 43953976 42196759 42804163 41829328 35582510 40315408
+raw zgrep_k: 34155033 35625842 33268836 31393596 29303553 31257129 30084472 31499906 31137324 34629697
+raw grep: 322000523 319669005 330078767 322402970 317592946 322691212 315400940 319681297 324527387 323439529
+raw rg: 62093197 63617115 64256148 63469808 61465926 63058464 59085235 57439908 65475623 60543159
+cmd zgrep_std zig-out/bin/zgrep -rnF malbolge /home/danny/Development/ISyCo/workspace/assembly
+cmd zgrep_k zig-out/bin/zgrep -rnF -k malbolge /home/danny/Development/ISyCo/workspace/assembly
+cmd grep grep -rnIF malbolge /home/danny/Development/ISyCo/workspace/assembly
+cmd rg rg -n -F --no-ignore --hidden malbolge /home/danny/Development/ISyCo/workspace/assembly
+json evidence/bench/b10_kamikaze_malbolge.json (1583 bytes)

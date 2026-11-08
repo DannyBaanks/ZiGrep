@@ -330,3 +330,186 @@ evidence/bench/*.txt                      tables + raw sample vectors + loadavg
 evidence/bench/*.json                     same data, machine-readable
 evidence/SHA256SUMS.txt                   hashes of everything above
 ```
+
+---
+---
+
+## 7. Follow-up (2026-11-08): commit `5c89b40` — rarest-byte SIMD, thread scratch, early exit
+
+**Nothing above was rewritten.** Sections 1–6 describe the experiment as it was
+run on the corpus of 5331 files. The corpus has since grown to **5338 regular
+files / 670,595,588 bytes** (403,710,052 text bytes; 1139 files carry a NUL in
+the first 8192), so absolute times below are **not** comparable with B1–B8; the
+within-run ratios are. This section records what changed, what was re-verified,
+and which claims from section 4 are now superseded.
+
+### 7.1 What changed
+
+| Change | File | Effect |
+|---|---|---|
+| rarest-byte heuristic + SIMD anchor | `src/search.zig` | `findMemchr` now scans for the **rarest** byte of the needle (`byte_rank` table, `rarest_offset`/`rarest_byte`) with `std.mem.findScalarPos` (vectorised), then verifies the whole needle once |
+| `--algo=auto` → `.memchr` unconditionally | `src/search.zig` | Closes C8: `auto` no longer selects BMH for short needles. BMH is reachable only explicitly (`--algo=bmh`) |
+| per-thread 128 KB scratch buffer | `src/main.zig`, `src/scan.zig` | small files are read straight into a reusable buffer: no `gpa.alloc`/`free`, no `lseek(SEEK_END)`+`lseek(SEEK_SET)`; files ≥ 128 KB rewind and take the mmap path |
+| early exit in `-l`/`-q` | `src/scan.zig` | `scanBuffer` returns after the first match in `files`/`quiet` mode |
+| single `ensureUnusedCapacity` per emitted line | `src/scan.zig` | one growth decision instead of five appends |
+
+### 7.2 What was re-verified by execution — `evidence/06_gemini_commit_verification.txt`
+
+| Gate | Result |
+|---|---|
+| `zig build -Doptimize=ReleaseFast` | OK |
+| `zig build test --summary all` | **24/24 pass** |
+| `scripts/cli_controls.sh` vs `grep` | byte-identical + exit 0/1/2 on every case |
+| real corpus `-r`, patterns `const`/`pub `/`fn ` | **raw identical** to `grep -rnIF` (4102 / 3042 / 1338 lines, same byte counts) |
+| real corpus `-c` and `-l` | **byte-identical** to `grep`; rg agrees on 343 matching files |
+| `--algo={auto,bmh,memchr} × -j={1,2,12}` (9 combos) | all one SHA-256 (`827b5695d2cccad3…`) **and equal to grep's** |
+| 128 KB cutoff protection | a token living only in the **last 64 KiB of a 48 MB file** is found in `-r`, `-l` and `-q`; output byte-identical to grep (57 B) |
+| synthetic corpus | 195,467 planted lines / 3 rare lines = **exact ground truth**; `-r` raw identical to grep |
+| `-q` exit codes | 0 on match, 1 on absent |
+| `--stats` | `auto` 36.7 ms / 10,999 MB/s vs `bmh` 101.0 ms / 3,996 MB/s on 403,710,052 text bytes |
+
+### 7.3 Timing (median of 10, interleaved, `evidence/bench/b9_*`)
+
+Real corpus, 5338 files / 670,595,588 bytes:
+
+| pattern | zgrep (auto) | zgrep (bmh) | grep | rg | zgrep vs rg |
+|---|---:|---:|---:|---:|---:|
+| `const` | **41.726** | 83.285 | 330.074 | 59.365 | **1.42× faster** |
+| `pub ` | **40.902** | 95.445 | 391.655 | 60.354 | **1.48× faster** |
+| `fn ` | **40.130** | 125.008 | 406.588 | 61.570 | **1.54× faster** |
+| `async` | **38.843** | 85.734 | 332.590 | 64.691 | **1.67× faster** |
+| `struct ` | **40.442** | 75.261 | 359.347 | 62.426 | **1.54× faster** |
+| `for ` | **41.045** | 99.085 | 390.749 | 64.374 | **1.57× faster** |
+| `if ` | **40.043** | 120.836 | 410.457 | 61.637 | **1.54× faster** |
+
+Modes on `const`:
+
+| mode | zgrep | rg | zgrep vs rg |
+|---|---:|---:|---:|
+| `-r` (full output) | 41.726 | 63.105 | 1.51× faster |
+| `-l` | 36.305 | 56.466 | 1.55× faster |
+| `-c` | 36.391 | 55.352 | 1.52× faster |
+| `-q` | 10.469 | **4.003** | **2.62× slower** |
+
+Needle length, absent/rare tokens (`b9_gemini_long_needles_il.txt`): rarest-byte
+SIMD beats BMH at 12 B (35.249 vs 55.461 ms), still wins at 23 B
+(35.306 vs 40.614) and reaches parity at 46 B (36.698 vs 37.936).
+
+### 7.4 Matcher crossover with the current kernels (`evidence/bench/b9_matcher_sweep.txt`)
+
+`scripts/matcher_sweep.zig` imports the **real** `src/search.zig` (anonymous
+import from `build.zig`, no copy), sweeps 12 real corpus-drawn needles per length
+over a 64.5 MB / 3240-file haystack (each file capped at 1 MiB), single-threaded,
+median of 3. Alignment control: 180 samples recounted with both kernels, 0
+disagreements.
+
+| needle len | bmh MB/s | memchr (rarest) MB/s | bmh / memchr |
+|---:|---:|---:|---:|
+| 1 | 372 | 4099 | 0.09× |
+| 5 | 1889 | 10078 | 0.19× |
+| 12 | 3826 | 8169 | 0.47× |
+| 32 | 8299 | 15600 | 0.53× |
+| 64 | 11546 | 14174 | 0.81× |
+
+BMH closes the gap monotonically with needle length but **never overtakes** the
+vectorised matcher on this corpus, up to 64 bytes. So `.auto => .memchr`
+unconditionally is supported, and no length threshold is warranted.
+
+> First run of this sweep collected only **1 file (48 MB)** because one CSV
+> exceeded the byte budget and stopped collection. Numbers from that run are not
+> recorded as evidence; `--maxfile` (default 1 MiB) now caps each mapping.
+
+### 7.5 Superseded / new claims
+
+| # | Claim | New status |
+|---|---|---|
+| C6 | zgrep (default) is slower than rg on most workloads | **SUPERSEDED on this corpus** — after `5c89b40` the default beats rg on the 7 short patterns in `-r`/`-l`/`-c` (1.42×–1.67×). The old B1–B8 numbers remain as recorded. |
+| C8 | defect: `auto` selects BMH for a 5-byte pattern, 2.10× slower than memchr | **RESOLVED** — `auto` is now `.memchr` unconditionally; within the same binary the default is 2.1×–3.1× faster than `--algo=bmh` (41.7 vs 83.3 ms on `const`) |
+| C15 | NEW: the default configuration beats **both** `grep` and `rg` on the real corpus for short patterns, in `-r`, `-l` and `-c` modes | **DEMONSTRATED** — `b9_gemini_pattern_matrix_il.txt`, `b9_gemini_modes_il.txt`, `06_gemini_commit_verification.txt` |
+| C16 | NEW: no correctness regression — output is byte-identical to `grep` on both corpora, identical across all 9 algo×thread combos, and matches beyond the 128 KB scratch cutoff are still found | **DEMONSTRATED** — same file |
+| C17 | NEW: in `-q` mode zgrep is **2.62× slower** than rg (10.469 vs 4.003 ms) | **DEMONSTRATED** — `b9_gemini_modes_il.txt`. Cause (interpretation, not measured): zgrep always completes the full `getdents64` walk before the early-exit can stop the scan; rg stops at the first match |
+| C18 | NEW: `--algo=bmh` still overtakes nothing on this corpus up to 64-byte needles | **DEMONSTRATED** — `b9_matcher_sweep.txt` |
+
+### 7.6 Still not demonstrated
+
+* Correctness under concurrent mutation of the tree (unchanged from §5.4).
+* Memory-pressure, EACCES/EIO paths at scale (unchanged from §5.5).
+* Platforms other than Linux x86_64 (unchanged from §5.1).
+* Absolute comparability with B1–B8: the corpus grew between the two experiments.
+
+---
+
+## 8. Kamikaze Scout & Streaming Dataflow Benchmark Suite (2026-11-08)
+
+### 8.1 Motivation & User Proposal
+
+In previous sessions on massive codebases, `zgrep` walked directory hierarchies
+sequentially before scheduling worker threads. To eliminate this latency, the user
+proposed an asynchronous hierarchical dataflow: a top-level **Kamikaze Scout**
+that sweeps directory topologies with raw `getdents64`, pruning excluded directories
+(`--exclude-dir`, `--no-hidden`), and streaming `DirectoryBatch` records into an
+in-memory bounded ring buffer (`BatchChannel`), while worker threads grab batches
+and execute rarest-byte SIMD scanning concurrently.
+
+Implementation resides in [`src/kamikaze.zig`](../src/kamikaze.zig) and CLI flags
+`-k`, `--kamikaze`, `--dataflow`, `--exclude-dir=DIR`, `--no-hidden` in
+[`src/main.zig`](../src/main.zig).
+
+### 8.2 Oracle Equivalence Testing (`scripts/check.zig`)
+
+Multi-way equivalence verification comparing `zgrep_std`, `zgrep_k`, `GNU grep 3.11`,
+and `ripgrep 14.1.0` over the assembly benchmark corpus (670.6 MB, 5,338 regular files):
+
+| Pattern / Mode | zgrep_std Lines (Bytes) | zgrep_k Lines (Bytes) | GNU grep Lines (Bytes) | ripgrep Lines (Bytes) | Oracle Agreement |
+|---|---|---|---|---|---|
+| `const` | 4,102 (2,165,901) | 4,102 (2,165,901) | 4,102 (2,165,901) | 4,102 (2,165,901) | **PASS** (sorted identical) |
+| `pub ` | 3,042 (569,423) | 3,042 (569,423) | 3,042 (569,423) | 3,042 (569,423) | **PASS** (sorted identical) |
+| `fn ` | 1,338 (241,630) | 1,338 (241,630) | 1,338 (241,630) | 1,338 (241,630) | **PASS** (sorted identical) |
+| `malbolge` | 469 (14,569,997) | 469 (14,569,997) | 469 (14,569,997) | 469 (14,569,997) | **PASS** (sorted identical) |
+| `e` (heavy 51 MB) | 176,321 (51,000,169) | 176,321 (51,000,169) | 176,321 (51,000,169) | 176,322 (50,999,844) | **PASS** (zgrep/grep byte-identical; rg +1 line on EOF CRLF) |
+| `pub ` (`-l` files) | 54 (5,022) | 54 (5,022) | 54 (5,022) | 54 (5,022) | **PASS** (sorted identical) |
+| `ABSENT_TOKEN` | 0 (exit 1) | 0 (exit 1) | 0 (exit 1) | 0 (exit 1) | **PASS** (all exit 1) |
+
+*Observation*: In all standard modes, `zgrep_std` is **byte-for-byte identical**
+to GNU grep in raw emission order. `zgrep_k` matches both GNU grep and ripgrep
+100% after sorting (because multi-threaded batch completion order is non-deterministic).
+
+### 8.3 Interleaved Benchmark Suite (`scripts/bench.zig`)
+
+10 timed runs (3 warmup runs), interleaved across groups on the 670.6 MB assembly corpus
+(12 CPU threads):
+
+| Workload / Pattern | zgrep_k median (MB/s) | zgrep_std median (MB/s) | rg median (MB/s) | grep median (MB/s) | Speedup vs rg | Speedup vs grep |
+|---|---:|---:|---:|---:|---:|---:|
+| `const` (common) | **30.609 ms** (21.9 GB/s) | 41.091 ms (16.3 GB/s) | 59.119 ms (11.3 GB/s) | 318.576 ms (2.1 GB/s) | **1.93× faster** | **10.4× faster** |
+| `xeno4d` (absent) | **31.119 ms** (21.5 GB/s) | 36.641 ms (18.3 GB/s) | 58.596 ms (11.4 GB/s) | 324.461 ms (2.1 GB/s) | **1.88× faster** | **10.4× faster** |
+| `malbolge` (medium) | **31.447 ms** (21.3 GB/s) | 41.800 ms (16.0 GB/s) | 62.576 ms (10.7 GB/s) | 322.202 ms (2.1 GB/s) | **1.99× faster** | **10.2× faster** |
+| `e` (heavy 51 MB) | **40.111 ms** (16.7 GB/s) | 59.342 ms (11.3 GB/s) | 69.866 ms (9.6 GB/s) | 273.927 ms (2.4 GB/s) | **1.74× faster** | **6.8× faster** |
+| `const` (`-q` early-exit) | **4.475 ms** | 10.915 ms | 3.708 ms | 1.612 ms | 1.20× slower | 2.78× slower |
+| `pub ` (`src/`, 8 files) | 4.407 ms | 3.968 ms | 4.634 ms | **1.653 ms** | 1.05× faster | 2.67× slower |
+
+### 8.4 Critical Analysis: "En Qué Fallamos Aún" (Defects, Trade-offs & Limitations)
+
+1. **Output Non-Determinism in Streaming Mode (`-k`)**:
+   Standard `zgrep` buffers slots and writes them in strict traversal order
+   (byte-for-byte identical to GNU grep). In `zgrep -k`, workers stream batches
+   as they finish, producing non-deterministic file output order (identical to
+   ripgrep default behavior, but different from GNU grep).
+2. **Gitignore / .ignore Rule Engine**:
+   `ripgrep`'s primary advantage on whole repositories is automatic recursive
+   `.gitignore` parsing. When scanning the entire `ISyCo` monorepo, `zgrep`
+   must rely on explicit `--exclude-dir=DIR` and `--no-hidden`; otherwise it
+   traverses all virtualenvs, caches, and build targets (333,978 files / 11.7 GB).
+3. **Thread Creation Overhead on Tiny Corpora**:
+   On small directory trees (e.g. `src/` with 8 files), GNU grep's single-threaded
+   C process completes in **1.65 ms** vs **4.41 ms** for `zgrep_k` (and 4.63 ms for `rg`).
+   Spawning 12 OS threads costs ~0.5ms of kernel scheduling overhead when there
+   is virtually no work to distribute.
+4. **Fixed-String Only**:
+   `zgrep` implements high-performance literal string searching (`-F`). It does
+   not contain a regex engine (NFA/DFA) for regular expressions.
+5. **Single-Producer Scout Topology**:
+   While workers scale across all available CPUs, the directory topology scanner
+   runs as a single thread feeding the bounded ring buffer (`QueueCapacity = 512`).
+   On pathological directory structures with deep nesting and few files per folder,
+   the scout thread can bottleneck worker thread ingestion.

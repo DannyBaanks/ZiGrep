@@ -14,6 +14,31 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
+    // The matcher sweep imports src/search.zig directly (as an anonymous
+    // import), so it can never drift from the matchers the binary ships.
+    const sweep_mod = b.createModule(.{
+        .root_source_file = b.path("scripts/matcher_sweep.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sweep_mod.addAnonymousImport("matcher", .{
+        .root_source_file = b.path("src/search.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sweep_mod.addAnonymousImport("walk", .{
+        .root_source_file = b.path("src/walk.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const sweep_exe = b.addExecutable(.{ .name = "matcher_sweep", .root_module = sweep_mod });
+    b.installArtifact(sweep_exe);
+    const sweep_run = b.addRunArtifact(sweep_exe);
+    sweep_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| sweep_run.addArgs(args);
+    const sweep_step = b.step("sweep", "Run the bmh vs memchr crossover sweep");
+    sweep_step.dependOn(&sweep_run.step);
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);

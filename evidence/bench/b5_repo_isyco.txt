@@ -1,0 +1,12 @@
+bench: runs=5 warmup=1 corpus_bytes=0 nproc=12 loadavg=5.08 6.13 6.36 1/1851 32144
+
+| label          |  median ms |     min ms |     max ms |    mean ms |   stddev ms |       MB/s |  exit |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| zgrep_k        |  64843.881 |  56714.104 |  67708.311 |  63900.800 |    4188.237 |        0.0 |     0 |
+| rg             |   9596.061 |    638.145 |  19701.751 |   9255.402 |    6925.633 |        0.0 |     0 |
+
+raw zgrep_k: 56714104130 65404238644 64833466875 64843880764 67708310659
+raw rg: 9596060819 638144811 9903197031 19701750686 6437854779
+cmd zgrep_k zig-out/bin/zgrep -rnF -k --exclude-dir=.git --exclude-dir=.zig-cache --no-hidden ISyCo /home/danny/Development/ISyCo
+cmd rg rg -n -F --glob !.git --glob !.zig-cache ISyCo /home/danny/Development/ISyCo
+json evidence/bench/b5_repo_isyco.json (831 bytes)
