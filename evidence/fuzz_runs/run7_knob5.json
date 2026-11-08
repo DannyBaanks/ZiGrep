@@ -1,0 +1,686 @@
+{
+ "iters": 20000,
+ "knob": 5,
+ "seed": 107,
+ "workers": 4,
+ "secs": 52.7,
+ "counts": {
+  "agree_all": 13886,
+  "zg_with_rg": 2158,
+  "zg_alone": 1293,
+  "zg_with_grep": 2024,
+  "all_differ": 639
+ },
+ "samples": {
+  "zg_alone": [
+   {
+    "i": 10,
+    "pat": "streampub\\s+(const|fn)||",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 106,
+    "pat": "|allocator(a|b|c)result()\\.std\\.(mem|math)(a|a)*",
+    "flags": [
+     "-q",
+     "-l"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 113,
+    "pat": "stream[a-z]walkresult\\wpatternconst\\.||[0-9]",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 116,
+    "pat": "||errorfnliteral",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 126,
+    "pat": "std\\.}(a|a)*",
+    "flags": [
+     "-c",
+     "-L",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 152,
+    "pat": "^|usizeomega",
+    "flags": [
+     "-w",
+     "-q",
+     "-l",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 172,
+    "pat": "usizekamikazenadírerror{errorscanresult",
+    "flags": [
+     "-w",
+     "-L",
+     "-F",
+     "-m",
+     "10"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 198,
+    "pat": "(|b)fnsearcher(a*)*error",
+    "flags": [
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 210,
+    "pat": "[a-z]searcher||return.()stream*(|b)allocator",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 251,
+    "pat": "walk$corrupt[0-9]\\.[[:alpha:]]",
+    "flags": [
+     "-L",
+     "-a",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 282,
+    "pat": "(a|a)*?pub\\s+(const|fn)error[a-z]",
+    "flags": [
+     "-q",
+     "-L",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 291,
+    "pat": "()(|b)patternallocator",
+    "flags": [
+     "-i",
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 319,
+    "pat": "]}(a|a)*returnomega(a|b|c)searcher(a|b|c)||\\d",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 321,
+    "pat": "^{1,5}über(a|b|c)result",
+    "flags": [
+     "-l",
+     "-w",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 328,
+    "pat": "^{1,5}errora{3}",
+    "flags": [
+     "-i",
+     "-q",
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 373,
+    "pat": "(a|a)*fn$omegaliteral+(a+)+{1,5}usize",
+    "flags": [
+     "-q",
+     "-a",
+     "-L",
+     "-m",
+     "2"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 381,
+    "pat": "errorbuffer(a+)+[a-z]{0,0}return",
+    "flags": [
+     "-l",
+     "-i",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 412,
+    "pat": "testerror||nadír?",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 480,
+    "pat": "nadír?omega[0-9]corrupt+",
+    "flags": [
+     "-w",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 517,
+    "pat": "(a|)(|b)(a*)*vectortest\\..*return",
+    "flags": [
+     "-F",
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 520,
+    "pat": "(|b)\\.kamikaze",
+    "flags": [
+     "-a",
+     "-w",
+     "-L",
+     "-m",
+     "10"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 525,
+    "pat": "buffer|]*",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 558,
+    "pat": "returnliteral{0,0}\\wresultusize",
+    "flags": [
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 562,
+    "pat": "|nadírcorrupt[[:alpha:]](|b)",
+    "flags": [
+     "-F",
+     "-L",
+     "-m",
+     "5"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 570,
+    "pat": ".allocator\\d",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   }
+  ],
+  "all_differ": [
+   {
+    "i": 103,
+    "pat": "fn\\s+\\w+\\(std\\.(mem|math)corrupt||alpha",
+    "flags": [
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 107,
+    "pat": "a{3}walk[a-z]?filterkamikaze",
+    "flags": [
+     "-l",
+     "-v",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 121,
+    "pat": "[a-z]alpha{0,1}omega(a|)$buffer",
+    "flags": [
+     "-c",
+     "-L",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 177,
+    "pat": "{(a|)pub|",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 204,
+    "pat": "io_uringpub\\s+(const|fn)kamikazefilterio_uring|",
+    "flags": [
+     "-c",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 224,
+    "pat": "||fnstd\\.(mem|math)scanstd\\.(mem|math)fn\\s+\\w+\\(error(a|a)*",
+    "flags": [
+     "-c",
+     "-L",
+     "-w"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 312,
+    "pat": "filterscan|(|b)[a-z]\\w",
+    "flags": [
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 336,
+    "pat": "literal.\\.(a|a)*filter()",
+    "flags": [
+     "-v",
+     "-L",
+     "-w"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 344,
+    "pat": "{0,1}||.",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 355,
+    "pat": "const\\\\omega}buffer}[[:alpha:]]",
+    "flags": [
+     "-F",
+     "-v",
+     "-L",
+     "-m",
+     "10"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 414,
+    "pat": "{10,2}[[:alpha:]]\\derrorsearcher||corrupttest\\s",
+    "flags": [
+     "-c",
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 2,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 420,
+    "pat": "std\\.(mem|math)alphascanvectorstdio_uringa{3}{",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 432,
+    "pat": "[0-9]searcher[(a+)+)[^a-z]|||",
+    "flags": [
+     "-L",
+     "-i",
+     "-v"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 770,
+    "pat": "pub\\s+(const|fn)const\\w",
+    "flags": [
+     "-L",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 774,
+    "pat": "\\.||bufferwalk[^a-z]",
+    "flags": [
+     "-L",
+     "-a",
+     "-w",
+     "-m",
+     "5"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 778,
+    "pat": "||{0,1}scan||}+searchertest[^a-z]",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 799,
+    "pat": "pub\\s+(const|fn){\\d{(a*)*io_uring\\s",
+    "flags": [
+     "-a",
+     "-L",
+     "-w",
+     "-m",
+     "10"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 829,
+    "pat": "teststd\\.(mem|math){0,1}(a|)test||[0-9]\\.{",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 837,
+    "pat": "{pub\\s+(const|fn){0,1}[[:alpha:]]test||]fnsearcherpub\\s+(const|fn)",
+    "flags": [
+     "-i",
+     "-w",
+     "-v",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 887,
+    "pat": "errorfn\\s+\\w+\\(returnüber",
+    "flags": [
+     "-c",
+     "-v",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 890,
+    "pat": "{10,2}allocator[[:alpha:]]alpha*result",
+    "flags": [
+     "-a",
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   },
+   {
+    "i": 893,
+    "pat": "testio_uringpub\\s+(const|fn)stream\\d{2,}walk\\.",
+    "flags": [
+     "-L",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 897,
+    "pat": "^(|b)}über$scan}||||(a|b|c)",
+    "flags": [
+     "-c",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 930,
+    "pat": "{0,1}?].",
+    "flags": [
+     "-l",
+     "-a",
+     "-c",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 2,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 976,
+    "pat": "scanfn\\s+\\w+\\([[$||\\wa{3}fn\\s+\\w+\\([a-z]",
+    "flags": [
+     "-a",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 2,
+    "gr": 1,
+    "v": "all_differ"
+   }
+  ]
+ }
+}

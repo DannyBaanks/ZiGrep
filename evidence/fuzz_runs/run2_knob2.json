@@ -1,0 +1,660 @@
+{
+ "iters": 20000,
+ "knob": 2,
+ "seed": 102,
+ "workers": 4,
+ "secs": 64.2,
+ "counts": {
+  "agree_all": 14299,
+  "zg_with_rg": 2048,
+  "zg_with_grep": 914,
+  "zg_alone": 1520,
+  "all_differ": 1219
+ },
+ "samples": {
+  "zg_alone": [
+   {
+    "i": 12,
+    "pat": "^allocator",
+    "flags": [
+     "-i",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 22,
+    "pat": "return$",
+    "flags": [
+     "-i",
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 42,
+    "pat": "[a-z]+_omega",
+    "flags": [
+     "-i",
+     "-w",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 43,
+    "pat": "^result",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 61,
+    "pat": "^pattern",
+    "flags": [
+     "-a",
+     "-L",
+     "-i",
+     "-m",
+     "5"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 62,
+    "pat": "io_uring$",
+    "flags": [
+     "-L",
+     "-w",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 87,
+    "pat": "stream$",
+    "flags": [
+     "-i",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 90,
+    "pat": "walk$",
+    "flags": [
+     "-l",
+     "-c",
+     "-L",
+     "-m",
+     "2"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 102,
+    "pat": "^allocator",
+    "flags": [
+     "-i",
+     "-a",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 116,
+    "pat": "^io_uring",
+    "flags": [
+     "-w",
+     "-L",
+     "-m",
+     "5"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 117,
+    "pat": "^nadír",
+    "flags": [
+     "-i",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 119,
+    "pat": "omega$",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 123,
+    "pat": "[a-z]+_alpha",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 140,
+    "pat": "[a-z]+_test",
+    "flags": [
+     "-i",
+     "-l",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 143,
+    "pat": "^omega",
+    "flags": [
+     "-L",
+     "-m",
+     "5"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 184,
+    "pat": "[a-z]+_std",
+    "flags": [
+     "-a",
+     "-q",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 189,
+    "pat": "^filter",
+    "flags": [
+     "-c",
+     "-L",
+     "-F"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 208,
+    "pat": "walk$",
+    "flags": [
+     "-q",
+     "-c",
+     "-v"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 212,
+    "pat": "^buffer",
+    "flags": [
+     "-l",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 224,
+    "pat": "^alpha",
+    "flags": [
+     "-v",
+     "-q",
+     "-L",
+     "-m",
+     "2"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 255,
+    "pat": "[a-z]+_std",
+    "flags": [
+     "-q",
+     "-c",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "zg_alone"
+   },
+   {
+    "i": 276,
+    "pat": "omega$",
+    "flags": [
+     "-L",
+     "-w"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 282,
+    "pat": "^alpha",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 293,
+    "pat": "^io_uring",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   },
+   {
+    "i": 304,
+    "pat": "filter$",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 1,
+    "gr": 1,
+    "v": "zg_alone"
+   }
+  ],
+  "all_differ": [
+   {
+    "i": 13,
+    "pat": "\\d+",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 44,
+    "pat": "\\d+",
+    "flags": [
+     "-v",
+     "-a",
+     "-L",
+     "-m",
+     "5"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 46,
+    "pat": "result",
+    "flags": [
+     "-w",
+     "-v",
+     "-L",
+     "-m",
+     "5"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 47,
+    "pat": "^fn",
+    "flags": [
+     "-v",
+     "-L",
+     "-F"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 53,
+    "pat": "kamikaze$",
+    "flags": [
+     "-L",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 74,
+    "pat": "\\d+",
+    "flags": [
+     "-c",
+     "-a"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 78,
+    "pat": "^pub",
+    "flags": [
+     "-L",
+     "-F",
+     "-v"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 82,
+    "pat": "\\d+",
+    "flags": [
+     "-c",
+     "-w"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 84,
+    "pat": "[a-z]+_corrupt",
+    "flags": [
+     "-v",
+     "-i",
+     "-L",
+     "-m",
+     "2"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 97,
+    "pat": "filter",
+    "flags": [
+     "-i",
+     "-L",
+     "-c",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 150,
+    "pat": "\\d+",
+    "flags": [
+     "-w",
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 165,
+    "pat": "\\d+",
+    "flags": [
+     "-v",
+     "-F",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 179,
+    "pat": "\\d+",
+    "flags": [
+     "-L",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 182,
+    "pat": "usize$",
+    "flags": [
+     "-l",
+     "-L",
+     "-v",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 190,
+    "pat": "\\d+",
+    "flags": [
+     "-L",
+     "-i",
+     "-a",
+     "-m",
+     "1"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 194,
+    "pat": "[a-z]+_buffer",
+    "flags": [
+     "-l",
+     "-c",
+     "-a"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 195,
+    "pat": "\\d+",
+    "flags": [
+     "-c",
+     "-i"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 215,
+    "pat": "\\d+",
+    "flags": [
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 229,
+    "pat": "\\d+",
+    "flags": [
+     "-L",
+     "-m",
+     "10"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 292,
+    "pat": "über$",
+    "flags": [
+     "-v",
+     "-i",
+     "-L",
+     "-m",
+     "1"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 298,
+    "pat": "\\d+",
+    "flags": [
+     "-L"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 315,
+    "pat": "\\d+",
+    "flags": [
+     "-l",
+     "-c"
+    ],
+    "zg": 0,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 323,
+    "pat": "\\d+",
+    "flags": [
+     "-v",
+     "-a",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 338,
+    "pat": "^pub",
+    "flags": [
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   },
+   {
+    "i": 343,
+    "pat": "\\d+",
+    "flags": [
+     "-v",
+     "-l",
+     "-L"
+    ],
+    "zg": 1,
+    "rg": 0,
+    "gr": 0,
+    "v": "all_differ"
+   }
+  ]
+ }
+}
