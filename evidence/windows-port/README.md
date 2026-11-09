@@ -841,3 +841,122 @@ The suite is now **55/55 tests passed** (native and baseline
 * **`v0.2.2`**: the current release. Baseline binary, installer that
   completes, `--version` on stdout.
 
+---
+
+## Release v0.2.2: the release that installs cleanly (final verification)
+
+### The workflow
+
+The release run `42574402048` completed all four jobs successfully:
+
+```text
+JOB: Build native Windows binary  ->  success
+JOB: Build Linux binaries (aarch64-linux, ...)  ->  success
+JOB: Build Linux binaries (x86_64-linux, ...)   ->  success
+JOB: Publish GitHub Release  ->  success
+```
+
+### The published assets
+
+All three archives were downloaded and verified byte for byte against the
+published `SHA256SUMS.txt`:
+
+```text
+published SHA256SUMS.txt (v0.2.2): 3 entries
+  f9a6198b023a7cf44454bd23b5216c7106d8d892b16810eafa5a9c120a6d3174  zigrep-linux-x86_64.tar.gz
+  40bf3ce12bf44e9134763ba9a7381c47de63d0e081dfdaf946d6635f3ed5737f  zigrep-linux-aarch64.tar.gz
+  c6d07401109d4a47ceb31170543e691a3d131b9c84a1d1f19dcd667871a84543  zigrep-windows-x86_64.zip
+
+OK    zigrep-linux-x86_64.tar.gz   f9a6198b...   (285031 bytes, 1 intento(s))
+OK    zigrep-linux-aarch64.tar.gz  40bf3ce1...   (1305803 bytes, 1 intento(s))
+OK    zigrep-windows-x86_64.zip    c6d07401...   (682740 bytes, 1 intento(s))
+
+=== 3/3 assets verificados contra el SHA256SUMS.txt publicado ===
+```
+
+### The one-line installer, executed against the published release
+
+The installer was fetched with `irm` from the public tag URL and executed
+with `iex`, from a clean state (no install directory, not in the user
+`PATH`):
+
+```text
+=== 0. estado inicial ===
+  install dir existe : False
+  ya esta en el PATH  : False
+=== 1. descargar el instalador (irm) ===
+  descargado: 11536 caracteres
+  primera linea: <#
+=== 2. ejecutar el instalador real (irm | iex) ===
+
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (c6d07401109d4a47ceb31170543e691a3d131b9c84a1d1f19dcd667871a84543)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+
+  Restart your terminal (or open a new one) so the PATH change applies.
+
+  Version check:
+    zgrep 0.2.2
+
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+
+  ZiGrep is ready.
+  exit=0
+=== 3. verificacion ===
+  zigrep.exe instalado : True
+  zgrep.exe  instalado : True
+  install.ps1 copiado  : True
+  version reportada    : zgrep 0.2.2
+  install dir en PATH   : True
+=== 4. uso real del binario instalado ===
+  busqueda: 2:needle
+=== 5b. el binario responde por stdout (no stderr) ===
+  stdout : 'zgrep 0.2.2'
+  stderr : ''
+  exit   : 0
+=== 6. PATH de usuario restaurado ===
+  install dir sigue en el PATH: False
+=== fin ===
+```
+
+Everything the installer claims is true: the checksum matched, three files
+were installed, the user `PATH` was updated, the version check answered
+**cleanly** (no `NativeCommandError` any more), the installer reached
+"ZiGrep is ready." with exit code 0, and the installed binary actually
+searched (`2:needle` is line 2 of the probe file, which is where `needle`
+was written).
+
+The harness restored the user `PATH` to its original state afterwards, so the
+machine was left as it was found.
+
+### Final state of the release line
+
+| Release | State |
+|---|---|
+| `v0.2.0` | Published, superseded: the Windows binary was built for `native` on an AVX-512 runner and cannot start without AVX-512. |
+| `v0.2.1` | Published, superseded: the binary is baseline, but the installer inside it aborted on its own successful install. |
+| `v0.2.2` | **Current.** Baseline binary, installer that completes, `--version` on stdout, verified end to end against the published release. |
+
+### Gates measured for the shipped commit (`701361e`)
+
+| Gate | Result |
+|---|---|
+| `zig build -Doptimize=ReleaseFast` | 11/11 steps succeeded |
+| `zig build test` | 55/55 tests passed |
+| `zig build test -Dtarget=x86_64-windows` | 55/55 tests passed |
+| `zig build oracle` | 25 PASSED, 0 FAILED |
+| `zig build oracle -Dtarget=x86_64-windows` | 25 PASSED, 0 FAILED |
+| `zig build -Dtarget=x86_64-linux` | 11/11 steps succeeded |
+| fuzz swarm (12 campaigns x 200,001 ops) | 0 anomalies, 0 crashes, 0 invalid exit codes, 0 invariant violations, 0 hangs |
+| cell fuzzer (exhaustive 373,248 cells) | 10.28 s, 36,300 cells/sec, 0 anomalies, 0 invariant violations, 0 crashes |
+

@@ -8,8 +8,12 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
 ```
+
+> La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
+> PR #1 se mergee. Hasta entonces usa la del **tag**, que es la verificada
+> (esta guia se escribio ejecutando exactamente esa linea).
 
 **Regla de oro:** no ejecutes `irm ... | iex` sobre un texto que no hayas
 leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
@@ -17,7 +21,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -38,6 +42,67 @@ src\search.zig
 ```
 
 `-l` lista los archivos con coincidencias; quítalo para mostrar las líneas.
+
+### Salida real del instalador publicado (v0.2.2)
+
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero:
+
+```text
+=== 0. estado inicial ===
+  install dir existe : False
+  ya esta en el PATH  : False
+=== 1. descargar el instalador (irm) ===
+  descargado: 11536 caracteres
+  primera linea: <#
+=== 2. ejecutar el instalador real (irm | iex) ===
+
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (c6d07401109d4a47ceb31170543e691a3d131b9c84a1d1f19dcd667871a84543)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+
+  Restart your terminal (or open a new one) so the PATH change applies.
+
+  Version check:
+    zgrep 0.2.2
+
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+
+  ZiGrep is ready.
+  exit=0
+=== 3. verificacion ===
+  zigrep.exe instalado : True
+  zgrep.exe  instalado : True
+  install.ps1 copiado  : True
+  version reportada    : zgrep 0.2.2
+  install dir en PATH   : True
+=== 4. uso real del binario instalado ===
+  busqueda: 2:needle
+=== 5. hash publicado vs asset real ===
+  SHA256SUMS.txt publicado:
+    f9a6198b023a7cf44454bd23b5216c7106d8d892b16810eafa5a9c120a6d3174  zigrep-linux-x86_64.tar.gz
+    40bf3ce12bf44e9134763ba9a7381c47de63d0e081dfdaf946d6635f3ed5737f  zigrep-linux-aarch64.tar.gz
+    c6d07401109d4a47ceb31170543e691a3d131b9c84a1d1f19dcd667871a84543  zigrep-windows-x86_64.zip
+=== 5b. el binario responde por stdout (no stderr) ===
+  stdout : 'zgrep 0.2.2'
+  stderr : ''
+  exit   : 0
+=== 6. PATH de usuario restaurado ===
+  install dir sigue en el PATH: False
+=== fin ===
+```
+
+Lo que se ve en `busqueda: 2:needle` es el binario **instalado** buscando
+`needle` en un fichero de prueba: la linea 2 es la que contenia la palabra.
 
 ### Qué hace el instalador (y cómo leer su salida)
 
