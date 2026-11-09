@@ -132,9 +132,29 @@ try {
         Write-Host ""
         Write-Host "Fallback: build from source with Zig 0.16+" -ForegroundColor Yellow
         if (Get-Command zig -ErrorAction SilentlyContinue) {
-            Write-Step "Cloning the repository and building..."
+            # Clone the release tag, not the default branch: the Windows port
+            # lives in a release, and the default branch may not have it (or
+            # may not build on Windows at all).
+            $cloneRef = $null
+            if ($Version -eq "latest") {
+                # Resolve the real latest tag through the GitHub API.
+                try {
+                    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "ZiGrep-Installer" }
+                    $cloneRef = $rel.tag_name
+                } catch {
+                    Write-Warn "Could not resolve the latest release tag ($($_.Exception.Message))."
+                }
+            } else {
+                $cloneRef = $Version
+                if (-not $cloneRef.StartsWith("v")) { $cloneRef = "v$cloneRef" }
+            }
+            if (-not $cloneRef) {
+                Write-Err "Cannot determine which release to build from. Use -Version <tag>."
+                exit 1
+            }
+            Write-Step "Cloning $Repo at $cloneRef and building..."
             $repoDir = Join-Path $tmp "repo"
-            git clone --depth 1 "https://github.com/$Repo.git" $repoDir | Out-Null
+            git clone --depth 1 --branch $cloneRef "https://github.com/$Repo.git" $repoDir | Out-Null
             Push-Location $repoDir
             try {
                 zig build -Doptimize=ReleaseFast
