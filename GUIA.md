@@ -68,9 +68,11 @@ Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
 * **El `PATH` solo cambia para las terminales nuevas**: la sesión actual sí
   queda actualizada (el instalador la modifica en memoria), pero cualquier
   terminal ya abierta necesita un reinicio.
-* **`zgrep --version` escribe en `stderr`**, no en `stdout`. En PowerShell eso
-  aparece como un `RemoteException` rojo aunque todo haya ido bien. Es
-  cosmético: el valor (`zgrep 0.2.1`) es correcto.
+* **`zgrep --version` y `zgrep --help` escriben en `stdout`** (como `grep` y
+  `ripgrep`). En las versiones anteriores (hasta la 0.2.1) escribían en
+  `stderr`, y en PowerShell eso aparecía como un `RemoteException` rojo
+  aunque todo hubiera ido bien. Además el instalador abortaba en el "Version
+  check" por eso. Corregido en la **0.2.2**.
 * **No hay versión ARM64 de Windows todavía**: el instalador detecta `ARM64` y
   pide `zigrep-windows-aarch64.zip`, que todavía no se publica. En ese caso
   compila desde fuente.
@@ -399,13 +401,13 @@ nativos (`\`) pero el oráculo normaliza separadores y CRLF al comparar.
 
 ---
 
-## 9. Release 0.2.1, fuzzer en Windows y el bug del enjambre de hilos
+## 9. Release 0.2.2, fuzzer en Windows y el bug del enjambre de hilos
 
-### Qué trae la 0.2.1
+### Qué trae la 0.2.2
 
 | | |
 |---|---|
-| Versión | `0.2.1` (`zgrep --version` → `zgrep 0.2.1`) |
+| Versión | `0.2.2` (`zgrep --version` → `zgrep 0.2.2`) |
 | Port Windows | Nativo, sin WSL ni runtime de C. `src/uring.zig` es ahora una fachada portable y el motor `io_uring` real vive en `src/uring_linux.zig` (Linux-only) |
 | Installer Windows | `install.ps1`, instalable con `irm ... | iex`, verifica SHA-256 y actualiza el `PATH` de usuario |
 | Release | `zigrep-linux-x86_64.tar.gz`, `zigrep-linux-aarch64.tar.gz`, `zigrep-windows-x86_64.zip` y `SHA256SUMS.txt` |
@@ -593,7 +595,7 @@ eran, en parte, esto. Compila antes de lanzar el fuzzer, no durante.
 
 ---
 
-## 11. La release 0.2.1: el binario que no arrancaba (AVX-512)
+## 11. Las releases 0.2.1 y 0.2.2: el binario que no arrancaba (AVX-512)
 
 ### Qué pasó
 
@@ -656,15 +658,20 @@ disco, no por el SIMD.
 
 ### Qué release usar
 
-* **`v0.2.1`**: la primera con el binario baseline. Es la que instala el
-  `irm ... | iex` por defecto (usa `releases/latest`).
-* **`v0.2.0`**: publicada pero **supersedida**. Su `.exe` no arranca en CPUs
+* **`v0.2.2`**: la actual. Binario baseline, instalador que no aborta y
+  `--version` en `stdout`. Es la que instala el `irm ... | iex` por defecto
+  (usa `releases/latest`).
+* **`v0.2.1`**: publicada y **supersedida** por la 0.2.2. Su `.exe` ya es
+  baseline y arranca en todas partes, pero su `install.ps1` (el que va dentro
+  del `.zip`) abortaba en el "Version check".
+* **`v0.2.0`**: publicada y **supersedida**. Su `.exe` no arranca en CPUs
   sin AVX-512. No la borres del historial: está ahí como registro.
 
-Si tienes la 0.2.0 instalada y el binario te da error al arrancar, reinstala:
+Si tienes una versión anterior instalada y el binario te da error al
+arrancar, reinstala:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.1/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
 ```
 
 ### Segundo arreglo del instalador: el fallback compilaba la versión equivocada
@@ -685,4 +692,120 @@ if ($Version -eq "latest") {
 }
 git clone --depth 1 --branch $cloneRef "https://github.com/$Repo.git" $repoDir
 ```
+
+---
+
+## 12. El quinto bug: el instalador abortaba en una instalación correcta
+
+### Qué pasó
+
+La instalación de la 0.2.1 se completaba (checksum verificado, ficheros
+copiados, `PATH` actualizado) y a continuación el instalador **murió**:
+
+```text
+  Version check:
+powershell : zigrep.exe : zgrep 0.2.1
+    + CategoryInfo          : NativeCommandError
+En línea 69 Carácter: 5
++     & (Join-Path $InstallDir "zigrep.exe") --version
+    + CategoryInfo          : NativeCommandError
+```
+
+El mensaje rojo es la trampa: en Windows PowerShell, una aplicación nativa
+que escribe en `stderr` produce un `NativeCommandError`, y como el instalador
+usa `$ErrorActionPreference = "Stop"` (para negarse a instalar cuando el
+checksum no cuadra), ese error se vuelve **terminante**. El instalador
+abortaba en el último paso, sin llegar a imprimir "ZiGrep is ready.".
+
+La causa de fondo: `zigrep --version` escribía en `stderr` (con
+`std.debug.print`), cuando la versión es una **respuesta**, no un diagnóstico.
+
+### Los dos arreglos
+
+**1. El CLI responde en `stdout`.** `--version` y `--help` ahora se escriben
+en `stdout`, como `grep` y `ripgrep`. `parseArgs` ya no escribe en ningún
+stream: deja un flag (`print_version` / `print_help`) y quien lo llama decide
+el stream, lo que además hace el parser testeable.
+
+```zig
+    if (opts.print_help or opts.print_version) {
+        if (opts.print_version) {
+            _ = platform.writeStdout(init.io, std.fmt.comptimePrint("zgrep {s}\n", .{version}));
+        } else {
+            _ = platform.writeStdout(init.io, usage);
+        }
+        std.process.exit(0);
+    }
+```
+
+**2. El instalador no puede morir por el stderr de un hijo.** Todos los
+comandos nativos pasan por un ayudante que captura la salida y devuelve el
+código de salida:
+
+```powershell
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [switch]$Capture
+    )
+    # Function scope: the caller's preference is not modified.
+    $ErrorActionPreference = "Continue"
+    if ($Capture) {
+        $raw = & $FilePath @Arguments 2>&1
+        $code = $LASTEXITCODE
+        $parts = foreach ($item in $raw) {
+            if ($item -is [System.Management.Automation.ErrorRecord]) { $item.ToString() }
+            else { [string]$item }
+        }
+        return [pscustomobject]@{ Output = (($parts -join "`n")).Trim(); ExitCode = $code }
+    }
+    & $FilePath @Arguments
+    return [pscustomobject]@{ Output = ""; ExitCode = $LASTEXITCODE }
+}
+```
+
+Esto también cubre el `git clone` y el `zig build` del fallback, que también
+escriben en `stderr`.
+
+### Comprobación
+
+```text
+=== 2. ejecutar el instalador real (irm | iex) ===
+
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (905845afe15370a5031dfda67d7539be98bc8762fb674ad200818cf63c75688f)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+
+  Version check:
+    zgrep 0.2.1
+
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+
+  ZiGrep is ready.
+  exit=0
+```
+
+Y el binario responde en stdout, con stderr vacío:
+
+```text
+stdout: 'zgrep 0.2.1'
+stderr: ''
+exit=0
+```
+
+Trampa: **`$ErrorActionPreference = "Stop"` convierte el stderr de cualquier
+aplicación nativa en un error terminante.** Si tu script llama a un `.exe` y
+no quieres que un mensaje por stderr lo tumbe, envuélvelo en
+`Invoke-Native` (o baja la preferencia solo alrededor de esa llamada).
 

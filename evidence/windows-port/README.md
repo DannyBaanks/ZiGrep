@@ -660,3 +660,184 @@ OK   zigrep-linux-aarch64.tar.gz  14eac390f29ab651d43260eea3e34348d765e000272023
 OK   zigrep-windows-x86_64.zip    2dd2fe1261b179a48369adcde9beca653be65989c05a039ff9690d9d0a1e3fdd
 ```
 
+---
+
+## Release v0.2.1 verification and the fifth bug: the installer aborted on a
+## successful install
+
+### v0.2.1 was published and its binary works
+
+The workflow run `42570222825` completed all four jobs successfully, including
+the new step:
+
+```text
+JOB: Build native Windows binary  ->  success
+    success  Build ReleaseFast (native Windows)
+    success  Verify the binary runs
+    success  Package the Windows executables
+    success  Upload asset
+JOB: Build Linux binaries (aarch64-linux, ...)  ->  success
+JOB: Build Linux binaries (x86_64-linux, ...)   ->  success
+JOB: Publish GitHub Release  ->  success
+```
+
+The published assets were verified byte for byte against the published
+`SHA256SUMS.txt` (3/3 OK):
+
+```text
+published SHA256SUMS.txt (v0.2.1): 3 entries
+  bdce7e875998f2b642c4bcb25fccc6e619ebd476e67c93477a92cfbdd1e6f97e  zigrep-linux-x86_64.tar.gz
+  505925d9c17b7c416ab4fcd1654fa3ff8f28a642dfd85d8ed04231600534e7ca  zigrep-linux-aarch64.tar.gz
+  905845afe15370a5031dfda67d7539be98bc8762fb674ad200818cf63c75688f  zigrep-windows-x86_64.zip
+
+OK    zigrep-linux-x86_64.tar.gz   bdce7e87...   (285080 bytes)
+OK    zigrep-linux-aarch64.tar.gz  505925d9...   (1305401 bytes)
+OK    zigrep-windows-x86_64.zip    905845af...   (682517 bytes)
+
+=== 3/3 assets verificados contra el SHA256SUMS.txt publicado ===
+```
+
+The published Windows binary now starts on this host (no AVX-512):
+
+```text
+=== contenido del zip publicado ===
+    install.ps1   9571
+    zgrep.exe   988160
+    zigrep.exe  988160
+
+=== census EVEX ===
+zigrep.exe: EVEX(0x62)=149  VEX(0xC4/0xC5)=1780     (v0.2.0: 3499 EVEX)
+
+=== ARRANCA? ===
+zgrep 0.2.1
+exit=0
+```
+
+149 EVEX prefixes instead of 3,499: the baseline target did what it was
+supposed to do.
+
+### The installer aborted on a successful install
+
+Running the **published** installer end to end (`irm` the installer from the
+tag, execute it) installed everything correctly and then died:
+
+```text
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (905845afe15370a5031dfda67d7539be98bc8762fb674ad200818cf63c75688f)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+
+  Version check:
+powershell : zigrep.exe : zgrep 0.2.1
+En línea 69 Carácter: 5
++     & (Join-Path $InstallDir "zigrep.exe") --version
+    + CategoryInfo          : NativeCommandError
+```
+
+The install was healthy; the installer still died, before printing
+"ZiGrep is ready.".
+
+### Root cause
+
+Two facts combined:
+
+1. `zigrep --version` printed on **stderr** (upstream used `std.debug.print`
+   for it). The version is an answer, not a diagnostic.
+2. In Windows PowerShell, a native command writing to stderr produces a
+   `NativeCommandError`, and the installer sets `$ErrorActionPreference =
+   "Stop"` (it needs that to refuse to install when the checksum does not
+   match). Under `Stop`, that error is **terminating**.
+
+So the last line of a successful installation killed the installer. The same
+trap applied to `git clone` ("Cloning into ...") and `zig build` in the
+source-build fallback.
+
+### Fix
+
+**The CLI answers on stdout.** `--version` and `--help` are printed with
+`platform.writeStdout`, and `parseArgs` no longer writes to any stream: it
+sets `opts.print_version` / `opts.print_help` and lets the caller choose the
+stream. That also matches `parseArgs`' own documented contract ("`parseArgs`
+itself never writes to a stream, which keeps it testable") and the behaviour
+of `grep` and `ripgrep`.
+
+```zig
+    if (opts.print_help or opts.print_version) {
+        if (opts.print_version) {
+            _ = platform.writeStdout(init.io, std.fmt.comptimePrint("zgrep {s}\n", .{version}));
+        } else {
+            _ = platform.writeStdout(init.io, usage);
+        }
+        std.process.exit(0);
+    }
+```
+
+**The installer cannot be killed by a child's stderr.** Every native command
+goes through `Invoke-Native`, which runs with the error preference relaxed
+inside the function's own scope, captures the output and returns the exit
+code:
+
+```powershell
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [switch]$Capture
+    )
+    $ErrorActionPreference = "Continue"
+    if ($Capture) {
+        $raw = & $FilePath @Arguments 2>&1
+        $code = $LASTEXITCODE
+        $parts = foreach ($item in $raw) {
+            if ($item -is [System.Management.Automation.ErrorRecord]) { $item.ToString() }
+            else { [string]$item }
+        }
+        return [pscustomobject]@{ Output = (($parts -join "`n")).Trim(); ExitCode = $code }
+    }
+    & $FilePath @Arguments
+    return [pscustomobject]@{ Output = ""; ExitCode = $LASTEXITCODE }
+}
+```
+
+### Verification
+
+The installer now completes and the binary answers on stdout:
+
+```text
+  Version check:
+    zgrep 0.2.1
+
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+
+  ZiGrep is ready.
+  exit=0
+```
+
+```text
+stdout: 'zgrep 0.2.1'
+stderr: ''
+exit=0
+```
+
+A regression test covers the new parser contract:
+
+```zig
+test "parseArgs: --version and -V ask for the version instead of searching" {
+```
+
+The suite is now **55/55 tests passed** (native and baseline
+`x86_64-windows`), and the differential oracle still reports **25 PASSED,
+0 FAILED**.
+
+### Release outcome after this fix
+
+* **`v0.2.0`**: superseded (the binary could not start without AVX-512).
+* **`v0.2.1`**: superseded (the binary is fine, but the installer inside it
+  aborted on the version check).
+* **`v0.2.2`**: the current release. Baseline binary, installer that
+  completes, `--version` on stdout.
+
