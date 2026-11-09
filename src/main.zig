@@ -27,7 +27,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.2.0";
+const version = "0.2.1";
 
 const usage =
     \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
