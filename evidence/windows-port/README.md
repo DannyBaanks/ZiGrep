@@ -292,13 +292,18 @@ NO debe haber instalado nada: False
 The installer refuses to install anything when the checksum does not match,
 and it needs no administrator rights (it appends to the **user** `PATH`).
 
-## NOT_DEMONSTRATED (unchanged)
+## NOT_DEMONSTRATED
 
 * **Linux runtime execution on this host**: the Docker daemon is not running,
   so only the Linux cross-compile was verified locally. The GitHub Actions
   `linux-build` job remains the authority for the Linux run.
 * **Remote `windows-native` CI job**: configured, but it had not executed for
   this branch at the time of writing.
+* **The swarm fuzzer under a cold filesystem cache**: every campaign above ran
+  against the same warm working tree. A cold-cache run was not measured.
+
+The exhaustive 373,248-cell sweep of the N-dimensional fuzzer is **not** in
+this list: it was executed on native Windows (10.84 s, 0 anomalies).
 
 ---
 
@@ -345,4 +350,175 @@ regenerated here: rewriting it would destroy the historical record and mix
 this branch's claims with upstream's. Its stale state is reported instead.
 The only checksum index this branch owns is
 `evidence/windows-port/SHA256SUMS.txt`, and that one is verified.
+
+---
+
+## Bug found by the Windows fuzzing (second one): the swarm could deadlock on
+## `std.process.run`'s truncated reads
+
+The first fuzzing campaign on Windows did not finish. The swarm completed all
+200,001 operations and then **never returned**: a child process stayed alive
+with 1 thread and 0% CPU while the parent waited for it. It was an
+intermittent deadlock, reproduced in **4 of 12** campaigns.
+
+### Diagnosis
+
+The CLI adversary (adversary 2) runs real `zigrep` invocations through
+`std.process.run` with `stdout_limit` / `stderr_limit` set to 4096 bytes.
+`std.process.run` **stops reading** a stream once it exceeds the limit, but
+the child keeps writing. On Windows a pipe holds 8 KB, so the child blocks
+forever writing into a full pipe while the parent waits for it to exit.
+
+Two controlled experiments (Python, same command line):
+
+```text
+=== A: el padre drena a EOF ===
+  A leer-a-EOF: TERMINO exit=0 en 0.04s
+      stdout=11130 stderr=0
+=== B: el padre nunca lee ===
+  B no-leer: COLGADO (>12s)
+=== C: emula std.process.run (limite 4096) ===
+  C limite-4096 (como run): TERMINO exit=0 en 1.01s
+      leidos stdout=8192 stderr=0
+```
+
+The offending command line was captured with the `--trace-cli` diagnostic
+added in this branch (paired `START`/`END` markers, one per spawned child):
+
+```text
+spawns=31 terminados=30 sin_terminar=1
+  #14 SIN TERMINAR: zig-out/bin/zigrep.exe --no-hidden -e scan src
+```
+
+A minimal Zig probe isolated it from the fuzzer completely
+(`std.process.run` with the fuzzer's exact options):
+
+```text
+calling std.process.run with limits 4096...
+run returned error: StreamTooLong
+EXIT=-1 t=294.2s
+```
+
+The same probe with the limits removed:
+
+```text
+calling std.process.run WITHOUT limits...
+run returned OK: stdout=11130 bytes stderr=0 bytes after 57 ms
+```
+
+So the limit was the cause: 294 s versus 57 ms for the identical call.
+
+The `run` timeout is not a substitute for draining the pipes. It works when
+the child is direct (measured: `error Timeout after 3760 ms` for a silent
+`ping.exe` child), but it does not help in the truncation case, because the
+parent is not waiting for data, it is waiting for the child to exit.
+
+### Fix
+
+`scripts/fuzz.zig` now captures the child's streams with
+`.stdout_limit = .unlimited` and `.stderr_limit = .unlimited`: the parent
+always drains to EOF, so the child can never block on a full pipe. The
+captured volume is bounded by the fuzzer's own corpus (the repository tree).
+
+The `--cli-timeout-ms=N` watchdog (default 10000) was kept as a second line
+of defence: a child that stops producing output and never exits is reported
+as an anomaly, a reproducer is written to `evidence/reproducers/`, and the
+swarm keeps going instead of hanging forever.
+
+### Verification
+
+Same harness, same seed, hard 90-second timeout on every campaign, before and
+after the fix:
+
+| State | Campaigns | Hangs | Result |
+|---|---|---|---|
+| Before the fix | 12 | **4** | swarm never returned |
+| After the fix | 18 | **0** | every campaign finished |
+
+Per-knob results after the fix (200,001 operations each):
+
+| Knob | Campaigns | Wall clock | Anomalies | Crashes | Invalid exit codes | Invariant violations |
+|---|---|---|---|---|---|---|
+| 3 (grammar) | 10 | 2.2 - 2.6 s | 0 | 0 | 0 | 0 |
+| 4 (ReDoS bait) | 4 | 5.3 - 5.6 s | 0 | 0 | 0 | 0 |
+| 5 (chaos) | 4 | 3.4 - 3.6 s | 0 | 0 | 0 | 0 |
+
+Throughput after the fix: 37,493 - 96,483 ops/second depending on the knob.
+
+### Diagnostics added to the fuzzer
+
+Two permanent flags were added so this class of failure can be diagnosed
+instead of guessed at:
+
+* `--trace-cli` prints every spawned CLI argv to stderr with a paired
+  `START` / `END` marker, so a child that never finishes is identifiable.
+* `--cli-timeout-ms=N` sets the hard limit for a CLI child (default 10000).
+  On timeout the swarm counts an anomaly, writes a reproducer and continues.
+
+## N-dimensional cell space fuzzer on native Windows
+
+Upstream's `scripts/cell_fuzz.zig` (373,248 cells) was written against the
+pre-port `scripts/common.zig` API and did not compile in this branch
+(`scripts/cell_fuzz.zig:470:19: error: expected 3 argument(s), found 2`): the
+Windows port moved `common.zig` to the io-first API, where every helper takes
+an explicit `std.Io` handle. The cell fuzzer was ported accordingly
+(`std.os.linux` -> `builtin`, `common.makePath/writeFile/readFile/nowNs/
+printOut` now take the io handle, and the reproducer script points at the
+platform's executable name).
+
+After the port the whole build is **11/11 steps** (the new `cell_fuzz`
+executable included) and the fuzzer runs natively on Windows 11 build 26200
+with Zig 0.16.0.
+
+### Measured results on native Windows
+
+Single-cell diagnostic (`--cell=48291`):
+
+```text
+  Coordinates : [Mode:1, Mod:2, Engine:5, Pattern:16, Haystack:3]
+  Output Mode : count (max_count=null)
+  Modifiers   : fixed=no, icase=no, word=YES, invert=no
+  Engine      : -j 12 (12 threads)
+  Pattern     : '((((((searcher))))))' (deep nested parens, is_syntax_error=no)
+  Haystack    : build.zig
+  Verdict: 🟢 CELL #48291 PASSED ALL INVARIANTS CLEANLY!
+```
+
+Partial sweep (20,000 cells, Weyl dispersion):
+
+```text
+  Cells Executed             : 20000 / 20000
+  Elapsed Wall Clock Time    : 0.639 seconds
+  Execution Throughput       : 31297 cells/sec
+    - Total Anomalies Found  : 0
+    - Invariant Violations   : 0
+    - Crashes / Panics       : 0
+```
+
+**Exhaustive sweep (all 373,248 cells)** — the run upstream measured on Linux:
+
+```text
+  Discrete Manifold Size: 373248 total unique cells (9 × 16 × 9 × 24 × 12)
+  Test Range            : Cells 0 .. 373247 (373248 cells scheduled)
+  Traversal Mode        : Entropic Coprime Weyl Dispersion (100% bijective)
+  Parallel Workers      : 24 threads
+  Cells Executed             : 373248 / 373248
+  Elapsed Wall Clock Time    : 10.840 seconds
+  Execution Throughput       : 34433 cells/sec
+
+  State Space Breakdown:
+    - Syntax Errors Rejected : 38880 (100% clean exit 2)
+    - Matches Detected       : 138384
+    - Zero Matches           : 195984
+
+  Fuzzing Invariants & Safety:
+    - Total Anomalies Found  : 0
+    - Invariant Violations   : 0
+    - Crashes / Panics       : 0
+  Verdict: 🟢 ZERO ANOMALIES — All 373248 cell coordinates executed with mathematical precision!
+```
+
+The exhaustive 373,248-cell sweep is therefore **DEMONSTRATED on native
+Windows**, not NOT_DEMONSTRATED: full coverage, 0 anomalies, 0 invariant
+violations, 0 crashes, in 10.84 seconds (34,433 cells/second) on 24 workers.
 

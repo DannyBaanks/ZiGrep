@@ -502,3 +502,92 @@ Código de salida: **2** (antes: cuelgue indefinido).
 Trampas: el mensaje va a `stderr`; en PowerShell sale en rojo como
 `RemoteException` aunque el comportamiento sea el correcto. Usa
 `$LASTEXITCODE` para comprobarlo.
+
+---
+
+## 10. El fuzzer de celdas en Windows y el segundo bug (deadlock del enjambre)
+
+### El fuzzer N-dimensional ya corre en Windows
+
+El fuzzer de celdas (`scripts/cell_fuzz.zig`, 373.248 celdas) llegó desde
+upstream **después** de este port y no compilaba: estaba escrito contra la
+API antigua de `scripts/common.zig`, pero el port de Windows la movió a la API
+*io-first* de Zig 0.16, donde cada helper necesita un handle `std.Io`
+explícito. Está portado en esta rama.
+
+```powershell
+.\zig-out\bin\cell_fuzz.exe --cell=48291     # una celda concreta
+.\zig-out\bin\cell_fuzz.exe --all             # las 373.248 celdas
+```
+
+Salida real del barrido exhaustivo (Windows 11 build 26200, Zig 0.16.0):
+
+```text
+  Cells Executed             : 373248 / 373248
+  Elapsed Wall Clock Time    : 10.840 seconds
+  Execution Throughput       : 34433 cells/sec
+
+  Fuzzing Invariants & Safety:
+    - Total Anomalies Found  : 0
+    - Invariant Violations   : 0
+    - Crashes / Panics       : 0
+  Verdict: 🟢 ZERO ANOMALIES — All 373248 cell coordinates executed with mathematical precision!
+```
+
+### El segundo bug: el enjambre se colgaba (4 de 12 campañas)
+
+El enjambre capturaba la salida del hijo con un límite de 4 KB, pero
+`std.process.run` **deja de leer** cuando se supera el límite mientras el
+hijo sigue escribiendo. En Windows el pipe aguanta 8 KB, así que el hijo se
+queda bloqueado escribiendo y el enjambre nunca vuelve: deadlock.
+
+Aislado con un probe mínimo de Zig:
+
+```text
+calling std.process.run with limits 4096...
+run returned error: StreamTooLong
+EXIT=-1 t=294.2s
+```
+
+El mismo probe sin límites:
+
+```text
+calling std.process.run WITHOUT limits...
+run returned OK: stdout=11130 bytes stderr=0 bytes after 57 ms
+```
+
+Arreglo: el enjambre **drena la salida del hijo hasta EOF** (nunca trunca) y
+mantiene un watchdog (`--cli-timeout-ms=N`, 10000 ms por defecto) por si el
+hijo deja de producir y nunca termina.
+
+Comprobación (mismo utillaje, misma semilla, 90 s de límite por campaña):
+
+| Estado | Campañas | Cuelgues |
+|---|---|---|
+| Antes del arreglo | 12 | **4** |
+| Después del arreglo | 18 | **0** |
+
+### Diagnóstico: `--trace-cli`
+
+Para que este tipo de fallo se pueda diagnosticar en vez de adivinar:
+
+```powershell
+.\zig-out\bin\fuzz.exe 200000 --seed=987654321 --knob=5 --threads=16 --trace-cli
+```
+
+Cada invocación sale con marcadores emparejados `START` / `END`; el que se
+queda sin `END` es el culpable:
+
+```text
+spawns=31 terminados=30 sin_terminar=1
+  #14 SIN TERMINAR: zig-out/bin/zigrep.exe --no-hidden -e scan src
+```
+
+El timeout de un hijo cuenta como anomalía, escribe un reproductor en
+`evidence/reproducers/` y el enjambre sigue adelante.
+
+Trampa: **`zig build` mientras corre una campaña rompe la campaña.** El
+build reemplaza `zig-out\bin\*.exe`, y los hijos que el enjambre tiene
+abiertos dejan de existir a mitad: los cuelgues que se veían antes del fix
+eran, en parte, esto. Compila antes de lanzar el fuzzer, no durante.
+
