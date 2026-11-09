@@ -149,7 +149,7 @@ Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 56/56 tests passed (Linux), 54/54 (native Windows)
+zig build test --summary all          # 56/56 tests passed (Linux y native Windows)
 zig build oracle                      # oráculo diferencial puro Zig (26/26 Linux, 25/25 native Windows)
 ```
 
@@ -350,7 +350,7 @@ zgrep --force-swarm -F "const" RUTA     # siempre enjambre (nunca micro path)
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 56/56 tests passed (Linux), 54/54 (native Windows)
+zig build test --summary all     # 56/56 tests passed (Linux y native Windows)
 zig build oracle                 # 26/26 differential oracle tests passed (Linux), 25/25 (native Windows)
 ```
 
@@ -432,6 +432,12 @@ Salida:
 Build Summary: 3/3 steps succeeded; 54/54 tests passed
 test success
 ```
+
+> Ese 54/54 es la medición de la rama del port (2026-11-08), antes de
+> unificarla con el micro-tree fast path. En el árbol unificado la suite son
+> **56/56 también en Windows**, medido por el job nativo del CI
+> (run `42609558486`); el oráculo sigue siendo 25/25 en Windows porque el caso
+> de stdin POSIX se omite allí.
 
 ```powershell
 # Requiere GNU grep y ripgrep en el PATH (en Windows: Git for Windows + ripgrep)

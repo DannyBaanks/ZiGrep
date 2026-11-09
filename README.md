@@ -185,7 +185,7 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (56/56 on Linux; 54/54 on native Windows, Zig 0.16.0)
+# Run all unit tests (56/56 on Linux and on native Windows, Zig 0.16.0)
 zig build test --summary all
 
 # Run pure Zig differential oracle against GNU grep & ripgrep (26/26 on Linux; 25/25 on native Windows)
@@ -305,7 +305,7 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 56/56 tests on Linux and 54/54 on native Windows (Zig 0.16.0) — the two `io_uring` tests are Linux-only. They cover memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
+* **Unit Tests**: 56/56 tests on Linux and on native Windows (Zig 0.16.0; measured in CI run `42609558486` on the unified tree). They cover memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
 * **Differential Oracle (`zig build oracle`)**: 26 automated multi-way verification checks on Linux against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, io_uring asynchronous batched engine `--uring`, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input). Native Windows runs 25 of them: the POSIX-only piped-stdin case is skipped there.
 * **Native Windows job**: builds ReleaseFast, runs the same unit tests and differential oracle, then smoke-tests Unicode/space-containing paths, the zero-thread micro-tree path, and `.gitignore` filtering under `--force-swarm`.
 * **Adversarial Entropic Fuzzer Swarm (`zig build fuzz`)**: A parallel multi-core stress testing swarm featuring 4 specialized adversaries:
