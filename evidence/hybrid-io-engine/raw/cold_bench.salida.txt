@@ -1,0 +1,24 @@
+               total       usado       libre  compartido   búf/caché  disponible
+Mem:              14           7           3           0           4           7
+Inter:            18           5          13
+árbol      : /home/danny/Development/ISyCo/workspace/assembly (5338 ficheros)
+carga host : 4.19   núcleos: 12
+memoria    : 
+=== 1. CALIENTE (el cache se llena en la primera pasada) ===
+  kamikaze (default)           mediana=   23.33 ms  min=   22.46  máx= 1110.92  todas=[1110.9, 23.3, 22.5]
+  kamikaze (default)           mediana=   21.84 ms  min=   21.03  máx=   23.53  todas=[23.5, 23.2, 21.8, 21.4, 21.0]
+  --uring                      mediana=   28.21 ms  min=   25.32  máx=   36.58  todas=[28.2, 25.3, 34.9, 27.7, 36.6]
+  => en caliente el enjambre síncrono gana por 6.4 ms (1.29x)
+
+=== 2. FRÍO (se expulsa cada fichero antes de cada corrida) ===
+  kamikaze (default)           mediana= 1163.73 ms  min=  998.22  máx= 1247.80  todas=[1005.5, 998.2, 1163.7, 1247.8, 1246.7]
+  --uring                      mediana=  859.38 ms  min=  812.35  máx=  881.66  todas=[829.1, 859.4, 877.9, 881.7, 812.4]
+
+  => en frío uring gana por 304.3 ms (1.35x)
+
+=== 3. Resumen ===
+  kamikaze  caliente   21.84 ms   frío 1163.73 ms   penalización por frío: 53.29x
+  --uring   caliente   28.21 ms   frío  859.38 ms   penalización por frío: 30.46x
+
+  lo que está en juego: en caliente uring PIERDE 6.4 ms; en frío GANA 304.3 ms
+  un despachador híbrido capturaría 6.4 ms en el mejor de los dos casos

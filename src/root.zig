@@ -14,6 +14,7 @@ pub const kamikaze = @import("kamikaze.zig");
 pub const filter = @import("filter.zig");
 pub const vfs = @import("vfs.zig");
 pub const nav = @import("nav.zig");
+pub const io_engine = @import("io_engine.zig");
 pub const uring = @import("uring.zig");
 
 test {
@@ -26,5 +27,6 @@ test {
     _ = filter;
     _ = vfs;
     _ = nav;
+    _ = io_engine;
     _ = uring;
 }

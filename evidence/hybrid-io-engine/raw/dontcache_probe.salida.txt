@@ -1,0 +1,6 @@
+  lectura normal                     : CALIENTE
+  NOWAIT                             : CALIENTE (262144 B)
+  NOWAIT|DONTCACHE                   : CALIENTE (262144 B)
+  NOWAIT tras DONTCACHE              : CALIENTE (262144 B) -> DONTCACHE no expulsó
+  DONTCACHE solo                     : 262144 B
+  NOWAIT tras DONTCACHE solo         : CALIENTE (262144 B)

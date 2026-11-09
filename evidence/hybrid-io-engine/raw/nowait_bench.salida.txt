@@ -1,0 +1,16 @@
+=== 1. la sonda discrimina ===
+  archivo frio?            EAGAIN
+  tras lectura normal:      CALIENTE (62048 B) <- la sonda funciona
+
+=== 2. coste en caliente (iovec 256 KB sobre fichero de 62 KB) ===
+  preadv2(NOWAIT) caliente :    2428 ns/llamada
+  preadv2 normal caliente  :    2355 ns/llamada
+  abrir+cerrar sin leer    :    2063 ns/llamada
+
+=== 3. coste puro del miss (expulsando en cada vuelta) ===
+  expulsar + sonda miss   :    2895 ns/vuelta (1983/2000 dieron EAGAIN)
+  solo expulsar           :     406 ns/vuelta
+  => sonda miss (restando):    2488 ns/vuelta
+
+  conclusion: en caliente la sonda cuesta el 103% de una lectura normal
+  (sink=1241926656)

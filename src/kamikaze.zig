@@ -20,6 +20,7 @@
 //!      atomic flag and aborts the entire swarm immediately.
 const std = @import("std");
 const platform = @import("platform.zig");
+const io_engine = @import("io_engine.zig");
 const vfs = @import("vfs.zig");
 const Allocator = std.mem.Allocator;
 const search = @import("search.zig");
@@ -63,6 +64,11 @@ pub const KamikazeStats = struct {
     early_aborted: bool = false,
     /// True when the run was served by the zero-thread micro-tree fast path.
     micro_path: bool = false,
+    /// Resolved engine for the swarm: `uring` only when the auto probe found
+    /// the tree cold, or when the user forced it.
+    io_engine_uring: bool = false,
+    probe_hits: usize = 0,
+    probe_misses: usize = 0,
 };
 
 pub const SpinLock = struct {
@@ -268,6 +274,8 @@ pub const KamikazeContext = struct {
     out_mutex: SpinLock = .{},
     stats_mutex: SpinLock = .{},
     use_uring: bool = false,
+    io_engine_mode: io_engine.Mode = .sync,
+    engine: ?*io_engine.State = null,
 };
 
 fn flushToStdout(io: std.Io, bytes: []const u8) void {
@@ -411,6 +419,8 @@ fn scanBatch(
         };
         defer if (heap_path) |hp| ctx.gpa.free(hp);
 
+        _ = probeEngine(ctx, full_path);
+
         const res = scan.scanFile(
             ctx.io,
             ctx.gpa,
@@ -455,6 +465,37 @@ fn scanBatch(
     }
 }
 
+/// Sonda acotada de page cache (`preadv2` + `RWF_NOWAIT`).
+///
+/// Solo corre en modo `auto` y mientras la muestra no esté cerrada. NO Sustituye
+/// a la lectura: abre el fichero, pregunta al kernel y cierra. Por eso está
+/// limitada por `io_engine.probe_budget`: el miss cuesta 2,3 µs y no devuelve
+/// bytes (medido en evidence/hybrid-io-engine/).
+///
+/// Devuelve la decision si esta sonda cierra la muestra (para que quien llama
+/// pueda promocionar su anillo); `null` si toca seguir sondeando.
+fn probeEngine(ctx: *KamikazeContext, full_path: [:0]const u8) ?io_engine.Decision {
+    const st = ctx.engine orelse return null;
+    if (ctx.io_engine_mode != .auto) return null;
+    if (st.settled()) return null;
+    if (st.probes.load(.monotonic) >= io_engine.probe_budget) return null;
+
+    const dec = st.record(io_engine.probePath(ctx.io, full_path)) orelse return null;
+    if (dec == .uring) st.verdict.store(2, .release);
+    return dec;
+}
+
+/// Promocion perezosa: el trabajador crea su anillo io_uring la primera vez que
+/// ve que la muestra se cerro en `uring`. Un anillo por trabajador es la
+/// precondicion de IORING_SETUP_SINGLE_ISSUER.
+fn ensureUring(ctx: *KamikazeContext, current: ?*uring.UringScanner) ?*uring.UringScanner {
+    if (current) |u| return u;
+    if (ctx.io_engine_mode != .auto) return null;
+    const st = ctx.engine orelse return null;
+    if (!st.settled() or st.decision() != .uring) return null;
+    return uring.UringScanner.create(ctx.gpa, 32) catch null;
+}
+
 pub fn kamikazeWorker(ctx: *KamikazeContext) void {
     const scratch = ctx.gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| ctx.gpa.free(s);
@@ -474,6 +515,10 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
         if (ctx.pool.aborted.load(.acquire)) return;
+
+        // 0. Promocion perezosa: si la muestra se cerro en uring y este
+        //    trabajador todavia no tiene anillo, lo crea ahora.
+        uring_scanner = ensureUring(ctx, uring_scanner);
 
         // 1. Try to pop a file batch (Prioritize scanning files to free memory)
         if (ctx.pool.popBatch()) |batch| {
@@ -769,6 +814,8 @@ pub fn runKamikazePipeline(
     use_uring: bool,
     force_swarm: bool,
     micro_max_bytes: usize,
+    io_engine_mode: io_engine.Mode,
+    engine_state: ?*io_engine.State,
 ) !bool {
     const probe_early = mode == .quiet and !scan_config.invert and nav_plan.len == 0;
 
@@ -824,6 +871,8 @@ pub fn runKamikazePipeline(
         .found = &found,
         .stats = stats,
         .use_uring = use_uring,
+        .io_engine_mode = io_engine_mode,
+        .engine = engine_state,
     };
 
     // Seed root directories / files into the pool
@@ -860,6 +909,15 @@ pub fn runKamikazePipeline(
                 t.join();
             }
         }
+    }
+
+    if (use_uring) {
+        // Modo forzado: el usuario pidio uring, no hay decisión que tomar.
+        stats.io_engine_uring = true;
+    } else if (engine_state) |st| {
+        stats.probe_hits = st.hits.load(.acquire);
+        stats.probe_misses = st.misses.load(.acquire);
+        stats.io_engine_uring = st.decision() == .uring;
     }
 
     return found.load(.acquire);

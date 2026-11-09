@@ -1,0 +1,6 @@
+main.zig (en cache)            preadv2(NOWAIT) -> AGAIN        FRIO / no soportado
+main.zig tras DONTNEED         preadv2(NOWAIT) -> AGAIN        FRIO / no soportado
+8 MB recien escrito            preadv2(NOWAIT) ->   262144 bytes   CALIENTE
+8 MB tras DONTNEED             preadv2(NOWAIT) -> AGAIN        FRIO / no soportado
+8 MB tras 2o DONTNEED          preadv2(NOWAIT) -> AGAIN        FRIO / no soportado
+8 MB tras preadv2 normal       preadv2(NOWAIT) ->   262144 bytes   CALIENTE

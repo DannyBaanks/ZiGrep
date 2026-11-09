@@ -32,6 +32,18 @@ pub fn isSupported() bool {
     return false;
 }
 
+/// Flags de `io_uring_setup` para el anillo de cada trabajador.
+///
+/// El anillo es de un solo emisor (lo crea quien lo usa y nadie mas lo toca),
+/// que es la precondicion de `SINGLE_ISSUER`. `COOP_TASKRUN` evita que el
+/// kernel despierte al hilo solo para publicar CQEs: en el modo sincrono eso
+/// se traducia en IPIs entre nucleos que ensuciaban la L1/L2 del worker que
+/// estaba corriendo SIMD.
+///
+/// Si el kernel los rechaza (anteriores a 6.0 / 5.19), se reintenta con 0:
+/// funcionar sin las flags es mejor que no funcionar.
+const ring_flags: u32 = linux.IORING_SETUP_SINGLE_ISSUER | linux.IORING_SETUP_COOP_TASKRUN;
+
 pub const UringScanner = struct {
     ring: IoUring,
     buffers: [BATCH_SIZE][BUFFER_SIZE]u8 = undefined,
@@ -43,7 +55,7 @@ pub const UringScanner = struct {
         const self = try gpa.create(UringScanner);
         errdefer gpa.destroy(self);
         self.* = .{
-            .ring = try IoUring.init(entries, 0),
+            .ring = IoUring.init(entries, ring_flags) catch try IoUring.init(entries, 0),
             .open_fds = [_]i32{-1} ** BATCH_SIZE,
         };
         return self;

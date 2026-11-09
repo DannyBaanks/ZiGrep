@@ -22,6 +22,7 @@ const kamikaze = @import("kamikaze.zig");
 const filter = @import("filter.zig");
 const nav = @import("nav.zig");
 const vfs = @import("vfs.zig");
+const io_engine = @import("io_engine.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -92,6 +93,10 @@ const usage =
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
     \\      --uring       use Linux io_uring asynchronous batched I/O engine
+    \\                     (exact alias of --io-engine=uring)
+    \\      --io-engine=  sync | uring | auto. auto probes the page cache with
+    \\                     preadv2(RWF_NOWAIT) and promotes to io_uring only
+    \\                     when the tree is cold
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
@@ -117,6 +122,10 @@ pub const Options = struct {
     kamikaze: bool = true,
     sort: bool = false,
     use_uring: bool = false,
+    /// `sync` | `uring` | `auto`. `--uring` sigue siendo un alias exacto de
+    /// `uring`: el oraculo diferencial y el cell fuzzer no pueden cambiar de
+    /// significado.
+    io_engine_mode: io_engine.Mode = .sync,
     invert_match: bool = false,
     max_count: ?usize = null,
     nav_plan: nav.NavPlan = .{},
@@ -396,6 +405,25 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.sort = false;
             } else if (std.mem.eql(u8, body, "uring") or std.mem.eql(u8, body, "io-uring")) {
                 opts.use_uring = true;
+                opts.io_engine_mode = .uring;
+            } else if (std.mem.startsWith(u8, a, "--io-engine=")) {
+                const value = a["--io-engine=".len..];
+                if (std.mem.eql(u8, value, "sync")) {
+                    opts.use_uring = false;
+                    opts.io_engine_mode = .sync;
+                } else if (std.mem.eql(u8, value, "uring")) {
+                    opts.use_uring = true;
+                    opts.io_engine_mode = .uring;
+                } else if (std.mem.eql(u8, value, "auto")) {
+                    opts.use_uring = false;
+                    opts.io_engine_mode = .auto;
+                } else {
+                    opts.fail = .{
+                        .what = "bad value for --io-engine (expected auto|sync|uring)",
+                        .arg = value,
+                    };
+                    return error.Usage;
+                }
             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
                 opts.sort = true;
                 opts.kamikaze = false;
@@ -887,6 +915,7 @@ pub fn main(init: std.process.Init) !void {
     // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
     if (!opts.sort) {
         var k_stats: kamikaze.KamikazeStats = .{};
+    var engine_state: io_engine.State = .{};
         var filter_engine = filter.FilterEngine.init(gpa);
         defer filter_engine.deinit();
 
@@ -935,6 +964,8 @@ pub fn main(init: std.process.Init) !void {
             opts.use_uring,
             opts.force_swarm,
             micro_tree_max_bytes,
+            opts.io_engine_mode,
+            &engine_state,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
             std.process.exit(2);
@@ -949,7 +980,7 @@ pub fn main(init: std.process.Init) !void {
             else
                 0;
             std.debug.print(
-                "kamikaze: dirs={d} files={d} bytes={d} matched_files={d} matched_lines={d} threads={d} micro_path={s} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
+                "kamikaze: dirs={d} files={d} bytes={d} matched_files={d} matched_lines={d} threads={d} micro_path={s} io_engine={s} probe_hits={d} probe_misses={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
                 .{
                     k_stats.dirs_scouted,
                     k_stats.files_scanned,
@@ -958,6 +989,9 @@ pub fn main(init: std.process.Init) !void {
                     k_stats.matched_lines,
                     worker_count,
                     if (k_stats.micro_path) "yes" else "no",
+                    if (k_stats.micro_path) "micro" else if (k_stats.io_engine_uring) "uring" else "sync",
+                    k_stats.probe_hits,
+                    k_stats.probe_misses,
                     elapsed_s,
                     mb_s,
                 },
