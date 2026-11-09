@@ -19,7 +19,7 @@
 //!   zig build cell-fuzz -- --all              # Exhaustively tests all 373,248 cells
 //!   zig build cell-fuzz -- --cli 1 500        # Also verifies against zig-out/bin/zigrep subprocess
 const std = @import("std");
-const linux = std.os.linux;
+const builtin = @import("builtin");
 const common = @import("common.zig");
 const zgrep = @import("zgrep");
 
@@ -251,8 +251,8 @@ const CellStats = struct {
     invariant_fails: std.atomic.Value(u64) = .init(0),
 };
 
-fn saveCellReproducer(gpa: Allocator, cell: *const CellConfig, issue: []const u8) void {
-    _ = common.makePath(gpa, "evidence/reproducers") catch {};
+fn saveCellReproducer(io: std.Io, gpa: Allocator, cell: *const CellConfig, issue: []const u8) void {
+    _ = common.makePath(io, "evidence/reproducers") catch {};
     const fname = std.fmt.allocPrint(gpa, "evidence/reproducers/cell_{d}.sh", .{cell.cell_id}) catch return;
     defer gpa.free(fname);
 
@@ -276,7 +276,7 @@ fn saveCellReproducer(gpa: Allocator, cell: *const CellConfig, issue: []const u8
     } else |_| {}
 
     // Construct reproduction command line
-    buf.appendSlice(gpa, "./zig-out/bin/zigrep ") catch return;
+    buf.appendSlice(gpa, if (builtin.os.tag == .windows) "./zig-out/bin/zigrep.exe " else "./zig-out/bin/zigrep ") catch return;
     if (cell.fixed) buf.appendSlice(gpa, "-F ") catch return;
     if (cell.icase) buf.appendSlice(gpa, "-i ") catch return;
     if (cell.word) buf.appendSlice(gpa, "-w ") catch return;
@@ -299,11 +299,11 @@ fn saveCellReproducer(gpa: Allocator, cell: *const CellConfig, issue: []const u8
 
     const fname_z = std.fmt.allocPrintSentinel(gpa, "{s}", .{fname}, 0) catch return;
     defer gpa.free(fname_z);
-    _ = common.writeFile(fname_z, buf.items);
+    _ = common.writeFile(io, fname_z, buf.items);
     std.debug.print("\n[CRITICAL CELL ANOMALY] Reproducer written: {s}\n", .{fname});
 }
 
-fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void {
+fn executeCell(io: std.Io, gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
@@ -325,7 +325,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
             // Anomaly: a known invalid regex syntax (e.g. [z-a] or a{5,2}) was accepted!
             _ = stats.anomalies.fetchAdd(1, .monotonic);
             _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-            saveCellReproducer(gpa, cell, "Invalid syntax regex was accepted without error");
+            saveCellReproducer(io, gpa, cell, "Invalid syntax regex was accepted without error");
             return;
         }
     } else |err| {
@@ -339,7 +339,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
             if (err != error.OutOfMemory) {
                 _ = stats.anomalies.fetchAdd(1, .monotonic);
                 _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-                saveCellReproducer(gpa, cell, "Valid pattern failed compilation");
+                saveCellReproducer(io, gpa, cell, "Valid pattern failed compilation");
             }
             return;
         }
@@ -349,13 +349,13 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
 
     // 2. Haystack Evaluation & Invariant Audit
     const payload = if (cell.haystack == .file_src)
-        common.readFile(arena, "src/main.zig") orelse ""
+        common.readFile(io, arena, "src/main.zig") orelse ""
     else if (cell.haystack == .file_kamikaze)
-        common.readFile(arena, "src/kamikaze.zig") orelse ""
+        common.readFile(io, arena, "src/kamikaze.zig") orelse ""
     else if (cell.haystack == .file_search)
-        common.readFile(arena, "src/search.zig") orelse ""
+        common.readFile(io, arena, "src/search.zig") orelse ""
     else if (cell.haystack == .file_build)
-        common.readFile(arena, "build.zig") orelse ""
+        common.readFile(io, arena, "build.zig") orelse ""
     else if (cell.haystack == .file_null)
         ""
     else
@@ -379,7 +379,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
     ) catch |err| {
         if (err != error.OutOfMemory) {
             _ = stats.anomalies.fetchAdd(1, .monotonic);
-            saveCellReproducer(gpa, cell, "scanBuffer unexpected error");
+            saveCellReproducer(io, gpa, cell, "scanBuffer unexpected error");
         }
         return;
     };
@@ -388,7 +388,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
     if (cell.max_count != null and cell.max_count.? == 0 and res.lines != 0) {
         _ = stats.anomalies.fetchAdd(1, .monotonic);
         _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-        saveCellReproducer(gpa, cell, "max_count == 0 produced lines > 0");
+        saveCellReproducer(io, gpa, cell, "max_count == 0 produced lines > 0");
         return;
     }
 
@@ -399,7 +399,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
         if (res.matched != norm_res.matched) {
             _ = stats.anomalies.fetchAdd(1, .monotonic);
             _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-            saveCellReproducer(gpa, cell, "Quiet mode matched flag diverged from normal scanBuffer");
+            saveCellReproducer(io, gpa, cell, "Quiet mode matched flag diverged from normal scanBuffer");
             return;
         }
     }
@@ -418,6 +418,7 @@ fn executeCell(gpa: Allocator, cell: *const CellConfig, stats: *CellStats) void 
 
 const CellWorkerContext = struct {
     worker_id: usize,
+    io: std.Io,
     gpa: Allocator,
     start_index: usize,
     count: usize,
@@ -431,7 +432,7 @@ fn cellWorker(ctx: *const CellWorkerContext) void {
         const global_k = ctx.start_index + i;
         const cell_id = if (ctx.linear) global_k % TOTAL_CELLS else permuteCell(global_k);
         const cell = decodeCell(cell_id);
-        executeCell(ctx.gpa, &cell, ctx.stats);
+        executeCell(ctx.io, ctx.gpa, &cell, ctx.stats);
     }
 }
 
@@ -467,7 +468,7 @@ pub fn main(init: std.process.Init) !void {
                 if (t > 0) threads_count = t;
             } else |_| {}
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
-            common.printOut(
+            common.printOut(init.io, 
                 \\N-Dimensional Discrete Cell Space Fuzzer for ZiGrep
                 \\
                 \\Total Coordinate Space: 373,248 Discrete Deterministic Cells
@@ -499,7 +500,7 @@ pub fn main(init: std.process.Init) !void {
 
     if (specific_cell) |sc| {
         const cell = decodeCell(sc);
-        common.printOut(
+        common.printOut(init.io, 
             \\========================================================================================
             \\  🔍 ZiGrep Discrete Cell Inspector: Cell #{d}
             \\========================================================================================
@@ -532,16 +533,16 @@ pub fn main(init: std.process.Init) !void {
         });
 
         var stats: CellStats = .{};
-        executeCell(gpa, &cell, &stats);
+        executeCell(init.io, gpa, &cell, &stats);
         if (stats.anomalies.load(.acquire) == 0) {
-            common.printOut("  Verdict: 🟢 CELL #{d} PASSED ALL INVARIANTS CLEANLY!\n\n", .{sc});
+            common.printOut(init.io, "  Verdict: 🟢 CELL #{d} PASSED ALL INVARIANTS CLEANLY!\n\n", .{sc});
         } else {
-            common.printOut("  Verdict: 🔴 CELL #{d} TRIGGERED AN ANOMALY! Check evidence/reproducers/\n\n", .{sc});
+            common.printOut(init.io, "  Verdict: 🔴 CELL #{d} TRIGGERED AN ANOMALY! Check evidence/reproducers/\n\n", .{sc});
         }
         return;
     }
 
-    common.printOut(
+    common.printOut(init.io, 
         \\========================================================================================
         \\  📐 ZiGrep N-Dimensional Discrete Cell Space Fuzzer
         \\========================================================================================
@@ -561,7 +562,7 @@ pub fn main(init: std.process.Init) !void {
     });
 
     var stats: CellStats = .{};
-    const t0 = common.nowNs();
+    const t0 = common.nowNs(init.io);
 
     // Partition work among worker threads
     var threads: std.ArrayList(std.Thread) = .empty;
@@ -579,6 +580,7 @@ pub fn main(init: std.process.Init) !void {
         const ctx = try arena.create(CellWorkerContext);
         ctx.* = .{
             .worker_id = i,
+            .io = init.io,
             .gpa = gpa,
             .start_index = cur,
             .count = this_count,
@@ -595,7 +597,7 @@ pub fn main(init: std.process.Init) !void {
         t.join();
     }
 
-    const elapsed_s = @as(f64, @floatFromInt(common.nowNs() - t0)) / 1_000_000_000.0;
+    const elapsed_s = @as(f64, @floatFromInt(common.nowNs(init.io) - t0)) / 1_000_000_000.0;
     const final_exec = stats.total_executed.load(.acquire);
     const final_rejected = stats.syntax_rejected.load(.acquire);
     const final_matches = stats.matches_found.load(.acquire);
@@ -604,7 +606,7 @@ pub fn main(init: std.process.Init) !void {
     const final_inv = stats.invariant_fails.load(.acquire);
     const ops_per_sec = if (elapsed_s > 0) @as(f64, @floatFromInt(final_exec)) / elapsed_s else 0;
 
-    common.printOut(
+    common.printOut(init.io, 
         \\----------------------------------------------------------------------------------------
         \\  🏁 Cell Space Campaign Complete!
         \\----------------------------------------------------------------------------------------
@@ -636,9 +638,9 @@ pub fn main(init: std.process.Init) !void {
     });
 
     if (final_anom == 0) {
-        common.printOut("  Verdict: 🟢 ZERO ANOMALIES — All {d} cell coordinates executed with mathematical precision!\n\n", .{final_exec});
+        common.printOut(init.io, "  Verdict: 🟢 ZERO ANOMALIES — All {d} cell coordinates executed with mathematical precision!\n\n", .{final_exec});
     } else {
-        common.printOut("  Verdict: 🔴 {d} ANOMALIES DETECTED! Reproducers saved to evidence/reproducers/\n\n", .{final_anom});
+        common.printOut(init.io, "  Verdict: 🔴 {d} ANOMALIES DETECTED! Reproducers saved to evidence/reproducers/\n\n", .{final_anom});
         std.process.exit(1);
     }
 }
