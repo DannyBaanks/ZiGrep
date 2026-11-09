@@ -387,6 +387,27 @@ pub fn wordWrap(arena: Allocator, inner: *Node) CompileError!*Node {
     return mk(arena, .{ .cat = items.items });
 }
 
+/// Wraps `inner` so it must match a whole line (`grep -x`).
+pub fn lineWrap(arena: Allocator, inner: *Node) CompileError!*Node {
+    const mk = struct {
+        fn n(a: Allocator, v: Node) CompileError!*Node {
+            const p = try a.create(Node);
+            p.* = v;
+            return p;
+        }
+    }.n;
+    const bol = try mk(arena, .bol);
+    const eol = try mk(arena, .eol);
+    var items: std.ArrayList(*Node) = .empty;
+    try items.append(arena, bol);
+    switch (inner.*) {
+        .cat => |kids| try items.appendSlice(arena, kids),
+        else => try items.append(arena, inner),
+    }
+    try items.append(arena, eol);
+    return mk(arena, .{ .cat = items.items });
+}
+
 /// Joins several patterns into one alternation.
 pub fn altOf(arena: Allocator, nodes: []*Node) CompileError!*Node {
     if (nodes.len == 1) return nodes[0];

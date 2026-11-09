@@ -1,0 +1,5 @@
+grep (GNU grep) 3.11
+ripgrep 14.1.0
+zgrep 0.3.0
+capturado: 2026-11-09T16:02:08-06:00
+kernel: Linux 7.0.0-42-generic x86_64

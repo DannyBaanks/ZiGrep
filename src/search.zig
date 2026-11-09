@@ -98,7 +98,7 @@ pub fn toLowerByte(b: u8) u8 {
     return b;
 }
 
-pub const Kind = enum { literal, regex };
+pub const Kind = enum { literal, regex, never };
 
 pub const Searcher = struct {
     needle: []const u8,
@@ -164,6 +164,7 @@ pub const Searcher = struct {
     /// callers only use the result to locate the line, so both are equivalent.
     /// An empty needle matches at `start` (grep semantics: matches every line).
     pub fn find(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        if (self.kind == .never) return null;
         if (self.kind == .regex) return self.findRegex(hay, start);
         if (self.word) return self.findWord(hay, start);
         return self.findRaw(hay, start);
@@ -298,6 +299,8 @@ pub const BuildOptions = struct {
     fixed: bool = false,
     icase: bool = false,
     word: bool = false,
+    /// The pattern must match a whole line (-x).
+    line: bool = false,
 };
 
 pub const BuildError = error{ BadRegex, OutOfMemory };
@@ -313,7 +316,15 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
 
-    if (patterns.len == 1) {
+    // GNU grep -f with an empty pattern file selects nothing. A dedicated
+    // kind keeps that distinct from "empty pattern", which matches every line.
+    if (patterns.len == 0) {
+        var s = Searcher.init("", o.algo);
+        s.kind = .never;
+        return s;
+    }
+
+    if (patterns.len == 1 and !o.line) {
         const pure: ?[]const u8 = if (o.fixed)
             patterns[0]
         else blk: {
@@ -339,6 +350,7 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
             try regex.literalNode(arena, p, o.icase)
         else
             try regex.parse(arena, p, .{ .icase = o.icase });
+        if (o.line) n = try regex.lineWrap(arena, n);
         if (o.word) n = try regex.wordWrap(arena, n);
         nodes[idx] = n;
     }
@@ -505,4 +517,57 @@ test "build: plain string keeps the literal fast path, flags select kernels" {
     try std.testing.expectEqual(@as(?usize, 3), latin_ci.find("El ÑANDÚ veloz", 0));
     const latin_upper = try build(pa, &.{"ÁRBOL"}, .{ .icase = true, .fixed = true });
     try std.testing.expectEqual(@as(?usize, 3), latin_upper.find("un árbol verde", 0));
+}
+
+// ---------------------------------------------------------------------------
+// Tests: -x whole-line matching and the empty-pattern-list (-f with an empty
+// file) case.
+// ---------------------------------------------------------------------------
+
+test "build: -x matches whole lines only" {
+    const pa = std.heap.page_allocator;
+    const s = try build(pa, &.{"cat"}, .{ .line = true });
+    try std.testing.expectEqual(Kind.regex, s.kind); // never the literal fast path
+    try std.testing.expectEqual(@as(?usize, 0), s.find("cat", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("concatenate", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("cat ", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("a cat", 0));
+    // works over a whole buffer: only the exact line answers
+    try std.testing.expectEqual(@as(?usize, 0), s.find("cat\ndog\n", 0));
+}
+
+test "build: -x with -i folds the whole line" {
+    const pa = std.heap.page_allocator;
+    const s = try build(pa, &.{"CAT"}, .{ .line = true, .icase = true });
+    try std.testing.expectEqual(@as(?usize, 0), s.find("cat", 0));
+    try std.testing.expectEqual(@as(?usize, 0), s.find("CaT", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("scat", 0));
+}
+
+test "build: -x with -F is a real whole line" {
+    const pa = std.heap.page_allocator;
+    const s = try build(pa, &.{"a.b"}, .{ .line = true, .fixed = true });
+    try std.testing.expectEqual(@as(?usize, 0), s.find("a.b", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("aXb", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("a.b and more", 0));
+}
+
+test "build: -x with several patterns ORs the anchors" {
+    const pa = std.heap.page_allocator;
+    const s = try build(pa, &.{ "cat", "dog" }, .{ .line = true });
+    try std.testing.expectEqual(@as(?usize, 0), s.find("dog", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("hotdog", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("dog food", 0));
+}
+
+test "build: no patterns selects nothing (-f with an empty file)" {
+    const pa = std.heap.page_allocator;
+    const s = try build(pa, &.{}, .{});
+    try std.testing.expectEqual(Kind.never, s.kind);
+    try std.testing.expectEqual(@as(?usize, null), s.find("anything", 0));
+    try std.testing.expectEqual(@as(?usize, null), s.find("", 0));
+    // and it is NOT the same as an empty pattern, which matches every line
+    const empty = try build(pa, &.{""}, .{});
+    try std.testing.expectEqual(Kind.literal, empty.kind);
+    try std.testing.expectEqual(@as(?usize, 0), empty.find("", 0));
 }

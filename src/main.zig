@@ -28,7 +28,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.2.2";
+const version = "0.3.0";
 
 /// Size budget for the zero-thread micro-tree fast path: a tree whose regular
 /// files add up to less than this is scanned on the calling thread, with no
@@ -47,12 +47,16 @@ const usage =
     \\  -F                fixed-string pattern(s); without it PATTERN is a regex
     \\  -E                extended regex (the default; kept for grep compat)
     \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
+    \\  -f, --file=FILE   read patterns from FILE (one per line, repeatable)
+    \\  -x, --line-regexp match whole lines only
     \\  -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
     \\  -v, --invert-match
     \\                    select non-matching lines
     \\  -w, --word-regexp match whole words only
     \\  -r                recurse into directories (always on; kept for grep compat)
     \\  -n                print line numbers (always on; kept for grep compat)
+    \\      --no-line-number
+    \\                    do not print line numbers
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches
@@ -62,9 +66,16 @@ const usage =
     \\                    quiet: no output, exit status only
     \\  -m, --max-count=NUM
     \\                    stop after NUM matching lines per file
+    \\  -A, --after-context=NUM
+    \\                    print NUM lines of context after a match
+    \\  -B, --before-context=NUM
+    \\                    print NUM lines of context before a match
+    \\  -C, --context=NUM print NUM lines of context around a match
     \\  -H                print the file name with each result
     \\  -h                do not print the file name with each result
     \\  -a                treat binary files as text
+    \\  -Z, -0, --null    print a NUL after each file name
+    \\  -s, --no-messages suppress error messages about unreadable files
     \\  -j, --threads N   worker threads (default: number of CPUs)
     \\  -k, --kamikaze, --dataflow
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
@@ -151,6 +162,21 @@ pub const Options = struct {
     fixed: bool = false,
     ignore_case: bool = false,
     word: bool = false,
+    /// `-x`: the pattern must match a whole line.
+    line_regexp: bool = false,
+    /// `-s` / `--no-messages`: do not report unreadable files.
+    no_messages: bool = false,
+    /// Line numbers are printed by default; `--no-line-number` disables them.
+    /// `-n` stays a no-op so `grep`-style clusters keep parsing.
+    show_line_no: bool = true,
+    /// `-Z` / `-0`: terminate file names with NUL instead of ':' / newline.
+    null_filename: bool = false,
+    /// `-A` / `-B` / `-C` line context.
+    before_context: usize = 0,
+    after_context: usize = 0,
+    /// `-f FILE`: patterns come from files as well.
+    pattern_files: [16][]const u8 = undefined,
+    pattern_files_count: usize = 0,
     patterns: [16][]const u8 = undefined,
     patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
@@ -299,6 +325,15 @@ fn eName(err: linux.E) []const u8 {
 // CLI
 // ---------------------------------------------------------------------------
 
+/// Parses a line-count argument (`-A2`, `--context 3`, ...). A non-numeric
+/// value is a usage error, not a silent zero.
+fn parseContextArg(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+    return parseCount(value) orelse {
+        opts.fail = .{ .what = what, .arg = value };
+        return error.Usage;
+    };
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -325,6 +360,32 @@ fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_e
         return error.Usage;
     }
     return n;
+}
+
+/// Reads patterns from a `-f` file: one per line, a trailing `\r` stripped, and
+/// the empty final element after a trailing newline ignored (GNU grep
+/// semantics). The lines live in the arena for the life of the process.
+fn readPatternFile(
+    arena: Allocator,
+    io: std.Io,
+    path: []const u8,
+    list: *std.ArrayListUnmanaged([]const u8),
+) !void {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| return err;
+    defer file.close(io);
+    const size = std.math.cast(usize, (file.stat(io) catch |err| return err).size) orelse return error.ReadFailed;
+    const bytes = try arena.alloc(u8, size);
+    const got = file.readPositionalAll(io, bytes, 0) catch |err| return err;
+    const data = bytes[0..got];
+    var start: usize = 0;
+    while (start < data.len) {
+        const end = std.mem.findScalarPos(u8, data, start, '\n') orelse data.len;
+        var line = data[start..end];
+        if (line.len > 0 and line[line.len - 1] == '\r') line = line[0 .. line.len - 1];
+        try list.append(arena, line);
+        if (end >= data.len) break;
+        start = end + 1;
+    }
 }
 
 fn trimQuotes(s: []const u8) []const u8 {
@@ -480,6 +541,69 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 };
             } else if (std.mem.eql(u8, body, "word-regexp")) {
                 opts.word = true;
+            } else if (std.mem.eql(u8, body, "line-regexp")) {
+                opts.line_regexp = true;
+            } else if (std.mem.eql(u8, body, "no-messages")) {
+                opts.no_messages = true;
+            } else if (std.mem.eql(u8, body, "no-line-number")) {
+                opts.show_line_no = false;
+            } else if (std.mem.eql(u8, body, "line-number")) {
+                opts.show_line_no = true;
+            } else if (std.mem.eql(u8, body, "null")) {
+                opts.null_filename = true;
+            } else if (std.mem.eql(u8, body, "text")) {
+                opts.binary = true;
+            } else if (std.mem.startsWith(u8, body, "after-context=")) {
+                const v = body["after-context=".len..];
+                opts.after_context = try parseContextArg(opts, v, "bad value for --after-context");
+            } else if (std.mem.eql(u8, body, "after-context")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.after_context = try parseContextArg(opts, args[i], "bad value for --after-context");
+            } else if (std.mem.startsWith(u8, body, "before-context=")) {
+                const v = body["before-context=".len..];
+                opts.before_context = try parseContextArg(opts, v, "bad value for --before-context");
+            } else if (std.mem.eql(u8, body, "before-context")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.before_context = try parseContextArg(opts, args[i], "bad value for --before-context");
+            } else if (std.mem.startsWith(u8, body, "context=")) {
+                const v = body["context=".len..];
+                opts.before_context = try parseContextArg(opts, v, "bad value for --context");
+                opts.after_context = opts.before_context;
+            } else if (std.mem.eql(u8, body, "context")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.before_context = try parseContextArg(opts, args[i], "bad value for --context");
+                opts.after_context = opts.before_context;
+            } else if (std.mem.startsWith(u8, body, "file=")) {
+                if (opts.pattern_files_count >= opts.pattern_files.len) {
+                    opts.fail = .{ .what = "too many -f pattern files (max 16)", .arg = a };
+                    return error.Usage;
+                }
+                opts.pattern_files[opts.pattern_files_count] = body["file=".len..];
+                opts.pattern_files_count += 1;
+            } else if (std.mem.eql(u8, body, "file")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.pattern_files_count >= opts.pattern_files.len) {
+                    opts.fail = .{ .what = "too many -f pattern files (max 16)", .arg = a };
+                    return error.Usage;
+                }
+                opts.pattern_files[opts.pattern_files_count] = args[i];
+                opts.pattern_files_count += 1;
             } else if (std.mem.eql(u8, body, "fixed-strings")) {
                 opts.fixed = true;
             } else if (std.mem.eql(u8, body, "extended-regexp")) {
@@ -598,10 +722,16 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         var ci: usize = 0;
         while (ci < chars.len) : (ci += 1) {
             switch (chars[ci]) {
-                // Accepted no-ops: zgrep is always recursive, fixed-string
-                // and line-numbered, never follows symlinks, and already
-                // skips binary files the way `-I` asks for.
-                'r', 'n', 'I', 'E', 'G', 's' => {},
+                // Accepted no-ops: zgrep is always recursive, never follows
+                // symlinks, and already skips binary files the way `-I` asks
+                // for. `-n` keeps its real meaning (line numbers are on by
+                // default) and `-s` is `--no-messages`, which used to be a
+                // silent no-op.
+                'r', 'I', 'E', 'G' => {},
+                'n' => opts.show_line_no = true,
+                's' => opts.no_messages = true,
+                'x' => opts.line_regexp = true,
+                'Z', '0' => opts.null_filename = true,
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
                 'v' => opts.invert_match = true,
@@ -675,6 +805,64 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.patterns_count += 1;
                     ci = chars.len;
                 },
+                'f' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    if (opts.pattern_files_count >= opts.pattern_files.len) {
+                        opts.fail = .{ .what = "too many -f pattern files (max 16)", .arg = value };
+                        return error.Usage;
+                    }
+                    opts.pattern_files[opts.pattern_files_count] = value;
+                    opts.pattern_files_count += 1;
+                    ci = chars.len;
+                },
+                'A' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.after_context = try parseContextArg(opts, value, "bad value for -A");
+                    ci = chars.len;
+                },
+                'B' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.before_context = try parseContextArg(opts, value, "bad value for -B");
+                    ci = chars.len;
+                },
+                'C' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.before_context = try parseContextArg(opts, value, "bad value for -C");
+                    opts.after_context = opts.before_context;
+                    ci = chars.len;
+                },
                 'j' => {
                     const rest = chars[ci + 1 ..];
                     const value: []const u8 = if (rest.len > 0) rest else blk: {
@@ -696,8 +884,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         }
     }
 
-    if (opts.patterns_count > 0) {
-        // Patterns came from -e / --regexp: all positionals are operands (paths).
+    if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
+        // Patterns came from -e / --regexp / -f: all positionals are operands (paths).
         const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
         return .{ .pattern = "", .operands = ops };
     }
@@ -771,11 +959,26 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    const pattern_list: []const []const u8 = if (opts.patterns_count > 0)
-        opts.patterns[0..opts.patterns_count]
-    else
-        @as([*]const []const u8, @ptrCast(&pattern))[0..1];
-    for (pattern_list) |pp| {
+    // Patterns come from -e, from -f files, or from the first positional.
+    // With -f an empty file means "select nothing", which `build` models with
+    // the `.never` kind.
+    var pattern_list: std.ArrayListUnmanaged([]const u8) = .empty;
+    defer pattern_list.deinit(gpa);
+    if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
+        pattern_list.appendSlice(gpa, opts.patterns[0..opts.patterns_count]) catch return usage_error.Usage;
+        for (opts.pattern_files[0..opts.pattern_files_count]) |pf| {
+            readPatternFile(arena, init.io, pf, &pattern_list) catch |err| {
+                if (!opts.no_messages) {
+                    std.debug.print("zgrep: {s}: {s}\n", .{ pf, @errorName(err) });
+                }
+                std.process.exit(2);
+            };
+        }
+    } else {
+        pattern_list.append(gpa, pattern) catch return usage_error.Usage;
+    }
+    const patterns: []const []const u8 = pattern_list.items;
+    for (patterns) |pp| {
         if (std.mem.indexOfScalar(u8, pp, '\n') != null) {
             std.debug.print("zgrep: patterns containing a newline are not supported\n", .{});
             std.process.exit(2);
@@ -799,11 +1002,12 @@ pub fn main(init: std.process.Init) !void {
 
     const t0 = nowMonotonicNs(init.io);
 
-    const searcher = search.build(gpa, pattern_list, .{
+    const searcher = search.build(gpa, patterns, .{
         .algo = opts.algo,
         .fixed = opts.fixed,
         .icase = opts.ignore_case,
         .word = opts.word,
+        .line = opts.line_regexp,
     }) catch |e| switch (e) {
         error.BadRegex => {
             std.debug.print("zgrep: invalid regex: {s}\n", .{@import("regex.zig").last_error});
@@ -841,6 +1045,10 @@ pub fn main(init: std.process.Init) !void {
         const scan_cfg = scan.ScanConfig{
             .invert = opts.invert_match,
             .max_count = opts.max_count,
+            .before_context = opts.before_context,
+            .after_context = opts.after_context,
+            .show_line_no = opts.show_line_no,
+            .null_filename = opts.null_filename,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -875,17 +1083,17 @@ pub fn main(init: std.process.Init) !void {
         if (opts.mode == .count) {
             if (show_p) {
                 try out.appendSlice(gpa, path_label);
-                try out.append(gpa, ':');
+                try out.append(gpa, if (opts.null_filename) 0 else ':');
             }
             var num_buf: [24]u8 = undefined;
             const s = std.fmt.bufPrint(&num_buf, "{d}\n", .{br.lines}) catch unreachable;
             try out.appendSlice(gpa, s);
         } else if (opts.mode == .files and br.matched) {
             try out.appendSlice(gpa, path_label);
-            try out.append(gpa, '\n');
+            try out.append(gpa, if (opts.null_filename) 0 else '\n');
         } else if (opts.mode == .files_without_match and !br.matched) {
             try out.appendSlice(gpa, path_label);
-            try out.append(gpa, '\n');
+            try out.append(gpa, if (opts.null_filename) 0 else '\n');
         }
 
         if (out.items.len > 0 and opts.mode != .quiet) {
@@ -904,7 +1112,7 @@ pub fn main(init: std.process.Init) !void {
     var had_error = false;
     for (operands) |op| {
         const info = vfs.statFile(init.io, op, .{}) catch |err| {
-            std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
+            if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
             had_error = true;
             continue;
         };
@@ -950,6 +1158,10 @@ pub fn main(init: std.process.Init) !void {
         const scan_cfg = scan.ScanConfig{
             .invert = opts.invert_match,
             .max_count = opts.max_count,
+            .before_context = opts.before_context,
+            .after_context = opts.after_context,
+            .show_line_no = opts.show_line_no,
+            .null_filename = opts.null_filename,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -1036,18 +1248,18 @@ pub fn main(init: std.process.Init) !void {
     var files: std.ArrayList([:0]const u8) = .empty;
     for (valid_operands.items) |op| {
         const info = vfs.statFile(init.io, op, .{}) catch |err| {
-            std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
+            if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
             had_error = true;
             continue;
         };
         if (info.kind == .directory) {
             walk.walk(init.io, arena, &.{op}, &files, &filter_engine, opts.nav_plan) catch |err| {
-                std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
+                if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
                 had_error = true;
             };
         } else if (info.kind == .file) {
             files.append(arena, op) catch {
-                std.debug.print("zgrep: {s}: {s}\n", .{ op, eName(.NOMEM) });
+                if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, eName(.NOMEM) });
                 had_error = true;
             };
         }
@@ -1077,6 +1289,10 @@ pub fn main(init: std.process.Init) !void {
         .scan_config = .{
             .invert = opts.invert_match,
             .max_count = opts.max_count,
+            .before_context = opts.before_context,
+            .after_context = opts.after_context,
+            .show_line_no = opts.show_line_no,
+            .null_filename = opts.null_filename,
         },
         .gpa = gpa,
         .window = window,
@@ -1086,13 +1302,22 @@ pub fn main(init: std.process.Init) !void {
     const main_scratch = gpa.alloc(u8, default_scratch_bytes) catch null;
     defer if (main_scratch) |s| gpa.free(s);
 
+    // GNU grep and ripgrep separate disjoint context groups from different
+    // files with a `--' line; keep that so context output is identical.
+    const context_mode = opts.mode == .lines and (opts.before_context > 0 or opts.after_context > 0);
+    var prev_emitted = false;
+
     if (!use_threads) {
         var idx: usize = 0;
         while (idx < files.items.len) : (idx += 1) {
             if (opts.mode == .quiet and ctx.found.load(.acquire)) break;
             scanOne(&ctx, idx, main_scratch);
             if (opts.mode != .quiet) {
-                out.writeAll(slots[idx].buf.items);
+                if (slots[idx].buf.items.len > 0) {
+                    if (context_mode and prev_emitted) out.writeAll("--\n");
+                    out.writeAll(slots[idx].buf.items);
+                    prev_emitted = true;
+                }
                 slots[idx].buf.deinit(gpa);
                 slots[idx].buf = .empty;
             }
@@ -1125,7 +1350,11 @@ pub fn main(init: std.process.Init) !void {
             var miss: usize = 0;
             while (w < slots.len) {
                 if (slots[w].ready.load(.acquire)) {
-                    out.writeAll(slots[w].buf.items);
+                    if (slots[w].buf.items.len > 0) {
+                        if (context_mode and prev_emitted) out.writeAll("--\n");
+                        out.writeAll(slots[w].buf.items);
+                        prev_emitted = true;
+                    }
                     slots[w].buf.deinit(gpa);
                     slots[w].buf = .empty;
                     ctx.emit_cursor.store(w + 1, .release);
@@ -1436,6 +1665,133 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
+    }
+}
+
+test "parseArgs: -x, -f, -s, --no-line-number, -Z/-0, -A/-B/-C" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-x", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.line_regexp);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--line-regexp", "cat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.line_regexp);
+    }
+    // -f consumes no positional: the pattern comes from the file.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-f", "pats.txt", "dir" };
+        const r = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.pattern_files_count);
+        try std.testing.expectEqualStrings("pats.txt", o.pattern_files[0]);
+        try std.testing.expectEqual(@as(usize, 0), o.patterns_count);
+        try std.testing.expectEqual(@as(usize, 1), r.operands.len);
+        try std.testing.expectEqualStrings("dir", r.operands[0]);
+    }
+    // -e together with -f: both, and every positional is a path.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-e", "one", "-f", "pats.txt", "f1", "f2" };
+        const r = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.patterns_count);
+        try std.testing.expectEqual(@as(usize, 1), o.pattern_files_count);
+        try std.testing.expectEqual(@as(usize, 2), r.operands.len);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-s", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.no_messages);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--no-messages", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.no_messages);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--no-line-number", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(!o.show_line_no);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-Z", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.null_filename);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-0", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.null_filename);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--null", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.null_filename);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-A3", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 3), o.after_context);
+        try std.testing.expectEqual(@as(usize, 0), o.before_context);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-B", "2", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2), o.before_context);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-C4", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 4), o.before_context);
+        try std.testing.expectEqual(@as(usize, 4), o.after_context);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--context=5", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 5), o.before_context);
+        try std.testing.expectEqual(@as(usize, 5), o.after_context);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--after-context", "2", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2), o.after_context);
+    }
+    // clustered with the new flags
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-nxA2", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.line_regexp);
+        try std.testing.expect(o.show_line_no);
+        try std.testing.expectEqual(@as(usize, 2), o.after_context);
+    }
+    // a non-numeric context is a usage error, not a silent zero
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--context=x", "pat" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-A" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
     }
 }
 

@@ -93,6 +93,7 @@ pub const UringScanner = struct {
         var result = uring.UringBatchResult{};
         const count = @min(file_names.len, BATCH_SIZE);
         if (count == 0) return result;
+        const context_mode = mode == .lines and (config.before_context > 0 or config.after_context > 0);
 
         // Ensure no lingering open fds on error or exit:
         defer {
@@ -157,6 +158,7 @@ pub const UringScanner = struct {
                 const bytes_read = cqes[cqe_idx].res;
                 if (bytes_read < 0) continue; // read error
                 const n: usize = @intCast(bytes_read);
+                const before_len = out.items.len;
 
                 result.files_scanned += 1;
 
@@ -168,6 +170,7 @@ pub const UringScanner = struct {
                     // anillo y se descartaba el resto: --stats mentía a la baja
                     // justo en frío, que es donde se usa el uring.
                     const fs = scan.scanFile(io, gpa, searcher, path, show_path, mode, binary, config, out, null, null);
+                    if (context_mode) scan.insertGroupSeparator(out, gpa, before_len);
                     result.bytes_scanned += fs.bytes;
                     const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;
                     if (is_hit) {
@@ -204,7 +207,8 @@ pub const UringScanner = struct {
                         }
                     }
                 }
-                if (scan.emitOncePerFile(out, gpa, path, show_path, mode, fs)) |e| fs.err = e;
+                if (scan.emitOncePerFile(out, gpa, path, show_path, mode, fs, config.null_filename)) |e| fs.err = e;
+                if (context_mode) scan.insertGroupSeparator(out, gpa, before_len);
 
                 const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;
                 if (is_hit) {

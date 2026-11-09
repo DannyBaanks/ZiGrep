@@ -1,0 +1,83 @@
+zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
+
+usage: zgrep [OPTIONS] PATTERN [PATH...]
+       zgrep [OPTIONS] [-e PATTERN...] [PATH...]
+       cat FILE | zgrep [OPTIONS] PATTERN
+
+options:
+  -F                fixed-string pattern(s); without it PATTERN is a regex
+  -E                extended regex (the default; kept for grep compat)
+  -e PATTERN        search for PATTERN; repeat for several (any may match)
+  -f, --file=FILE   read patterns from FILE (one per line, repeatable)
+  -x, --line-regexp match whole lines only
+  -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
+  -v, --invert-match
+                    select non-matching lines
+  -w, --word-regexp match whole words only
+  -r                recurse into directories (always on; kept for grep compat)
+  -n                print line numbers (always on; kept for grep compat)
+      --no-line-number
+                    do not print line numbers
+  -c, --count       print only a count of matching lines per file
+  -l, --files-with-matches
+                    print only the names of files with matches
+  -L, --files-without-match
+                    print only the names of files without matches
+  -q, --quiet, --silent
+                    quiet: no output, exit status only
+  -m, --max-count=NUM
+                    stop after NUM matching lines per file
+  -A, --after-context=NUM
+                    print NUM lines of context after a match
+  -B, --before-context=NUM
+                    print NUM lines of context before a match
+  -C, --context=NUM print NUM lines of context around a match
+  -H                print the file name with each result
+  -h                do not print the file name with each result
+  -a                treat binary files as text
+  -Z, -0, --null    print a NUL after each file name
+  -s, --no-messages suppress error messages about unreadable files
+  -j, --threads N   worker threads (default: number of CPUs)
+  -k, --kamikaze, --dataflow
+                    streaming dataflow with concurrent kamikaze swarm (default)
+      --sort, --deterministic
+                    emit results in deterministic order by path (disables streaming)
+  -N, --nav, --befunge SPEC
+                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
+      --exclude-dir=DIR
+                    skip directory matching DIR (comma-separated or globs)
+      --exclude-ext=EXT
+                    skip file extensions (e.g. log,tmp,lock)
+      --include-ext=EXT
+                    only search file extensions (e.g. zig,rs,py)
+      --exclude=GLOB
+                    skip files matching GLOB (e.g. *.min.js)
+      --include=GLOB
+                    only search files matching GLOB
+      --no-ignore   do not read .dataignore / .gitignore or apply defaults
+      --no-default-ignore
+                    do not apply built-in default ignore lists
+      --no-hidden   skip hidden files and directories
+      --force-swarm
+                    always use the concurrent kamikaze swarm (never the
+                    zero-thread micro-tree fast path)
+      --algo MODE   auto | bmh | memchr   (default: auto)
+      --stats       print timing and throughput to stderr
+      --uring       use Linux io_uring asynchronous batched I/O engine
+                     (exact alias of --io-engine=uring)
+      --io-engine=  sync | uring | auto   (default: auto). auto makes the
+                     first read of each probed file a preadv2(RWF_NOWAIT)
+                     probe: if the page is in RAM its bytes are scanned
+                     directly; if the tree is cold it promotes to
+                     io_uring. sync is the old behaviour, byte for byte
+      --help        print this help
+  -V, --version     print the version
+
+regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \\d \\w \\s * + ? {n,m} | ( ) ^ $
+not supported (reported as an error): \\b, back-references, lookaround.
+a plain string with no metacharacters takes the fast literal path.
+patterns containing a newline are rejected.
+when no PATH is given or when PATH is '-', standard input is read.
+
+exit status: 0 match found, 1 no match, 2 error

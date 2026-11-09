@@ -32,6 +32,13 @@ pub const Mode = enum {
 pub const ScanConfig = struct {
     invert: bool = false,
     max_count: ?usize = null,
+    /// Lines of context before/after a selected line (`-A` / `-B` / `-C`).
+    before_context: usize = 0,
+    after_context: usize = 0,
+    /// Print the line-number prefix (default on, like GNU grep -n).
+    show_line_no: bool = true,
+    /// `-Z`: terminate file names with NUL instead of ':' / newline.
+    null_filename: bool = false,
 };
 
 /// NUL probe window used to decide a file is binary, aligned with GNU grep's
@@ -96,23 +103,124 @@ fn emitLine(
     gpa: Allocator,
     path: []const u8,
     show_path: bool,
+    show_line_no: bool,
+    sep: u8,
     line_no: usize,
     text: []const u8,
+    null_filename: bool,
 ) Allocator.Error!void {
     const path_extra: usize = if (show_path) path.len + 1 else 0;
-    const needed = path_extra + 24 + 1 + text.len + 1;
+    const line_extra: usize = if (show_line_no) 24 else 0;
+    const needed = path_extra + line_extra + 1 + text.len + 1;
     try out.ensureUnusedCapacity(gpa, needed);
 
     if (show_path) {
         out.appendSliceAssumeCapacity(path);
-        out.appendAssumeCapacity(':');
+        out.appendAssumeCapacity(if (null_filename) 0 else sep);
     }
-    var buf: [24]u8 = undefined;
-    const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
-    out.appendSliceAssumeCapacity(s);
-    out.appendAssumeCapacity(':');
+    if (show_line_no) {
+        var buf: [24]u8 = undefined;
+        const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+        out.appendSliceAssumeCapacity(s);
+        out.appendAssumeCapacity(sep);
+    }
     out.appendSliceAssumeCapacity(text);
     out.appendAssumeCapacity('\n');
+}
+
+const LineRef = struct { start: usize, end: usize, no: usize };
+
+/// Ordered line scan used by `-v` and by `-A`/`-B`/`-C`. The jump-to-next-match
+/// path in `scanBuffer` cannot see the lines between matches, so context needs
+/// this loop; it also keeps one output line per selected line (grep semantics).
+fn scanBufferLines(
+    gpa: Allocator,
+    data: []const u8,
+    searcher: *const Searcher,
+    path: []const u8,
+    show_path: bool,
+    mode: Mode,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+) Allocator.Error!BufferResult {
+    var res: BufferResult = .{};
+
+    var ring: []LineRef = &.{};
+    if (config.before_context > 0) {
+        ring = try gpa.alloc(LineRef, config.before_context);
+    }
+    defer if (ring.len > 0) gpa.free(ring);
+    var ring_len: usize = 0;
+    var ring_pos: usize = 0;
+
+    // Group separators only exist with context enabled: without `-A/-B/-C`
+    // the old ordered path printed nothing but matching lines.
+    const context_enabled = config.before_context > 0 or config.after_context > 0;
+
+    var line_start: usize = 0;
+    var line_no: usize = 1;
+    var last_printed: usize = 0;
+    var printed_any = false;
+    var after_left: usize = 0;
+    var maxed = false;
+
+    while (line_start < data.len) {
+        const line_end = std.mem.findScalarPos(u8, data, line_start, '\n') orelse data.len;
+        const line_slice = data[line_start..line_end];
+        const has_match = searcher.find(line_slice, 0) != null;
+        const selected = if (config.invert) !has_match else has_match;
+
+        if (selected and !maxed) {
+            res.matched = true;
+            res.lines += 1;
+            if (mode == .quiet or mode == .files or mode == .files_without_match) return res;
+
+            if (mode == .lines) {
+                if (ring.len > 0 and ring_len > 0) {
+                    const first = if (line_no > config.before_context) line_no - config.before_context else 1;
+                    var k: usize = 0;
+                    while (k < ring_len) : (k += 1) {
+                        const at = (ring_pos + ring.len - ring_len + k) % ring.len;
+                        const ref = ring[at];
+                        if (ref.no < first or ref.no <= last_printed) continue;
+                        if (printed_any and ref.no > last_printed + 1) try out.appendSlice(gpa, "--\n");
+                        try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename);
+                        last_printed = ref.no;
+                        printed_any = true;
+                    }
+                }
+                if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
+                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
+                last_printed = line_no;
+                printed_any = true;
+            }
+
+            after_left = if (mode == .lines) config.after_context else 0;
+            if (config.max_count) |mc| {
+                if (res.lines >= mc) maxed = true;
+            }
+        } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
+            if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
+            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, line_slice, config.null_filename);
+            last_printed = line_no;
+            printed_any = true;
+            after_left -= 1;
+        } else if (maxed and after_left == 0) {
+            break;
+        }
+
+        if (ring.len > 0) {
+            ring[ring_pos] = .{ .start = line_start, .end = line_end, .no = line_no };
+            ring_pos = (ring_pos + 1) % ring.len;
+            if (ring_len < ring.len) ring_len += 1;
+        }
+
+        if (line_end >= data.len) break;
+        line_start = line_end + 1;
+        line_no += 1;
+    }
+
+    return res;
 }
 
 /// Searches one in-memory buffer and, in `lines` mode, appends the matching
@@ -138,30 +246,10 @@ pub fn scanBuffer(
         return res;
     }
 
-    // Inverted matching: select lines that DO NOT contain the pattern
-    if (config.invert) {
-        var line_start: usize = 0;
-        var line_no: usize = 1;
-        while (line_start < data.len) {
-            const line_end = std.mem.findScalarPos(u8, data, line_start, '\n') orelse data.len;
-            const line_slice = data[line_start..line_end];
-            const has_match = (searcher.find(line_slice, 0) != null);
-            if (!has_match) {
-                res.matched = true;
-                res.lines += 1;
-                if (mode == .quiet or mode == .files) return res;
-                if (mode == .lines) {
-                    try emitLine(out, gpa, path, show_path, line_no, line_slice);
-                }
-                if (config.max_count) |mc| {
-                    if (res.lines >= mc) break;
-                }
-            }
-            if (line_end >= data.len) break;
-            line_start = line_end + 1;
-            line_no += 1;
-        }
-        return res;
+    // Inverted matching and/or line context both need every line in order;
+    // the jump-to-next-match fast path below cannot provide context.
+    if (config.invert or config.before_context > 0 or config.after_context > 0) {
+        return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
     // Early-exit optimization for files (-l, -L) and quiet (-q) modes:
@@ -194,7 +282,7 @@ pub fn scanBuffer(
         res.matched = true;
         res.lines += 1;
         if (mode == .lines) {
-            try emitLine(out, gpa, path, show_path, line_no, data[line_start..line_end]);
+            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..line_end], config.null_filename);
         }
         if (config.max_count) |mc| {
             if (res.lines >= mc) break;
@@ -273,7 +361,7 @@ fn scanFilePortable(
         return res;
     };
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
         return res;
     }
 
@@ -288,7 +376,7 @@ fn scanFilePortable(
                 return res;
             }
             processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
             return res;
         }
     }
@@ -301,7 +389,7 @@ fn scanFilePortable(
             var map = map_value;
             defer map.destroy(io);
             processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
             return res;
         } else |_| {}
     }
@@ -320,7 +408,7 @@ fn scanFilePortable(
         return res;
     }
     processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
     return res;
 }
 
@@ -446,7 +534,7 @@ fn scanFileLinux(
         // Did the entire file fit in the scratch buffer?
         if (got < sbuf.len) {
             if (got == 0) {
-                if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+                if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
                 return res;
             }
             const data = sbuf[0..got];
@@ -475,7 +563,7 @@ fn scanFileLinux(
                     res.bytes = data.len;
                 }
             }
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
             return res;
         }
         // File >= sbuf.len: rewind to 0 for mmap/read fallback.
@@ -491,7 +579,7 @@ fn scanFileLinux(
     const size: usize = @intCast(@as(isize, @bitCast(szr)));
     _ = linux.lseek(fd, 0, linux.SEEK.SET);
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
         return res;
     }
 
@@ -572,7 +660,7 @@ fn scanFileLinux(
     // --- modes that emit once per file ------------------------------------
     // `-c` reports every scanned file, including binary-skipped ones as 0,
     // which is what `grep -c` does.
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |e| res.err = e;
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
     return res;
 }
 
@@ -585,22 +673,32 @@ pub fn emitOncePerFile(
     show_path: bool,
     mode: Mode,
     res: FileScan,
+    null_filename: bool,
 ) ?linux.E {
     if (mode == .count) {
         if (show_path) {
             out.appendSlice(gpa, path) catch return .NOMEM;
-            out.append(gpa, ':') catch return .NOMEM;
+            out.append(gpa, if (null_filename) 0 else ':') catch return .NOMEM;
         }
         appendDecimal(out, gpa, res.lines) catch return .NOMEM;
         out.append(gpa, '\n') catch return .NOMEM;
     } else if (mode == .files and res.matched) {
         out.appendSlice(gpa, path) catch return .NOMEM;
-        out.append(gpa, '\n') catch return .NOMEM;
+        out.append(gpa, if (null_filename) 0 else '\n') catch return .NOMEM;
     } else if (mode == .files_without_match and !res.matched) {
         out.appendSlice(gpa, path) catch return .NOMEM;
-        out.append(gpa, '\n') catch return .NOMEM;
+        out.append(gpa, if (null_filename) 0 else '\n') catch return .NOMEM;
     }
     return null;
+}
+
+/// `-A/-B/-C` with more than one file: GNU grep prints a `--` line between the
+/// context groups of different files. Callers snapshot `out.items.len` before
+/// appending a file and call this afterwards.
+pub fn insertGroupSeparator(out: *std.ArrayList(u8), gpa: Allocator, before_len: usize) void {
+    if (before_len > 0 and out.items.len > before_len) {
+        out.insertSlice(gpa, before_len, "--\n") catch {};
+    }
 }
 
 /// Reads exactly `buf.len` bytes. Returns null on success or the errno.
@@ -786,4 +884,235 @@ test "utf16: BOM detection and LE decoding" {
     const decoded = try decodeUtf16ToUtf8(std.testing.allocator, &utf16_sample, true);
     defer std.testing.allocator.free(decoded);
     try std.testing.expectEqualStrings("Hello\n", decoded);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: -A / -B / -C context, --no-line-number, -Z, and their interaction
+// with -v and -m. Every expected output here was captured from GNU grep 3.11
+// and then repeated against ripgrep 14.1.0.
+// ---------------------------------------------------------------------------
+
+const ctx_data = "l1\nl2\nHIT a\nl4\nl5\nl6\nl7\nHIT b\nl9\nHIT c\nl11\n";
+
+test "scanBuffer: -A1 -B1 without file names" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1, .after_context = 1 }, "a.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\2-l2
+        \\3:HIT a
+        \\4-l4
+        \\--
+        \\7-l7
+        \\8:HIT b
+        \\9-l9
+        \\10:HIT c
+        \\11-l11
+        \\
+    , got);
+}
+
+test "scanBuffer: -A2 -B2 with file names" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 2, .after_context = 2 }, "a.txt", true);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\a.txt-1-l1
+        \\a.txt-2-l2
+        \\a.txt:3:HIT a
+        \\a.txt-4-l4
+        \\a.txt-5-l5
+        \\a.txt-6-l6
+        \\a.txt-7-l7
+        \\a.txt:8:HIT b
+        \\a.txt-9-l9
+        \\a.txt:10:HIT c
+        \\a.txt-11-l11
+        \\
+    , got);
+}
+
+test "scanBuffer: after-context only and before-context only" {
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .after_context = 1 }, "a.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings(
+            \\3:HIT a
+            \\4-l4
+            \\--
+            \\8:HIT b
+            \\9-l9
+            \\10:HIT c
+            \\11-l11
+            \\
+        , got);
+    }
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1 }, "a.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings(
+            \\2-l2
+            \\3:HIT a
+            \\--
+            \\7-l7
+            \\8:HIT b
+            \\9-l9
+            \\10:HIT c
+            \\
+        , got);
+    }
+}
+
+test "scanBuffer: a match inside a previous after-context is printed once, as a match" {
+    // Lines 8, 9, 10 are consecutive matches; only the group separator makes
+    // groups at all here, and grep does not print one between adjacent matches.
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1 }, "a.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\2-l2
+        \\3:HIT a
+        \\--
+        \\7-l7
+        \\8:HIT b
+        \\9-l9
+        \\10:HIT c
+        \\
+    , got);
+}
+
+test "scanBuffer: context wider than the file stays a single group" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 10, .after_context = 10 }, "a.txt", true);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\a.txt-1-l1
+        \\a.txt-2-l2
+        \\a.txt:3:HIT a
+        \\a.txt-4-l4
+        \\a.txt-5-l5
+        \\a.txt-6-l6
+        \\a.txt-7-l7
+        \\a.txt:8:HIT b
+        \\a.txt-9-l9
+        \\a.txt:10:HIT c
+        \\a.txt-11-l11
+        \\
+    , got);
+}
+
+test "scanBuffer: max-count stops matching but still drains after-context" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .after_context = 2, .max_count = 1 }, "a.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\3:HIT a
+        \\4-l4
+        \\5-l5
+        \\
+    , got);
+}
+
+test "scanBuffer: --no-line-number keeps the context separator" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1, .after_context = 1, .show_line_no = false }, "a.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\l2
+        \\HIT a
+        \\l4
+        \\--
+        \\l7
+        \\HIT b
+        \\l9
+        \\HIT c
+        \\l11
+        \\
+    , got);
+    // With file names the path separator still marks match vs context.
+    const named = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1, .show_line_no = false }, "a.txt", true);
+    defer std.testing.allocator.free(named);
+    try std.testing.expectEqualStrings(
+        \\a.txt-l2
+        \\a.txt:HIT a
+        \\--
+        \\a.txt-l7
+        \\a.txt:HIT b
+        \\a.txt-l9
+        \\a.txt:HIT c
+        \\
+    , named);
+}
+
+test "scanBuffer: context is still counted, not emitted, in -c mode" {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .count, .{ .before_context = 2, .after_context = 2 }, &out);
+    try std.testing.expectEqualStrings("", out.items);
+    try std.testing.expectEqual(@as(usize, 3), br.lines);
+}
+
+test "scanBuffer: invert without context prints no group separators" {
+    // Regression: the ordered path used by -v once leaked the `--` group
+    // separator even with -A/-B/-C disabled (oracle case "invert-match -v").
+    const data = "one\ntwo\nthree\nfour\nfive\nsix\n";
+    const got = try runWithConfig(data, "zzz", .lines, .{ .invert = true }, "f", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings("1:one\n2:two\n3:three\n4:four\n5:five\n6:six\n", got);
+    const inc = try runWithConfig(data, "e", .lines, .{ .invert = true }, "f", false);
+    defer std.testing.allocator.free(inc);
+    try std.testing.expectEqualStrings("2:two\n4:four\n6:six\n", inc);
+    // same, with after-context: matches become context of an inverted match
+    const with_ctx = try runWithConfig(data, "e", .lines, .{ .invert = true, .after_context = 1 }, "f", false);
+    defer std.testing.allocator.free(with_ctx);
+    try std.testing.expectEqualStrings("2:two\n3-three\n4:four\n5-five\n6:six\n", with_ctx);
+}
+
+test "scanBuffer: -A1 -B1 still honours invert (-v)" {
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .invert = true, .after_context = 1 }, "a.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\1:l1
+        \\2:l2
+        \\3-HIT a
+        \\4:l4
+        \\5:l5
+        \\6:l6
+        \\7:l7
+        \\8-HIT b
+        \\9:l9
+        \\10-HIT c
+        \\11:l11
+        \\
+    , got);
+}
+
+test "scanBuffer: -Z prints a NUL after the file name" {
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .null_filename = true }, "a.txt", true);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("a.txt\x003:HIT a\na.txt\x008:HIT b\na.txt\x0010:HIT c\n", got);
+    }
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .null_filename = true, .after_context = 1 }, "a.txt", true);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("a.txt\x003:HIT a\na.txt\x004-l4\n--\na.txt\x008:HIT b\na.txt\x009-l9\na.txt\x0010:HIT c\na.txt\x0011-l11\n", got);
+    }
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .count, .{ .null_filename = true }, "a.txt", true);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("", got);
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = Searcher.init("HIT", .auto);
+        const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .count, .{ .null_filename = true }, &out);
+        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .count, .{ .matched = br.matched, .lines = br.lines }, true);
+        try std.testing.expectEqualStrings("a.txt\x003\n", out.items);
+    }
+    {
+        const got = try runWithConfig(ctx_data, "HIT", .files, .{ .null_filename = true }, "a.txt", true);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("", got);
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = Searcher.init("HIT", .auto);
+        const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .files, .{ .null_filename = true }, &out);
+        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .files, .{ .matched = br.matched, .lines = br.lines }, true);
+        try std.testing.expectEqualStrings("a.txt\x00", out.items);
+    }
 }

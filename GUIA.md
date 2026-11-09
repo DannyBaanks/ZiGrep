@@ -314,6 +314,38 @@ zgrep --force-swarm -F "const" RUTA     # siempre enjambre (nunca micro path)
 
 ---
 
+## 4b. Paridad con GNU grep (nuevo en 0.3.0, 2026-11-09)
+
+Bandera por bandera, con la semántica de GNU grep y verificado contra
+`grep 3.11` en 40 casos (`evidence/feature-corpus/conformance-results.txt`):
+
+```sh
+zgrep -A2 -B1 -n "patron" RUTA       # contexto: 2 después, 1 antes
+zgrep -C3 "patron" RUTA              # contexto simétrico
+zgrep -x "linea exacta" RUTA         # solo líneas completas (-x / --line-regexp)
+zgrep -f patrones.txt RUTA           # patrones desde fichero, uno por línea
+zgrep --no-line-number "patron" RUTA # sin número de línea
+zgrep -Z -l "patron" RUTA            # nombres separados por NUL (para xargs -0)
+zgrep -s "patron" /ruta/ilegible     # sin mensajes de error
+zgrep --text "patron" RUTA           # alias largo de -a
+```
+
+* El contexto usa un bucle ordenado por línea; el salto directo al siguiente
+  match se conserva cuando **no** hay contexto ni `-v`, así que el caso normal
+  no pierde rendimiento (medido: igual que 0.2.2 en 171 MB).
+* `-m N` con contexto: deja de contar matches pero **vací­a** el contexto
+  posterior del último, igual que `grep`.
+* Los grupos disjuntos se separan con `--`, y también entre ficheros.
+* `--no-line-number` solo tiene forma larga: `-N` es la navegación Befunge.
+* `-f` con un fichero vacío selecciona nada (como `grep`); `-f -` no existe.
+* `-s` antes se aceptaba y **no suprimía nada**: era un no-op. Ahora suprime
+  los mensajes de fichero ilegible.
+
+Lo que **no** está y por qué, en `evidence/feature-corpus/CORPUS.md`
+(PCRE2/-P, multilínea, `-o`, `--color`, `--replace`, `--json`…).
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

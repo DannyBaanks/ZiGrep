@@ -1,0 +1,48 @@
+===== -x =====
+PASS -x cat                    
+PASS -x -i CAT                 
+PASS -x -F a.b                 
+PASS -x -e dog -e cat          
+PASS -x -c                     
+PASS -x -l (2f)                
+PASS -x (arbol)                
+===== -f =====
+PASS -f pats                   
+PASS -f pats2 (vacia)          
+PASS -f empty                  
+PASS rc -f empty               
+PASS -e + -f                   
+===== -s =====
+PASS rc -s                     
+PASS stderr -s vacio           
+===== --no-line-number (grep sin -n / rg -N) =====
+PASS sin numeros 1f            
+PASS sin numeros 2f            
+PASS sin numeros rg            
+PASS sin numeros -c            
+===== -Z =====
+PASS -Z -l                     
+PASS -Z -c                     
+PASS -Z -H                     
+PASS -Z -L                     
+PASS -Z -A1                    
+===== contexto =====
+PASS -A1 -B1                   
+PASS -A2 -B2 2f                
+PASS -A1                       
+PASS -B1                       
+PASS -C2                       
+PASS -m1 -A2                   
+PASS -v -A1                    
+PASS -A1 --sort                
+PASS -A1 swarm                 
+PASS -A1 uring                 
+PASS -A 1 (arg)                
+PASS --context=1               
+PASS rg es igual               
+PASS -A1 stdin                 
+PASS -A1 3f                    
+PASS -A999 (bordes)            
+PASS -B999 (bordes)            
+
+TOTAL pass=40 fail=0

@@ -111,3 +111,24 @@ El micro path **ignora** `.gitignore`/`.dataignore` (el usuario lo confirma
 explícitamente el 2026-11-09). `--force-swarm` reproduce el comportamiento
 anterior byte a byte. El job nativo de Windows del CI cubre **las dos**
 variantes.
+
+---
+
+## 5. Ampliación 2026-11-09 (posterior al texto de arriba)
+
+La campaña de paridad con GNU grep añadió `evidence/feature-corpus/`
+(corpus de superficie + matriz de decisiones + conformance contra
+`grep 3.11`) y regeneró `SHA256SUMS.unified.txt`. La cabecera de este
+documento sigue describiendo el estado del commit con el que nació; lo que
+cuenta es el manifiesto vigente y lo que verifique en disco.
+
+| Componente | Resultado |
+|---|---|
+| `zig build test` | 82 pass / 1 skip |
+| Oráculo diferencial (`zig build oracle`) | 26/26 contra `grep` y `rg` |
+| Conformance nuevo (`conformance.sh`) | 40/40 contra `grep 3.11` |
+| Fuzzer (100.001 permutaciones) | 0 anomalías |
+| Cell fuzzer (1.000 celdas) | 0 anomalías |
+| A/B sin contexto, 171 MB | 0.2.2 y 0.3.0 idénticos (mediana 0,01 s) |
+| Binario de las mediciones | `zgrep 0.3.0`, Zig 0.16.0, ReleaseFast |
+

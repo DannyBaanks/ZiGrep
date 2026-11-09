@@ -276,6 +276,12 @@ pub const KamikazeContext = struct {
     use_uring: bool = false,
     io_engine_mode: io_engine.Mode = .sync,
     engine: ?*io_engine.State = null,
+    /// `-A/-B/-C` in `.lines` mode: context groups from different files are
+    /// separated by a `--` line, exactly like GNU grep.
+    context_mode: bool = false,
+    /// Whether any worker already flushed a group; guards the cross-file
+    /// separator and is always touched under `out_mutex`.
+    context_emitted: bool = false,
 };
 
 fn flushToStdout(io: std.Io, bytes: []const u8) void {
@@ -419,6 +425,7 @@ fn scanBatch(
         };
         defer if (heap_path) |hp| ctx.gpa.free(hp);
 
+        const before_len = local_out.items.len;
         const res = scan.scanFile(
             ctx.io,
             ctx.gpa,
@@ -434,7 +441,7 @@ fn scanBatch(
             // solo se pasa en ese modo; `sync`/`uring` no cambian ni un syscall.
             if (ctx.io_engine_mode == .auto) ctx.engine else null,
         );
-
+        if (ctx.context_mode) scan.insertGroupSeparator(local_out, ctx.gpa, before_len);
         local_files += 1;
         local_bytes += res.bytes;
         const is_hit = if (ctx.mode == .files_without_match) !res.matched else res.matched;
@@ -452,6 +459,8 @@ fn scanBatch(
     if (local_out.items.len > 0 and ctx.mode != .quiet) {
         ctx.out_mutex.lock();
         defer ctx.out_mutex.unlock();
+        if (ctx.context_mode and ctx.context_emitted) flushToStdout(ctx.io, "--\n");
+        if (local_out.items.len > 0) ctx.context_emitted = true;
         flushToStdout(ctx.io, local_out.items);
         local_out.clearRetainingCapacity();
     }
@@ -668,8 +677,10 @@ fn tryQuickTreeScan(
 
     var matched_any = false;
     stats.dirs_scouted += dirs_visited;
+    const context_mode = mode == .lines and (scan_config.before_context > 0 or scan_config.after_context > 0);
 
     for (files.items) |full_path| {
+        const before_len = local_out.items.len;
         const res = scan.scanFile(
             io,
             gpa,
@@ -683,6 +694,7 @@ fn tryQuickTreeScan(
             scratch,
             null, // el camino ordenado (`--sort`) no tiene muestra de motor
         );
+        if (context_mode) scan.insertGroupSeparator(&local_out, gpa, before_len);
 
         stats.files_scanned += 1;
         stats.bytes_scanned += res.bytes;
@@ -864,6 +876,7 @@ pub fn runKamikazePipeline(
         .use_uring = use_uring,
         .io_engine_mode = io_engine_mode,
         .engine = engine_state,
+        .context_mode = mode == .lines and (scan_config.before_context > 0 or scan_config.after_context > 0),
     };
 
     // Seed root directories / files into the pool
