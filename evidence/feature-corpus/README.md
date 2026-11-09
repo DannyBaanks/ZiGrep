@@ -55,3 +55,12 @@ con nombre largo:
 
 Ver `conformance.sh` + `conformance-results.txt` para la comparacion caso por
 caso contra GNU grep 3.11 (micro path, swarm, uring y stdin incluidos).
+
+## Trampa de dialecto que encontro esta campaña
+
+zgrep habla **ERE** (el dialecto de `rg`), no el BRE de `grep` sin `-E`. Un
+patrón con paréntesis literales copiado de un `grep -x 'f(a, b)'` **no
+coincide**: en ERE los paréntesis son grupos. Con `\(` y `\)` coinciden
+`zgrep`, `rg` y `grep -E` (verificado en `.opencode/role_doctor/doctor.py:552`).
+No es un defecto de `-x`: es la frontera BRE/ERE, anotada en la fila `-G` del
+corpus y como trampa 10 de la guía del monorepo.
