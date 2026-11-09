@@ -34,10 +34,12 @@ jobs:
       - name: Build zigrep (ReleaseFast)
         run: zig build -Doptimize=ReleaseFast
 
-      # 64 tests en total: 63 corren en Linux (el de la sonda fuera de Linux
-      # se salta) y los 64 corren en Windows, donde esa sonda contesta
-      # `unsupported`. El nombre no cifra el resultado: lo imprime el resumen.
-      - name: Run unit tests (64 total; 63 en Linux, 64 en Windows)
+      # El nombre NO cifra cuantos tests hay: esa cifra se mueve cada vez que
+      # se anade uno (ya paso con 56 y con 64). El numero real lo imprime
+      # `zig build test --summary all`. En Linux se salta el test de la sonda
+      # fuera de Linux; en Windows se salta el de la fusion (que es Linux-only)
+      # y corre el de la sonda, que alli contesta `unsupported`.
+      - name: Run unit tests
         run: zig build test --summary all
 
       - name: Run pure Zig differential oracle (26/26 tests vs GNU grep & ripgrep)
