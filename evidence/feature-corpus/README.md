@@ -74,7 +74,7 @@ transición **sin inyección de `start`** para saber dónde empieza el match.
 Verificado con el oráculo perfecto para esto, `grep -E -o`:
 **1419/1419 casos idénticos** (patrones × líneas), cero desajustes.
 
-Eso desbloqueó `-o`, `--column`, `--color`, `-r/--replace` y `--count-matches`.
+Eso desbloqueó `-o`, `--column`, `--color`, `--replace` y `--count-matches`.
 
 ### ¿Y ejecutar Python desde zgrep? Medido, no opinado
 

@@ -344,7 +344,7 @@ zgrep --text "patron" RUTA           # alias largo de -a
 Lo que **no** está y por qué, en `evidence/feature-corpus/CORPUS.md`
 (PCRE2/-P, multilínea, `-o`, `--color`, `--replace`, `--json`…).
 
-## 4c. Los spans: -o, --column, --color, -r, --count-matches
+## 4c. Los spans: -o, --column, --color, --replace, --count-matches
 
 El motor dejó de responder "¿coincide?" y responde "¿dónde?" (leftmost-longest,
 la semántica POSIX que usa `grep`). Verificado contra `grep -E -o`: **1419/1419
@@ -356,13 +356,13 @@ zgrep -o -n 'cat' a.txt b.txt               # con numero de linea
 zgrep --column 'cat' fichero.txt            # columna (1-based) del primer match
 zgrep --color=always 'cat' fichero.txt      # resalta SOLO los spans
 zgrep --count-matches -c 'a' fichero.txt    # cuenta matches, no lineas
-zgrep -r NUEVO -o 'a' fichero.txt           # reemplaza cada match (literal)
-zgrep --passthru -r NUEVO 'a' fichero.txt   # e imprime tambien las que no coinciden
+zgrep --replace NUEVO -o 'a' fichero.txt    # reemplaza cada match (literal)
+zgrep --passthru --replace NUEVO 'a' f.txt # e imprime tambien las que no coinciden
 ```
 
 Notas honestas:
 
-* `-r/--replace` es **reemplazo literal**: `$1` no existe porque el motor no
+* `--replace` (solo largo: `-r` es `--recursive`) es **reemplazo literal**: `$1` no existe porque el motor no
   guarda capturas.
 * El formato de bytes de `--color` es el nuestro (línea en verde, match en
   `01;31`), no el de `grep` (que además rellena con `\e[K`); la paridad se
