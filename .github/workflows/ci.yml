@@ -34,8 +34,90 @@ jobs:
       - name: Build zigrep (ReleaseFast)
         run: zig build -Doptimize=ReleaseFast
 
-      - name: Run unit tests (53/53)
+      - name: Run unit tests (56/56)
         run: zig build test --summary all
 
       - name: Run pure Zig differential oracle (26/26 tests vs GNU grep & ripgrep)
+
         run: zig build oracle
+
+  windows-native:
+    name: Native Windows Build, Tests & Oracle
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install ripgrep
+        shell: pwsh
+        run: choco install ripgrep --yes --no-progress
+
+      - name: Add Git for Windows GNU grep
+        shell: pwsh
+        run: |
+          $gitUsrBin = Join-Path $env:ProgramFiles 'Git\usr\bin'
+          if (-not (Test-Path (Join-Path $gitUsrBin 'grep.exe'))) {
+            throw "GNU grep not found at $gitUsrBin"
+          }
+          $gitUsrBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify native tools
+        shell: pwsh
+        run: |
+          zig version
+          grep --version | Select-Object -First 1
+          rg --version | Select-Object -First 1
+
+      - name: Build optimized Windows binaries
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Run unit tests
+        run: zig build test --summary all
+
+      - name: Run native Windows differential oracle
+        run: zig build -Doptimize=ReleaseFast oracle --summary all
+
+      - name: Smoke-test Unicode paths and ignore rules
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'zigrep windows 高速'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          [System.IO.File]::WriteAllText(
+            (Join-Path $root '.gitignore'),
+            "skip.txt`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          [System.IO.File]::WriteAllText(
+            (Join-Path $root 'keep 你好.txt'),
+            "needle`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          [System.IO.File]::WriteAllText(
+            (Join-Path $root 'skip.txt'),
+            "needle`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          # Default path: the tree is a micro-tree (< 2 MB), so it is scanned
+          # by the zero-thread fast path, which does not apply ignore files.
+          # The Unicode/space path must still be returned.
+          $result = & .\zig-out\bin\zigrep.exe -H -F needle $root
+          if ($LASTEXITCODE -ne 0) { throw "zigrep exited $LASTEXITCODE" }
+          if (($result -join "`n") -notmatch 'keep 你好\.txt') {
+            throw "Unicode path was not returned: $result"
+          }
+          # --force-swarm restores the old swarm behaviour, which does apply
+          # the .gitignore of the tree root.
+          $swarm = & .\zig-out\bin\zigrep.exe --force-swarm -H -F needle $root
+          if ($LASTEXITCODE -ne 0) { throw "zigrep --force-swarm exited $LASTEXITCODE" }
+          if (($swarm -join "`n") -notmatch 'keep 你好\.txt') {
+            throw "Unicode path was not returned by --force-swarm: $swarm"
+          }
+          if (($swarm -join "`n") -match 'skip\.txt') {
+            throw "Git-ignored file was searched by --force-swarm: $swarm"
+          }

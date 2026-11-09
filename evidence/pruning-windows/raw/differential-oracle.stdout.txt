@@ -1,0 +1,28 @@
+===============================================================================
+  zigrep Differential Oracle Suite (pure Zig runner)
+  Testing zig-out/bin/zigrep.exe against GNU grep and ripgrep
+===============================================================================
+
+  [PASS] literal 'Searcher' (-n)                    (exit 0, lines 44)
+  [PASS] case-insensitive -i 'searcher'             (exit 0, lines 67)
+  [PASS] whole-word -w 'Searcher'                   (exit 0, lines 44)
+  [PASS] combined -i -w 'searcher'                  (exit 0, lines 67)
+  [PASS] multi-pattern -e 'const' -e 'pub'          (exit 0, lines 668)
+  [PASS] regex 'pub\s+fn\s+'                        (exit 0, lines 65)
+  [PASS] regex alternation 'searcher|filter'        (exit 0, lines 139)
+  [PASS] regex digits '[0-9]{2,}'                   (exit 0, lines 241)
+  [PASS] regex anchor '^const'                      (exit 0, lines 66)
+  [PASS] count mode -c                              (exit 0, lines 11)
+  [PASS] files mode -l                              (exit 0, lines 4)
+  [PASS] quiet mode -q present (exit 0)             (exit 0, lines 0)
+  [PASS] quiet mode -q absent (exit 1)              (exit 1, lines 0)
+  [PASS] kamikaze swarm -k 'Searcher'               (exit 0, lines 44)
+  [PASS] kamikaze swarm -k -q present (exit 0)      (exit 0, lines 0)
+  [PASS] deterministic sorted mode --sort           (exit 0, lines 44)
+  [PASS] nav depth ceiling -m 'v^' (scan root only) (exit 0, lines 44)
+  [PASS] nav trampoline -m '^v' (dive into subdirs) (exit 0, lines 19)
+  [PASS] absent needle (exit 1)                     (exit 1, lines 0)
+
+-------------------------------------------------------------------------------
+Results: 19 PASSED, 0 FAILED (total 19)
+-------------------------------------------------------------------------------

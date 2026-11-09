@@ -9,3 +9,7 @@ bench-corpus/
 # ad-hoc scratch and rea experiments
 analysis/
 evidence/rea/
+
+# python bytecode (the fuzzers are python scripts)
+__pycache__/
+*.pyc

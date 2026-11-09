@@ -10,10 +10,19 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Release Static Binaries
+  build-linux:
+    name: Build Linux binaries
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux
+            asset: zigrep-linux-x86_64.tar.gz
+            dir: x86_64
+          - target: aarch64-linux
+            asset: zigrep-linux-aarch64.tar.gz
+            dir: aarch64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,25 +38,90 @@ jobs:
       - name: Run unit tests
         run: zig build test --summary all
 
-      - name: Build x86_64-linux (ReleaseFast, static)
+      - name: Build ${{ matrix.target }} (ReleaseFast, static)
         run: |
-          mkdir -p dist/x86_64
-          zig build -Dtarget=x86_64-linux -Doptimize=ReleaseFast
-          cp zig-out/bin/zigrep dist/x86_64/zigrep
-          strip dist/x86_64/zigrep 2>/dev/null || true
-          tar -czf dist/zigrep-linux-x86_64.tar.gz -C dist/x86_64 zigrep
+          mkdir -p dist/${{ matrix.dir }}
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+          cp zig-out/bin/zigrep dist/${{ matrix.dir }}/zigrep
+          strip dist/${{ matrix.dir }}/zigrep 2>/dev/null || true
+          tar -czf dist/${{ matrix.asset }} -C dist/${{ matrix.dir }} zigrep
 
-      - name: Build aarch64-linux (ReleaseFast, static)
+      - name: Upload asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  build-windows:
+    name: Build native Windows binary
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Verify toolchain
+        shell: pwsh
+        run: zig version
+
+      - name: Run unit tests
+        run: zig build test --summary all
+
+      - name: Build ReleaseFast (native Windows)
+        # The target MUST be explicit. Without it Zig builds for `native`,
+        # which means "whatever CPU this runner happens to have": the
+        # windows-latest runner reports AVX-512, so the published binary
+        # contained AVX-512 instructions and died with
+        # STATUS_ILLEGAL_INSTRUCTION (0xC000001D) on every CPU without
+        # AVX-512 (Haswell, Broadwell, Zen1, ...). Measured: 3499 EVEX
+        # prefixes in that binary versus 144 in a build for this host.
+        #
+        # x86_64-windows is the baseline x86_64 target (SSE2), so the
+        # release runs on every x86_64 Windows machine.
+        run: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast
+
+      - name: Verify the binary runs
+        shell: pwsh
         run: |
-          mkdir -p dist/aarch64
-          zig build -Dtarget=aarch64-linux -Doptimize=ReleaseFast
-          cp zig-out/bin/zigrep dist/aarch64/zigrep
-          tar -czf dist/zigrep-linux-aarch64.tar.gz -C dist/aarch64 zigrep
+          & .\zig-out\bin\zigrep.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "zigrep.exe --version failed with $LASTEXITCODE" }
+
+      - name: Package the Windows executables
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item zig-out/bin/zigrep.exe dist/zigrep.exe
+          Copy-Item zig-out/bin/zgrep.exe dist/zgrep.exe
+          Copy-Item install.ps1 dist/install.ps1
+          Compress-Archive -Path dist/zigrep.exe, dist/zgrep.exe, dist/install.ps1 -DestinationPath dist/zigrep-windows-x86_64.zip
+
+      - name: Upload asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: zigrep-windows-x86_64.zip
+          path: dist/zigrep-windows-x86_64.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all assets
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Generate Checksums
         run: |
           cd dist
-          sha256sum zigrep-linux-x86_64.tar.gz zigrep-linux-aarch64.tar.gz > SHA256SUMS.txt
+          sha256sum zigrep-linux-x86_64.tar.gz zigrep-linux-aarch64.tar.gz zigrep-windows-x86_64.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
@@ -56,5 +130,6 @@ jobs:
           files: |
             dist/zigrep-linux-x86_64.tar.gz
             dist/zigrep-linux-aarch64.tar.gz
+            dist/zigrep-windows-x86_64.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true

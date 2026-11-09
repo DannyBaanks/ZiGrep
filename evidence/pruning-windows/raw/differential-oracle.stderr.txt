@@ -1,0 +1,12 @@
+Build Summary: 10/10 steps succeeded
+oracle success
++- run exe oracle success 3s
+   +- compile exe oracle ReleaseFast native cached 98ms MaxRSS:18M
+   +- install cached
+      +- install zgrep cached
+      |  +- compile exe zgrep ReleaseFast native cached 99ms MaxRSS:19M
+      +- install zigrep cached
+      |  +- compile exe zigrep ReleaseFast native cached 99ms MaxRSS:18M
+      +- install matcher_sweep cached
+         +- compile exe matcher_sweep ReleaseFast native cached 98ms MaxRSS:18M
+

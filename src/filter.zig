@@ -12,7 +12,7 @@
 //!   4. Zero-cost fast filtering in raw dirent buffers before statx/openat.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const linux = std.os.linux;
+const vfs = @import("vfs.zig");
 
 pub const default_excluded_dirs = [_][]const u8{
     ".git",
@@ -179,20 +179,17 @@ pub const FilterEngine = struct {
         try self.included_patterns.append(self.gpa, dup);
     }
 
-    pub fn loadIgnoreFile(self: *FilterEngine, dir_path: []const u8, file_name: []const u8) void {
+    pub fn loadIgnoreFile(self: *FilterEngine, io: std.Io, dir_path: []const u8, file_name: []const u8) void {
         if (self.no_ignore) return;
-        var full_path_buf: [1024]u8 = undefined;
-        const full_path = std.fmt.bufPrintZ(&full_path_buf, "{s}/{s}", .{ dir_path, file_name }) catch return;
-
-        const rc = linux.openat(linux.AT.FDCWD, full_path, .{ .CLOEXEC = true }, 0);
-        if (linux.errno(rc) != .SUCCESS) return;
-        const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-        defer _ = linux.close(fd);
+        const full_path = std.fs.path.join(self.gpa, &.{ dir_path, file_name }) catch return;
+        defer self.gpa.free(full_path);
+        const file = std.Io.Dir.cwd().openFile(io, full_path, .{}) catch return;
+        defer file.close(io);
 
         var buf: [32 * 1024]u8 = undefined;
-        const n = linux.read(fd, &buf, buf.len);
-        if (linux.errno(n) != .SUCCESS or n <= 0) return;
-        const content = buf[0..@intCast(n)];
+        const n = file.readPositionalAll(io, &buf, 0) catch return;
+        if (n == 0) return;
+        const content = buf[0..n];
 
         var it = std.mem.splitScalar(u8, content, '\n');
         while (it.next()) |raw_line| {
@@ -204,23 +201,19 @@ pub const FilterEngine = struct {
     }
 
     /// Recursively discovers .dataignore and .gitignore walking upwards to the git/project root.
-    pub fn loadUpwardIgnoreFiles(self: *FilterEngine, start_path: []const u8) void {
+    pub fn loadUpwardIgnoreFiles(self: *FilterEngine, io: std.Io, start_path: []const u8) void {
         if (self.no_ignore) return;
         var cur: []const u8 = start_path;
         if (cur.len == 0) cur = ".";
 
         while (true) {
-            self.loadIgnoreFile(cur, ".dataignore");
-            self.loadIgnoreFile(cur, ".gitignore");
+            self.loadIgnoreFile(io, cur, ".dataignore");
+            self.loadIgnoreFile(io, cur, ".gitignore");
 
             // If this directory contains a .git folder or file, it's the repo root; stop after reading it
-            var git_buf: [1024]u8 = undefined;
-            if (std.fmt.bufPrintZ(&git_buf, "{s}/.git", .{cur})) |git_path| {
-                var stx: linux.Statx = undefined;
-                if (linux.errno(linux.statx(linux.AT.FDCWD, git_path, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-                    break;
-                }
-            } else |_| {}
+            const git_path = std.fs.path.join(self.gpa, &.{ cur, ".git" }) catch break;
+            defer self.gpa.free(git_path);
+            if (vfs.stat(io, git_path, false) != null) break;
 
             const parent = std.fs.path.dirname(cur) orelse break;
             if (parent.len == 0 or std.mem.eql(u8, parent, cur) or std.mem.eql(u8, parent, "/")) break;
@@ -234,14 +227,14 @@ pub const FilterEngine = struct {
     /// Idempotent on purpose: the micro-tree fast path defers this call until
     /// it knows the tree is too big for the single-threaded path, so a tiny
     /// tree never pays for the upward walk, and a big one never pays twice.
-    pub fn loadIgnoreFiles(self: *FilterEngine, roots: []const [:0]const u8) void {
+    pub fn loadIgnoreFiles(self: *FilterEngine, io: std.Io, roots: []const [:0]const u8) void {
         if (self.ignore_files_loaded) return;
         self.ignore_files_loaded = true;
         if (self.no_ignore) return;
 
-        self.loadUpwardIgnoreFiles(".");
+        self.loadUpwardIgnoreFiles(io, ".");
         for (roots) |root| {
-            self.loadUpwardIgnoreFiles(root);
+            self.loadUpwardIgnoreFiles(io, root);
         }
     }
 

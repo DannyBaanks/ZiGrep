@@ -19,8 +19,16 @@ import json, os, random, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# Resolve the repository from this script's location so the fuzzer runs from
+# any checkout, on any host.
 REPO = Path(__file__).resolve().parent.parent
-ZIGREP = str(REPO / "zig-out/bin/zigrep")
+# The Windows build is a .exe; the upstream name has no extension.
+_ZIGREP_BIN = "zig-out/bin/zigrep.exe" if os.name == "nt" else "zig-out/bin/zigrep"
+ZIGREP = str(REPO / _ZIGREP_BIN)
+# The reference engines can be overridden (useful when GNU grep lives in a
+# Git-for-Windows installation that is not on PATH).
+RIPGREP = os.environ.get("ZIGREP_RIPGREP", "rg")
+GNU_GREP = os.environ.get("ZIGREP_GREP", "grep")
 TIMEOUT = 3.0
 
 WORDS = ["searcher", "filter", "kamikaze", "io_uring", "walk", "scan", "buffer", "result",
@@ -115,8 +123,8 @@ def one(args):
     fx = [f for f in flags if f != "-F"]
     # -e guards patterns that start with '-'
     zg = [ZIGREP] + flags + ["-e", pat, "src"]
-    rg = ["rg", "-n", "-H", "--no-heading"] + flags + ["-e", pat, "src"]
-    gr = ["grep", "-rnI" + ("F" if "-F" in flags else "E")] + fx + ["-e", pat, "src"]
+    rg = [RIPGREP, "-n", "-H", "--no-heading"] + flags + ["-e", pat, "src"]
+    gr = [GNU_GREP, "-rnI" + ("F" if "-F" in flags else "E")] + fx + ["-e", pat, "src"]
     # grep has no -a-equivalent semantics problem; keep as is
     (zc, zo, zt), (rc, ro, rt), (gc, go, gt) = run(zg), run(rg), run(gr)
     rec = {"i": i, "pat": pat, "flags": flags, "zg": zc, "rg": rc, "gr": gc}
@@ -142,6 +150,13 @@ def one(args):
 
 
 def main():
+    # Windows consoles still default to a legacy code page; keep the report
+    # readable (and never crash on an unprintable byte) by forcing UTF-8.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     a = [x for x in sys.argv[1:] if not x.startswith("--")]
     opt = dict(x[2:].split("=", 1) for x in sys.argv[1:] if x.startswith("--") and "=" in x)
     iters = int(a[0]) if a else 20000

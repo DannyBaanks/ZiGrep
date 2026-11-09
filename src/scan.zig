@@ -10,6 +10,7 @@
 //! exactly grep semantics: one output line per matching line, not one per
 //! occurrence.
 const std = @import("std");
+const builtin = @import("builtin");
 const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
@@ -215,6 +216,155 @@ const map_failed: usize = @bitCast(@as(isize, -1));
 /// An optional `scratch` buffer (e.g. 128 KB) enables zero-allocation reads for
 /// small/medium files, completely avoiding allocator mutex lock contention.
 pub fn scanFile(
+    io: std.Io,
+    gpa: Allocator,
+    searcher: *const Searcher,
+    path: [:0]const u8,
+    show_path: bool,
+    mode: Mode,
+    binary: bool,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+    scratch: ?[]u8,
+) FileScan {
+    if (builtin.os.tag == .linux) {
+        return scanFileLinux(gpa, searcher, path, show_path, mode, binary, config, out, scratch);
+    }
+    return scanFilePortable(io, gpa, searcher, path, show_path, mode, binary, config, out, scratch);
+}
+
+fn scanFilePortable(
+    io: std.Io,
+    gpa: Allocator,
+    searcher: *const Searcher,
+    path: [:0]const u8,
+    show_path: bool,
+    mode: Mode,
+    binary: bool,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+    scratch: ?[]u8,
+) FileScan {
+    var res: FileScan = .{};
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| {
+        res.err = mapIoError(err);
+        return res;
+    };
+    defer file.close(io);
+
+    const stat = file.stat(io) catch |err| {
+        res.err = mapIoError(err);
+        return res;
+    };
+    const size = std.math.cast(usize, stat.size) orelse {
+        res.err = .FBIG;
+        return res;
+    };
+    if (size == 0) {
+        if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+        return res;
+    }
+
+    if (scratch) |buffer| {
+        if (size < buffer.len) {
+            const read = file.readPositionalAll(io, buffer[0..size], 0) catch |err| {
+                res.err = mapIoError(err);
+                return res;
+            };
+            if (read != size) {
+                res.err = .IO;
+                return res;
+            }
+            processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+            return res;
+        }
+    }
+
+    if (size >= mmap_threshold) {
+        if (std.Io.File.MemoryMap.create(io, file, .{
+            .len = size,
+            .protection = .{ .read = true, .write = false },
+        })) |map_value| {
+            var map = map_value;
+            defer map.destroy(io);
+            processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+            return res;
+        } else |_| {}
+    }
+
+    const data = gpa.alloc(u8, size) catch {
+        res.err = .NOMEM;
+        return res;
+    };
+    defer gpa.free(data);
+    const read = file.readPositionalAll(io, data, 0) catch |err| {
+        res.err = mapIoError(err);
+        return res;
+    };
+    if (read != size) {
+        res.err = .IO;
+        return res;
+    }
+    processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res)) |err| res.err = err;
+    return res;
+}
+
+fn processBuffer(
+    gpa: Allocator,
+    searcher: *const Searcher,
+    data: []const u8,
+    path: []const u8,
+    show_path: bool,
+    mode: Mode,
+    binary: bool,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+    res: *FileScan,
+) void {
+    const probe = @min(data.len, binary_probe_bytes);
+    const utf16_bom = isUtf16Bom(data);
+    const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+    if (is_binary) return;
+
+    if (utf16_bom) |bom| {
+        const decoded = decodeUtf16ToUtf8(gpa, data, bom == .le) catch {
+            res.err = .NOMEM;
+            return;
+        };
+        defer gpa.free(decoded);
+        const match = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
+            res.err = .NOMEM;
+            return;
+        };
+        res.matched = match.matched;
+        res.lines = match.lines;
+        res.bytes = data.len;
+        return;
+    }
+
+    const match = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
+        res.err = .NOMEM;
+        return;
+    };
+    res.matched = match.matched;
+    res.lines = match.lines;
+    res.bytes = data.len;
+}
+
+fn mapIoError(err: anyerror) linux.E {
+    return switch (err) {
+        error.AccessDenied, error.PermissionDenied => .ACCES,
+        error.FileNotFound => .NOENT,
+        error.IsDir => .ISDIR,
+        error.SystemResources => .NOMEM,
+        else => .IO,
+    };
+}
+
+fn scanFileLinux(
     gpa: Allocator,
     searcher: *const Searcher,
     path: [:0]const u8,
@@ -550,7 +700,7 @@ test "scanFile: files-without-match (-L)" {
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(gpa);
     const searcher = Searcher.init("non_existent_token_xyz", .auto);
-    const res = scanFile(gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null);
+    const res = scanFile(std.testing.io, gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null);
     try std.testing.expect(!res.matched);
     try std.testing.expectEqualStrings("src/root.zig\n", out.items);
 }

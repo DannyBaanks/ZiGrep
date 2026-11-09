@@ -4,7 +4,7 @@
 //!   1. Work-Stealing Unified Swarm:
 //!      Workers are hybrid: they simultaneously act as Directory Scouts ("Abuelo/Padres")
 //!      and File Scanners ("Hijos/Nietos"). Any free worker pops pending directories
-//!      from `WorkPool.dir_queue` and walks them with raw `linux.getdents64`.
+//!      from `WorkPool.dir_queue` and walks them through the VFS adapter.
 //!      Discovered subdirectories are pushed back to the pool, while regular files
 //!      are batched into `WorkPool.batch_queue`.
 //!
@@ -19,7 +19,8 @@
 //!      In `-q` (quiet) or `-l` (files with match) mode, the first hit flips an
 //!      atomic flag and aborts the entire swarm immediately.
 const std = @import("std");
-const linux = std.os.linux;
+const platform = @import("platform.zig");
+const vfs = @import("vfs.zig");
 const Allocator = std.mem.Allocator;
 const search = @import("search.zig");
 const scan = @import("scan.zig");
@@ -31,6 +32,16 @@ pub const uring = @import("uring.zig");
 
 pub const Mode = scan.Mode;
 pub const Searcher = search.Searcher;
+
+/// Upper bound for the worker pool.
+///
+/// Every worker is an OS thread with its own stack, so the count has to stay
+/// bounded. An unbounded value (`-j 18446744073709551615`) used to turn the
+/// spawn loop below into an endless create-and-exit cycle: the machine was
+/// pinned at 100% CPU and the process could not even be killed promptly.
+/// The CLI rejects such values up front; this clamp is the second line of
+/// defence for every other caller.
+pub const max_threads: usize = 1024;
 
 /// A cluster of regular files within a single directory.
 pub const DirectoryBatch = struct {
@@ -218,15 +229,17 @@ pub fn formatPathBuf(buf: []u8, dir: []const u8, name: []const u8) ?[:0]const u8
         buf[name.len] = 0;
         return buf[0..name.len :0];
     }
-    const has_slash = dir[dir.len - 1] == '/';
-    const slash_len: usize = if (has_slash) 0 else 1;
-    const total_len = dir.len + slash_len + name.len;
+    // Native separator, so the emitted paths match the ones built by the VFS
+    // adapter (`\` on Windows, `/` on POSIX).
+    const has_sep = dir[dir.len - 1] == '/' or dir[dir.len - 1] == '\\';
+    const sep_len: usize = if (has_sep) 0 else 1;
+    const total_len = dir.len + sep_len + name.len;
     if (total_len + 1 > buf.len) return null;
 
     @memcpy(buf[0..dir.len], dir);
     var cursor = dir.len;
-    if (!has_slash) {
-        buf[cursor] = '/';
+    if (!has_sep) {
+        buf[cursor] = std.fs.path.sep;
         cursor += 1;
     }
     @memcpy(buf[cursor .. cursor + name.len], name);
@@ -236,16 +249,11 @@ pub fn formatPathBuf(buf: []u8, dir: []const u8, name: []const u8) ?[:0]const u8
 }
 
 pub fn joinPathSentinel(gpa: Allocator, dir: []const u8, name: []const u8) Allocator.Error![:0]const u8 {
-    if (dir.len == 0 or std.mem.eql(u8, dir, ".")) {
-        return std.fmt.allocPrintSentinel(gpa, "{s}", .{name}, 0);
-    }
-    if (dir[dir.len - 1] == '/') {
-        return std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ dir, name }, 0);
-    }
-    return std.fmt.allocPrintSentinel(gpa, "{s}/{s}", .{ dir, name }, 0);
+    return vfs.joinPathSentinel(gpa, dir, name);
 }
 
 pub const KamikazeContext = struct {
+    io: std.Io,
     gpa: Allocator,
     pool: *WorkPool,
     searcher: *const Searcher,
@@ -262,15 +270,8 @@ pub const KamikazeContext = struct {
     use_uring: bool = false,
 };
 
-fn flushToStdout(bytes: []const u8) void {
-    var off: usize = 0;
-    while (off < bytes.len) {
-        const r = linux.write(linux.STDOUT_FILENO, bytes.ptr + off, bytes.len - off);
-        const e = linux.errno(r);
-        if (e == .INTR) continue;
-        if (e != .SUCCESS or r == 0) break;
-        off += r;
-    }
+fn flushToStdout(io: std.Io, bytes: []const u8) void {
+    _ = platform.writeStdout(io, bytes);
 }
 
 fn scoutDirConcurrent(
@@ -287,11 +288,8 @@ fn scoutDirConcurrent(
         ctx.stats_mutex.unlock();
     }
 
-    const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-    const open_err = linux.errno(rc);
-    if (open_err != .SUCCESS) return;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+    var stream = vfs.DirStream.open(ctx.io, dir) catch return;
+    defer stream.close();
 
     var subdirs: std.ArrayList([:0]const u8) = .empty;
     errdefer {
@@ -307,61 +305,27 @@ fn scoutDirConcurrent(
 
     const scan_files = ctx.nav_plan.shouldScanFiles(depth);
     const recurse_subdirs = ctx.nav_plan.shouldRecurseSubdirs(depth);
-
-    var buf: [32 * 1024]u8 = undefined;
     while (true) {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
         if (ctx.pool.aborted.load(.acquire)) break;
 
-        const n = linux.getdents64(fd, &buf, buf.len);
-        const rd_err = linux.errno(n);
-        if (rd_err == .INTR) continue;
-        if (rd_err != .SUCCESS or n == 0) break;
+        const maybe_entry = stream.next() catch break;
+        const entry = maybe_entry orelse break;
+        var kind = entry.kind;
+        if (kind == .unknown) {
+            const full_path = try joinPathSentinel(ctx.gpa, dir, entry.name);
+            defer ctx.gpa.free(full_path);
+            kind = if (vfs.stat(ctx.io, full_path, false)) |info| info.kind else .other;
+        }
 
-        var off: usize = 0;
-        while (off < n) {
-            const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-            const reclen: usize = ent.reclen;
-            if (reclen == 0) break;
-            const name: [:0]const u8 = std.mem.sliceTo(
-                @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-                0,
-            );
-            off += reclen;
-
-            if (name.len == 0) continue;
-            if (std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
-
-            const kind = ent.type;
-            if (kind == linux.DT.DIR) {
-                if (!recurse_subdirs) continue;
-                if (ctx.filter.isDirExcluded(name)) continue;
-                const child = try joinPathSentinel(ctx.gpa, dir, name);
-                try subdirs.append(ctx.gpa, child);
-            } else if (kind == linux.DT.REG) {
-                if (!scan_files) continue;
-                if (ctx.filter.isFileExcluded(name)) continue;
-                const child_name = try ctx.gpa.dupeZ(u8, name);
-                try files.append(ctx.gpa, child_name);
-            } else if (kind == linux.DT.UNKNOWN) {
-                const full_p = try joinPathSentinel(ctx.gpa, dir, name);
-                defer ctx.gpa.free(full_p);
-                var stx: linux.Statx = undefined;
-                if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true }, &stx)) == .SUCCESS) {
-                    const m = stx.mode & linux.S.IFMT;
-                    if (m == linux.S.IFDIR) {
-                        if (recurse_subdirs and !ctx.filter.isDirExcluded(name)) {
-                            const child = try ctx.gpa.dupeZ(u8, full_p);
-                            try subdirs.append(ctx.gpa, child);
-                        }
-                    } else if (m == linux.S.IFREG) {
-                        if (scan_files and !ctx.filter.isFileExcluded(name)) {
-                            const child_name = try ctx.gpa.dupeZ(u8, name);
-                            try files.append(ctx.gpa, child_name);
-                        }
-                    }
-                }
-            }
+        if (kind == .directory) {
+            if (!recurse_subdirs) continue;
+            if (ctx.filter.isDirExcluded(entry.name)) continue;
+            try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, entry.name));
+        } else if (kind == .file) {
+            if (!scan_files) continue;
+            if (ctx.filter.isFileExcluded(entry.name)) continue;
+            try files.append(ctx.gpa, try ctx.gpa.dupeZ(u8, entry.name));
         }
     }
 
@@ -406,6 +370,7 @@ fn scanBatch(
             if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
             const slice = batch.file_names[start_idx .. start_idx + uring.BATCH_SIZE];
             if (u_scan.scanAsyncBatch(
+                ctx.io,
                 ctx.gpa,
                 ctx.searcher,
                 batch.dir_path,
@@ -434,7 +399,7 @@ fn scanBatch(
         }
     }
 
-    var path_buf: [linux.PATH_MAX]u8 = undefined;
+    var path_buf: [platform.path_max]u8 = undefined;
     for (batch.file_names[start_idx..]) |fname| {
         if (ctx.mode == .quiet and ctx.found.load(.acquire)) break;
 
@@ -447,6 +412,7 @@ fn scanBatch(
         defer if (heap_path) |hp| ctx.gpa.free(hp);
 
         const res = scan.scanFile(
+            ctx.io,
             ctx.gpa,
             ctx.searcher,
             full_path,
@@ -475,7 +441,7 @@ fn scanBatch(
     if (local_out.items.len > 0 and ctx.mode != .quiet) {
         ctx.out_mutex.lock();
         defer ctx.out_mutex.unlock();
-        flushToStdout(local_out.items);
+        flushToStdout(ctx.io, local_out.items);
         local_out.clearRetainingCapacity();
     }
 
@@ -538,11 +504,27 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
         if (idle_count < 64) {
             std.atomic.spinLoopHint();
         } else {
-            const ts = linux.timespec{ .sec = 0, .nsec = 50_000 }; // 50 µs sleep
-            _ = linux.nanosleep(&ts, null);
+            platform.sleepBrief(ctx.io); // 50 us sleep, native on every OS
             idle_count = 0;
         }
     }
+}
+
+/// Portable stat that never follows symlinks and always reports the size.
+///
+/// `vfs.stat` cannot be used for the byte budget: on Linux it asks statx for
+/// the TYPE mask only, so `stx.size` is left unset.
+fn statNoFollow(io: std.Io, path: []const u8) ?vfs.Metadata {
+    const info = vfs.statFile(io, path, .{ .follow_symlinks = false }) catch return null;
+    return .{
+        .kind = switch (info.kind) {
+            .file => .file,
+            .directory => .directory,
+            .sym_link => .symlink,
+            else => .other,
+        },
+        .size = info.size,
+    };
 }
 
 /// Zero-Spawn Fast Path for micro-trees.
@@ -551,11 +533,15 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
 /// (2 MB by default) and that stays inside the file/dir/depth budgets. It is
 /// scanned on the calling thread: no worker pool, no mutexes, no io_uring —
 /// and, because ignore-file upkeep is pointless in a tree that small, no
-/// upward `.dataignore` / `.gitignore` inspection either.
+/// `.dataignore` / `.gitignore` inspection either.
+///
+/// The traversal goes through the portable `vfs` layer, so the same fast path
+/// runs natively on Linux and on Windows.
 ///
 /// Returns `null` when the tree is not a micro-tree; the caller then hands
 /// the run over to the full concurrent swarm.
 fn tryQuickTreeScan(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     root: [:0]const u8,
@@ -571,9 +557,6 @@ fn tryQuickTreeScan(
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
 
-    var dir_queue: std.ArrayList(DirTask) = .empty;
-    var files: std.ArrayList([:0]const u8) = .empty;
-
     // Budgets: a micro-tree is small by construction. Anything bigger belongs
     // to the swarm, which parallelises the I/O. The size budget is the real
     // gate; the file/dir/depth caps only bound the work spent discovering
@@ -582,81 +565,61 @@ fn tryQuickTreeScan(
     const max_dirs: usize = 512;
     const max_depth: usize = 32;
 
+    var dir_queue: std.ArrayList(DirTask) = .empty;
     dir_queue.append(arena, .{ .path = root, .depth = 0 }) catch return null;
 
     var dirs_visited: usize = 0;
     var total_bytes: u64 = 0;
-    var buf: [32 * 1024]u8 = undefined;
+    var files: std.ArrayList([:0]const u8) = .empty;
 
     // --- Phase 1: collect the candidate files ------------------------------
-    // Every candidate is statx'd *before* a single byte is read: the budget is
-    // measured in bytes, so a tree that is too big goes to the swarm without
-    // any wasted I/O.
+    // Every candidate is measured *before* a single byte is read: the budget
+    // is measured in bytes, so a tree that is too big goes to the swarm
+    // without any wasted I/O.
     while (dir_queue.items.len > 0) {
         const task = dir_queue.pop().?;
-        const rc = linux.openat(linux.AT.FDCWD, task.path, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-        if (linux.errno(rc) != .SUCCESS) continue;
-        const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-        defer _ = linux.close(fd);
+        var stream = vfs.DirStream.open(io, task.path) catch continue;
+        defer stream.close();
 
         dirs_visited += 1;
-        if (dirs_visited > max_dirs) return null; // Exceeds micro-tree limit -> handoff to parallel swarm
+        if (dirs_visited > max_dirs) return null;
 
         while (true) {
-            const n = linux.getdents64(fd, &buf, buf.len);
-            if (linux.errno(n) != .SUCCESS or n == 0) break;
+            const maybe_entry = stream.next() catch return null;
+            const entry = maybe_entry orelse break;
 
-            var off: usize = 0;
-            while (off < n) {
-                const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-                const reclen: usize = ent.reclen;
-                if (reclen == 0) break;
-                const name: [:0]const u8 = std.mem.sliceTo(
-                    @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-                    0,
-                );
-                off += reclen;
+            var kind = entry.kind;
+            var size: u64 = 0;
 
-                if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+            if (kind == .unknown or kind == .file) {
+                // The size is needed for the budget, and the kind has to be
+                // confirmed: an entry can be a symlink, and symlinks are
+                // never followed (same rule as the concurrent scout).
+                const full_p = joinPathSentinel(arena, task.path, entry.name) catch return null;
+                const info = statNoFollow(io, full_p) orelse continue;
+                kind = info.kind;
+                size = info.size;
+            }
 
-                const kind = ent.type;
-                if (kind == linux.DT.DIR) {
-                    if (filter_engine.isDirExcluded(name)) continue;
+            switch (kind) {
+                .directory => {
+                    if (filter_engine.isDirExcluded(entry.name)) continue;
                     if (task.depth >= max_depth) return null;
-                    const child_dir = joinPathSentinel(arena, task.path, name) catch return null;
+                    const child_dir = joinPathSentinel(arena, task.path, entry.name) catch return null;
                     dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1 }) catch return null;
-                } else if (kind == linux.DT.REG) {
-                    if (filter_engine.isFileExcluded(name)) continue;
-                    if (files.items.len >= max_files) return null; // Exceeds micro-tree limit -> handoff to parallel swarm
-                    const full_path = joinPathSentinel(arena, task.path, name) catch return null;
-                    var stx: linux.Statx = undefined;
-                    if (linux.errno(linux.statx(linux.AT.FDCWD, full_path, linux.AT.STATX_DONT_SYNC, .{ .SIZE = true }, &stx)) == .SUCCESS) {
-                        total_bytes += stx.size;
-                        if (total_bytes > @as(u64, max_bytes)) return null;
-                    }
+                },
+                .file => {
+                    if (filter_engine.isFileExcluded(entry.name)) continue;
+                    if (files.items.len >= max_files) return null;
+                    total_bytes += size;
+                    if (total_bytes > @as(u64, max_bytes)) return null;
+                    const full_path = joinPathSentinel(arena, task.path, entry.name) catch return null;
                     files.append(arena, full_path) catch return null;
-                } else if (kind == linux.DT.UNKNOWN) {
-                    // Some filesystems leave d_type empty: resolve it the same
-                    // way the concurrent scout does (symlinks are never followed).
-                    const full_p = joinPathSentinel(arena, task.path, name) catch return null;
-                    var stx: linux.Statx = undefined;
-                    if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true, .SIZE = true }, &stx)) == .SUCCESS) {
-                        const m = stx.mode & linux.S.IFMT;
-                        if (m == linux.S.IFDIR) {
-                            if (filter_engine.isDirExcluded(name)) continue;
-                            if (task.depth >= max_depth) return null;
-                            dir_queue.append(arena, .{ .path = full_p, .depth = task.depth + 1 }) catch return null;
-                        } else if (m == linux.S.IFREG) {
-                            if (filter_engine.isFileExcluded(name)) continue;
-                            if (files.items.len >= max_files) return null;
-                            total_bytes += stx.size;
-                            if (total_bytes > @as(u64, max_bytes)) return null;
-                            files.append(arena, full_p) catch return null;
-                        }
-                    }
-                }
-                // Symlinks, sockets, fifos and device nodes are skipped, exactly
-                // like the concurrent scout does.
+                },
+                else => {
+                    // Symlinks, sockets, fifos and device nodes are skipped,
+                    // exactly like the concurrent scout does.
+                },
             }
         }
     }
@@ -674,6 +637,7 @@ fn tryQuickTreeScan(
 
     for (files.items) |full_path| {
         const res = scan.scanFile(
+            io,
             gpa,
             searcher,
             full_path,
@@ -697,7 +661,7 @@ fn tryQuickTreeScan(
     }
 
     if (local_out.items.len > 0 and mode != .quiet) {
-        flushToStdout(local_out.items);
+        flushToStdout(io, local_out.items);
     }
 
     return matched_any;
@@ -707,6 +671,7 @@ fn tryQuickTreeScan(
 /// Scans up to 4 regular files in root on the main thread prior to thread pool creation.
 /// If a match is found instantly, returns true in < 0.3 ms with 0 thread spawns.
 fn tryQuickQuietProbe(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     root: [:0]const u8,
@@ -714,43 +679,37 @@ fn tryQuickQuietProbe(
     binary: bool,
     scan_config: scan.ScanConfig,
 ) bool {
-    const rc = linux.openat(linux.AT.FDCWD, root, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return false;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+    var stream = vfs.DirStream.open(io, root) catch return false;
+    defer stream.close();
 
-    var buf: [8 * 1024]u8 = undefined;
-    const n = linux.getdents64(fd, &buf, buf.len);
-    if (linux.errno(n) != .SUCCESS or n == 0) return false;
-
-    var off: usize = 0;
     var probed: usize = 0;
     var scratch: [64 * 1024]u8 = undefined;
     var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
 
-    var path_buf: [linux.PATH_MAX]u8 = undefined;
-    while (off < n and probed < 4) {
-        const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-        const reclen: usize = ent.reclen;
-        if (reclen == 0) break;
-        const name: [:0]const u8 = std.mem.sliceTo(
-            @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-            0,
-        );
-        off += reclen;
-        if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
-        if (ent.type != linux.DT.REG) continue;
-        if (filter_engine.isFileExcluded(name)) continue;
+    var path_buf: [platform.path_max]u8 = undefined;
+    while (probed < 4) {
+        const maybe_entry = stream.next() catch return false;
+        const entry = maybe_entry orelse break;
+        var kind = entry.kind;
+        if (kind == .unknown) {
+            const probe_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+            defer gpa.free(probe_path);
+            kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
+        }
+        if (kind != .file) continue;
+        if (filter_engine.isFileExcluded(entry.name)) continue;
 
-        const stack_path = formatPathBuf(&path_buf, root, name);
+        const stack_path = formatPathBuf(&path_buf, root, entry.name);
         var heap_path: ?[:0]const u8 = null;
         const full_path: [:0]const u8 = stack_path orelse blk: {
-            heap_path = joinPathSentinel(gpa, root, name) catch continue;
+            heap_path = joinPathSentinel(gpa, root, entry.name) catch continue;
             break :blk heap_path.?;
         };
         defer if (heap_path) |hp| gpa.free(hp);
 
         const res = scan.scanFile(
+            io,
             gpa,
             searcher,
             full_path,
@@ -769,6 +728,7 @@ fn tryQuickQuietProbe(
 
 /// Zero-Latency Probe for Quiet Mode (-q), run over every root.
 fn quietProbeHit(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     roots: []const [:0]const u8,
@@ -778,7 +738,7 @@ fn quietProbeHit(
     stats: *KamikazeStats,
 ) bool {
     for (roots) |root| {
-        if (tryQuickQuietProbe(gpa, searcher, root, filter_engine, binary, scan_config)) {
+        if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {
             stats.early_aborted = true;
             return true;
         }
@@ -794,6 +754,7 @@ fn quietProbeHit(
 /// `micro_max_bytes` is the size budget under which a tree qualifies as a
 /// micro-tree and is scanned on the calling thread.
 pub fn runKamikazePipeline(
+    io: std.Io,
     gpa: Allocator,
     searcher: *const Searcher,
     roots: []const [:0]const u8,
@@ -814,8 +775,8 @@ pub fn runKamikazePipeline(
     if (force_swarm) {
         // 0. Old flow, exactly: the ignore files are loaded up front and the
         //    quiet probe answers before any traversal happens.
-        filter_engine.loadIgnoreFiles(roots);
-        if (probe_early and quietProbeHit(gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
+        filter_engine.loadIgnoreFiles(io, roots);
+        if (probe_early and quietProbeHit(io, gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
             return true;
         }
     } else {
@@ -824,11 +785,9 @@ pub fn runKamikazePipeline(
         //    probe: a micro-tree and the swarm do not see the same file set.
         if (roots.len == 1 and nav_plan.len == 0) {
             const root = roots[0];
-            var stx: linux.Statx = undefined;
-            if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-                const m = stx.mode & linux.S.IFMT;
-                if (m == linux.S.IFDIR) {
-                    if (tryQuickTreeScan(gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats)) |matched| {
+            if (vfs.stat(io, root, true)) |info| {
+                if (info.kind == .directory) {
+                    if (tryQuickTreeScan(io, gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats)) |matched| {
                         stats.micro_path = true;
                         return matched;
                     }
@@ -838,8 +797,8 @@ pub fn runKamikazePipeline(
         // 2. The tree is too big for the fast path: the upward
         //    `.dataignore` / `.gitignore` walk happens here, and the quiet
         //    probe now sees the same file set as the swarm.
-        filter_engine.loadIgnoreFiles(roots);
-        if (probe_early and quietProbeHit(gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
+        filter_engine.loadIgnoreFiles(io, roots);
+        if (probe_early and quietProbeHit(io, gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
             return true;
         }
     }
@@ -852,6 +811,7 @@ pub fn runKamikazePipeline(
     var found = std.atomic.Value(bool).init(false);
 
     var ctx = KamikazeContext{
+        .io = io,
         .gpa = gpa,
         .pool = &pool,
         .searcher = searcher,
@@ -868,19 +828,17 @@ pub fn runKamikazePipeline(
 
     // Seed root directories / files into the pool
     for (roots) |root| {
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-            const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR) {
+        if (vfs.stat(io, root, true)) |info| {
+            if (info.kind == .directory) {
                 try pool.pushRoot(root);
-            } else if (m == linux.S.IFREG) {
+            } else if (info.kind == .file) {
                 try pool.pushSingleFile(root);
             }
         }
     }
 
     // Spawn concurrent hybrid worker swarm
-    const actual_workers = @max(1, threads_count);
+    const actual_workers = @min(@max(1, threads_count), max_threads);
     if (actual_workers == 1) {
         // Zero-spawn fast path: single thread runs directly on calling thread
         kamikazeWorker(&ctx);

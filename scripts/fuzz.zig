@@ -11,7 +11,7 @@
 //! Usage:
 //!   zig build fuzz -- [ITERATIONS] [--threads=N] [--adversary=1..4|all] [--cli-rate=N]
 const std = @import("std");
-const linux = std.os.linux;
+const builtin = @import("builtin");
 const common = @import("common.zig");
 const zgrep = @import("zgrep");
 
@@ -55,14 +55,25 @@ const SwarmConfig = struct {
     cli_rate: u32 = 100, // 1 in N CLI ops runs full external subprocess
     master_seed: u64 = 0,
     knob: u8 = 3, // 1: Gentle, 2: Flags, 3: Grammar, 4: ReDoS, 5: Chaos
-    exe_path: []const u8 = "zig-out/bin/zigrep",
+    exe_path: []const u8 = if (builtin.os.tag == .windows) "zig-out/bin/zigrep.exe" else "zig-out/bin/zigrep",
+    /// Print every spawned CLI argv to stderr. Off by default because it
+    /// floods the output; useful to identify a hanging child.
+    trace_cli: bool = false,
+    /// Hard limit for a CLI child. Without it a child that never terminates
+    /// blocks the whole swarm forever (the swarm has no watchdog).
+    cli_timeout_ms: u64 = 10_000,
 };
+
+/// Counter used by the `--trace-cli` diagnostic to pair every spawned CLI
+/// argv with its completion, so a child that never finishes is identifiable.
+var trace_counter = std.atomic.Value(u64).init(0);
 
 // ---------------------------------------------------------------------------
 // Reproducer Writer
 // ---------------------------------------------------------------------------
 
 fn saveReproducer(
+    io: std.Io,
     gpa: Allocator,
     adversary: []const u8,
     seed: u64,
@@ -70,8 +81,8 @@ fn saveReproducer(
     payload: []const u8,
     cmd_args: ?[]const []const u8,
 ) void {
-    _ = common.makePath(gpa, "evidence/reproducers") catch {};
-    const ts = common.nowNs();
+    _ = common.makePath(io, "evidence/reproducers") catch {};
+    const ts = common.nowNs(io);
     const fname = std.fmt.allocPrint(gpa, "evidence/reproducers/repro_{d}_{s}_{d}.txt", .{ ts, adversary, seed }) catch return;
     defer gpa.free(fname);
 
@@ -113,7 +124,7 @@ fn saveReproducer(
 
     const fname_z = std.fmt.allocPrintSentinel(gpa, "{s}", .{fname}, 0) catch return;
     defer gpa.free(fname_z);
-    _ = common.writeFile(fname_z, content.items);
+    _ = common.writeFile(io, fname_z, content.items);
     std.debug.print("\n[CRITICAL FUZZ ANOMALY DETECTED] Reproducer saved: {s}\n", .{fname});
 }
 
@@ -122,18 +133,20 @@ fn saveReproducer(
 // ---------------------------------------------------------------------------
 
 const regex_tokens = [_][]const u8{
-    "(", ")", "[", "]", "{", "}", "*", "+", "?", "|", "^", "$", ".",
-    "\\d", "\\w", "\\s", "\\b", "\\B", "\\p{L}", "\\0", "\\x00", "\\xFF",
-    "[a-z]", "[^a-z]", "[0-9]", "[[:alpha:]]", "[[:bad:]]", "[--]", "[z-a]",
-    "()", "||", "(a|)", "(|b)", "(a|b|c)", "(a+)+", "(a*)*", "(a|a)*",
-    "{0,0}", "{0,1}", "{1,5}", "{10,2}", "{99999,99999}", "{,5}",
-    "fn\\s+\\w+\\(", "pub\\s+(const|fn)", "std\\.(mem|math|os)",
+    "(",         ")",      "[",             "]",    "{",             "}",                 "*",                   "+",       "?",     "|",     "^",      "$",     ".",
+    "\\d",       "\\w",    "\\s",           "\\b",  "\\B",           "\\p{L}",            "\\0",                 "\\x00",   "\\xFF", "[a-z]", "[^a-z]", "[0-9]", "[[:alpha:]]",
+    "[[:bad:]]", "[--]",   "[z-a]",         "()",   "||",            "(a|)",              "(|b)",                "(a|b|c)", "(a+)+", "(a*)*", "(a|a)*", "{0,0}", "{0,1}",
+    "{1,5}",     "{10,2}", "{99999,99999}", "{,5}", "fn\\s+\\w+\\(", "pub\\s+(const|fn)", "std\\.(mem|math|os)",
 };
 
 const corpus_words = [_][]const u8{
-    "searcher", "filter", "kamikaze", "io_uring", "walk", "scan", "buffer",
-    "result", "allocator", "pattern", "literal", "vector", "stream", "corrupt",
-    "alpha", "omega", "zenith", "nadír", "über", "añejo", "こんにちは",
+    "searcher", "filter",    "kamikaze", "io_uring", "walk",   "scan",   "buffer",
+    "result",   "allocator", "pattern",  "literal",  "vector", "stream", "corrupt",
+    "alpha",    "omega",     "zenith",
+    "nadír",
+    "über",
+    "añejo",
+    "こんにちは",
 };
 
 fn mutateRegex(arena: Allocator, rand: std.Random, knob: u8) ![]const u8 {
@@ -307,11 +320,11 @@ const short_flags = [_][]const u8{
 };
 
 const long_flags = [_][]const u8{
-    "--fixed-strings",      "--extended-regexp",    "--ignore-case",
-    "--invert-match",       "--word-regexp",        "--count",
+    "--fixed-strings",      "--extended-regexp",     "--ignore-case",
+    "--invert-match",       "--word-regexp",         "--count",
     "--files-with-matches", "--files-without-match", "--quiet",
-    "--kamikaze",           "--sort",               "--uring",
-    "--stats",              "--no-ignore",          "--no-default-ignore",
+    "--kamikaze",           "--sort",                "--uring",
+    "--stats",              "--no-ignore",           "--no-default-ignore",
     "--no-hidden",
 };
 
@@ -391,7 +404,7 @@ fn runAdversary2(
     const path_choice = rand.uintLessThan(u8, 4);
     switch (path_choice) {
         0 => args_list.append(arena, std.fmt.allocPrintSentinel(arena, "src", .{}, 0) catch return) catch return,
-        1 => args_list.append(arena, std.fmt.allocPrintSentinel(arena, "/dev/null", .{}, 0) catch return) catch return,
+        1 => args_list.append(arena, std.fmt.allocPrintSentinel(arena, if (builtin.os.tag == .windows) "nul" else "/dev/null", .{}, 0) catch return) catch return,
         2 => args_list.append(arena, std.fmt.allocPrintSentinel(arena, "nonexistent_dir_or_file_xyz", .{}, 0) catch return) catch return,
         3 => args_list.append(arena, std.fmt.allocPrintSentinel(arena, "build.zig", .{}, 0) catch return) catch return,
         else => {},
@@ -415,17 +428,59 @@ fn runAdversary2(
             sub_argv.append(arena, a) catch return;
         }
 
-        // Limit pipe buffer capture to 4 KB (bloc de notas / dummy sink)
-        const limit = std.Io.Limit.limited(4096);
+        const trace_id = if (cfg.trace_cli) trace_counter.fetchAdd(1, .monotonic) else 0;
+        if (cfg.trace_cli) {
+            var line: std.ArrayList(u8) = .empty;
+            defer line.deinit(gpa);
+            for (sub_argv.items) |a| {
+                line.appendSlice(gpa, a) catch {};
+                line.append(gpa, ' ') catch {};
+            }
+            line.append(gpa, '\n') catch {};
+            std.debug.print("[CLI #{d} START] {s}", .{ trace_id, line.items });
+        }
+
+        // NEVER truncate the captured streams.
+        //
+        // std.process.run stops reading a stream once it exceeds its limit,
+        // but the child keeps writing. On Windows the pipe buffer is 8 KB, so
+        // the child blocks forever on a full pipe while the parent waits for
+        // it: a deadlock. Measured with Zig 0.16.0 on Windows 11:
+        //   stdout_limit = 4096  -> the call took 294 s and then reported
+        //                          error.StreamTooLong (the deferred kill did
+        //                          not rescue it)
+        //   stdout_limit = .unlimited -> the same call returned in 57 ms
+        // The captured output is bounded by the fuzzer's own corpus (the
+        // repository tree), so draining it is safe.
         const res = std.process.run(arena, io, .{
             .argv = sub_argv.items,
-            .stdout_limit = limit,
-            .stderr_limit = limit,
-        }) catch {
-            // Failed to spawn (e.g. process limit) is not a bug in zigrep
+            .stdout_limit = .unlimited,
+            .stderr_limit = .unlimited,
+            // A child that never terminates would block the whole swarm: the
+            // swarm has no watchdog of its own.
+            .timeout = .{ .duration = .{
+                .raw = .fromMilliseconds(@intCast(cfg.cli_timeout_ms)),
+                .clock = .awake,
+            } },
+        }) catch |err| {
+            // Failed to spawn (e.g. process limit) is not a bug in zigrep.
+            // A timeout is a finding, not a bug in the fuzzer: report it and
+            // keep going instead of hanging forever.
+            if (cfg.trace_cli) {
+                std.debug.print("[CLI #{d} END] (error: {s})\n", .{ trace_id, @errorName(err) });
+            }
+            if (err == error.Timeout) {
+                _ = stats.anomalies.fetchAdd(1, .monotonic);
+                const desc = std.fmt.allocPrint(arena, "CLI child timed out after {d} ms", .{cfg.cli_timeout_ms}) catch "CLI child timed out";
+                saveReproducer(io, gpa, "CLI_Permutator", seed, desc, "", sub_argv.items);
+            }
             _ = stats.adv2_ops.fetchAdd(1, .monotonic);
             return;
         };
+
+        if (cfg.trace_cli) {
+            std.debug.print("[CLI #{d} END] code={d}\n", .{ trace_id, common.termCode(res.term) });
+        }
 
         const code = common.termCode(res.term);
         // Valid exit codes: 0 = match, 1 = no match, 2 = usage error
@@ -435,7 +490,7 @@ fn runAdversary2(
             if (code >= 128) _ = stats.crashes.fetchAdd(1, .monotonic);
 
             const desc = std.fmt.allocPrint(arena, "Unexpected exit code {d} (signal/crash)", .{code}) catch "exit code > 2";
-            saveReproducer(gpa, "CLI_Permutator", seed, desc, res.stderr, sub_argv.items);
+            saveReproducer(io, gpa, "CLI_Permutator", seed, desc, res.stderr, sub_argv.items);
         }
     }
 
@@ -523,7 +578,7 @@ fn generateToxicPayload(arena: Allocator, rand: std.Random, knob: u8) ![]const u
     }
 }
 
-fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64, knob: u8) void {
+fn runAdversary3(io: std.Io, gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64, knob: u8) void {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
@@ -569,7 +624,7 @@ fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
         if (err != error.OutOfMemory) {
             _ = stats.anomalies.fetchAdd(1, .monotonic);
             _ = stats.bad_exits.fetchAdd(1, .monotonic);
-            saveReproducer(gpa, "Toxic_Payload", seed, "scanBuffer failed with unexpected error", payload, null);
+            saveReproducer(io, gpa, "Toxic_Payload", seed, "scanBuffer failed with unexpected error", payload, null);
         }
         return;
     };
@@ -578,7 +633,7 @@ fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
     if (cfg.max_count != null and cfg.max_count.? == 0 and res.lines != 0) {
         _ = stats.anomalies.fetchAdd(1, .monotonic);
         _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-        saveReproducer(gpa, "Toxic_Payload", seed, "max_count == 0 violated (res.lines > 0)", payload, null);
+        saveReproducer(io, gpa, "Toxic_Payload", seed, "max_count == 0 violated (res.lines > 0)", payload, null);
     }
 
     _ = stats.adv3_ops.fetchAdd(1, .monotonic);
@@ -588,7 +643,7 @@ fn runAdversary3(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
 // Adversary 4: The Differential Oracle Auditor (Mathematical Invariant Verifier)
 // ---------------------------------------------------------------------------
 
-fn runAdversary4(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64) void {
+fn runAdversary4(io: std.Io, gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64) void {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
     const arena = arena_inst.allocator();
@@ -634,7 +689,7 @@ fn runAdversary4(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
     if (auto_off != bmh_off or bmh_off != memchr_off) {
         _ = stats.anomalies.fetchAdd(1, .monotonic);
         _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-        saveReproducer(gpa, "Differential_Oracle", seed, "BMH vs memchr mismatch", payload, null);
+        saveReproducer(io, gpa, "Differential_Oracle", seed, "BMH vs memchr mismatch", payload, null);
         return;
     }
 
@@ -649,7 +704,7 @@ fn runAdversary4(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
         _ = stats.anomalies.fetchAdd(1, .monotonic);
         _ = stats.invariant_fails.fetchAdd(1, .monotonic);
         const desc = std.fmt.allocPrint(arena, "Invert partition violated: {d} + {d} != {d}", .{ res_norm.lines, res_inv.lines, total_lines }) catch "Invert partition error";
-        saveReproducer(gpa, "Differential_Oracle", seed, desc, payload, null);
+        saveReproducer(io, gpa, "Differential_Oracle", seed, desc, payload, null);
         return;
     }
 
@@ -662,7 +717,7 @@ fn runAdversary4(gpa: Allocator, stats: *SwarmStats, rand: std.Random, seed: u64
     if (quiet_matched != expected_matched) {
         _ = stats.anomalies.fetchAdd(1, .monotonic);
         _ = stats.invariant_fails.fetchAdd(1, .monotonic);
-        saveReproducer(gpa, "Differential_Oracle", seed, "Quiet mode match divergence", payload, null);
+        saveReproducer(io, gpa, "Differential_Oracle", seed, "Quiet mode match divergence", payload, null);
         return;
     }
 
@@ -703,8 +758,8 @@ fn swarmWorker(ctx: *const WorkerContext) void {
         switch (adv) {
             1 => runAdversary1(ctx.gpa, ctx.stats, rand, seed, ctx.cfg.knob),
             2 => runAdversary2(ctx.gpa, ctx.stats, rand, seed, ctx.cfg, ctx.io),
-            3 => runAdversary3(ctx.gpa, ctx.stats, rand, seed, ctx.cfg.knob),
-            4 => runAdversary4(ctx.gpa, ctx.stats, rand, seed),
+            3 => runAdversary3(ctx.io, ctx.gpa, ctx.stats, rand, seed, ctx.cfg.knob),
+            4 => runAdversary4(ctx.io, ctx.gpa, ctx.stats, rand, seed),
             else => {},
         }
     }
@@ -720,7 +775,7 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(arena);
 
     var cfg: SwarmConfig = .{
-        .master_seed = common.nowNs(),
+        .master_seed = common.nowNs(init.io),
     };
 
     // Detect CPU count for optimal parallel swarm
@@ -756,8 +811,15 @@ pub fn main(init: std.process.Init) !void {
             if (std.fmt.parseInt(u64, val, 10)) |s| {
                 cfg.master_seed = s;
             } else |_| {}
+        } else if (std.mem.eql(u8, arg, "--trace-cli")) {
+            cfg.trace_cli = true;
+        } else if (std.mem.startsWith(u8, arg, "--cli-timeout-ms=")) {
+            const val = arg["--cli-timeout-ms=".len..];
+            if (std.fmt.parseInt(u64, val, 10)) |t| {
+                if (t > 0) cfg.cli_timeout_ms = t;
+            } else |_| {}
         } else if (std.mem.startsWith(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
-            common.printOut(
+            common.printOut(init.io,
                 \\Adversarial Entropic Fuzzer Swarm for ZiGrep
                 \\
                 \\Usage:
@@ -768,6 +830,8 @@ pub fn main(init: std.process.Init) !void {
                 \\  --adversary=N     1: Regex, 2: CLI, 3: Corrupt Buffers, 4: Oracle Invariants, all: Swarm
                 \\  --cli-rate=N      1 in N CLI runs will execute full subprocess (default: 100)
                 \\  --seed=N          master PRNG seed (default: monotonic clock)
+                \\  --trace-cli       print every spawned CLI argv to stderr
+                \\  --cli-timeout-ms=N  hard limit for a CLI child (default: 10000)
                 \\  --help            show this help message
                 \\
             , .{});
@@ -780,7 +844,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    common.printOut(
+    common.printOut(init.io,
         \\========================================================================================
         \\  ⚡ ZiGrep Adversarial Entropic Fuzzer Swarm (Pure Zig 0.16 Multi-Core Swarm)
         \\========================================================================================
@@ -808,7 +872,7 @@ pub fn main(init: std.process.Init) !void {
     defer threads.deinit(gpa);
 
     const contexts = try arena.alloc(WorkerContext, cfg.threads);
-    const start_time = common.nowNs();
+    const start_time = common.nowNs(init.io);
 
     var i: usize = 0;
     while (i < cfg.threads) : (i += 1) {
@@ -833,11 +897,10 @@ pub fn main(init: std.process.Init) !void {
     var last_time = start_time;
 
     while (!stats.stop.load(.acquire)) {
-        const sleep_ts = linux.timespec{ .sec = 1, .nsec = 0 }; // 1000 ms
-        _ = linux.nanosleep(&sleep_ts, null);
+        std.Io.sleep(init.io, .fromSeconds(1), .awake) catch {}; // 1000 ms
 
         const current_ops = stats.total_ops.load(.acquire);
-        const current_time = common.nowNs();
+        const current_time = common.nowNs(init.io);
         const elapsed_s = @as(f64, @floatFromInt(current_time - start_time)) / 1_000_000_000.0;
         const delta_s = @as(f64, @floatFromInt(current_time - last_time)) / 1_000_000_000.0;
         const delta_ops = current_ops -| last_ops;
@@ -852,7 +915,7 @@ pub fn main(init: std.process.Init) !void {
         const adv4 = stats.adv4_ops.load(.acquire);
         const anom = stats.anomalies.load(.acquire);
 
-        common.printOut("\r  [SWARM HUD] Elapsed: {d:.1}s | Ops: {d}/{d} ({d:.0} ops/s) | Adv[1:{d} 2:{d} 3:{d} 4:{d}] | Anomalies: {d}   ", .{
+        common.printOut(init.io, "\r  [SWARM HUD] Elapsed: {d:.1}s | Ops: {d}/{d} ({d:.0} ops/s) | Adv[1:{d} 2:{d} 3:{d} 4:{d}] | Anomalies: {d}   ", .{
             elapsed_s,
             current_ops,
             cfg.target_ops,
@@ -872,7 +935,7 @@ pub fn main(init: std.process.Init) !void {
         t.join();
     }
 
-    const total_time_s = @as(f64, @floatFromInt(common.nowNs() - start_time)) / 1_000_000_000.0;
+    const total_time_s = @as(f64, @floatFromInt(common.nowNs(init.io) - start_time)) / 1_000_000_000.0;
     const final_ops = stats.total_ops.load(.acquire);
     const avg_rate = if (total_time_s > 0) @as(f64, @floatFromInt(final_ops)) / total_time_s else 0.0;
 
@@ -885,7 +948,7 @@ pub fn main(init: std.process.Init) !void {
     const final_bad_exits = stats.bad_exits.load(.acquire);
     const final_inv_fails = stats.invariant_fails.load(.acquire);
 
-    common.printOut(
+    common.printOut(init.io,
         \\
         \\----------------------------------------------------------------------------------------
         \\  🏁 Fuzzing Swarm Campaign Complete!
@@ -922,9 +985,9 @@ pub fn main(init: std.process.Init) !void {
     });
 
     if (final_anom == 0) {
-        common.printOut("  Verdict: 🟢 ZERO ANOMALIES — ZiGrep stood resilient against {d} adversarial permutations!\n\n", .{final_ops});
+        common.printOut(init.io, "  Verdict: 🟢 ZERO ANOMALIES — ZiGrep stood resilient against {d} adversarial permutations!\n\n", .{final_ops});
     } else {
-        common.printOut("  Verdict: 🔴 {d} ANOMALIES FOUND! Reproducers saved to evidence/reproducers/\n\n", .{final_anom});
+        common.printOut(init.io, "  Verdict: 🔴 {d} ANOMALIES FOUND! Reproducers saved to evidence/reproducers/\n\n", .{final_anom});
         std.process.exit(1);
     }
 }

@@ -1,0 +1,9 @@
+Build Summary: 7/7 steps succeeded
+install cached
++- install zgrep cached
+|  +- compile exe zgrep ReleaseFast native cached 99ms MaxRSS:18M
++- install zigrep cached
+|  +- compile exe zigrep ReleaseFast native cached 99ms MaxRSS:18M
++- install matcher_sweep cached
+   +- compile exe matcher_sweep ReleaseFast native cached 99ms MaxRSS:19M
+
