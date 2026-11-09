@@ -70,7 +70,7 @@ Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
   terminal ya abierta necesita un reinicio.
 * **`zgrep --version` escribe en `stderr`**, no en `stdout`. En PowerShell eso
   aparece como un `RemoteException` rojo aunque todo haya ido bien. Es
-  cosmético: el valor (`zgrep 0.2.0`) es correcto.
+  cosmético: el valor (`zgrep 0.2.1`) es correcto.
 * **No hay versión ARM64 de Windows todavía**: el instalador detecta `ARM64` y
   pide `zigrep-windows-aarch64.zip`, que todavía no se publica. En ese caso
   compila desde fuente.
@@ -399,13 +399,13 @@ nativos (`\`) pero el oráculo normaliza separadores y CRLF al comparar.
 
 ---
 
-## 9. Release 0.2.0, fuzzer en Windows y el bug delenjambre de hilos
+## 9. Release 0.2.1, fuzzer en Windows y el bug del enjambre de hilos
 
-### Qué trae la 0.2.0
+### Qué trae la 0.2.1
 
 | | |
 |---|---|
-| Versión | `0.2.0` (`zgrep --version` → `zgrep 0.2.0`) |
+| Versión | `0.2.1` (`zgrep --version` → `zgrep 0.2.1`) |
 | Port Windows | Nativo, sin WSL ni runtime de C. `src/uring.zig` es ahora una fachada portable y el motor `io_uring` real vive en `src/uring_linux.zig` (Linux-only) |
 | Installer Windows | `install.ps1`, instalable con `irm ... | iex`, verifica SHA-256 y actualiza el `PATH` de usuario |
 | Release | `zigrep-linux-x86_64.tar.gz`, `zigrep-linux-aarch64.tar.gz`, `zigrep-windows-x86_64.zip` y `SHA256SUMS.txt` |
@@ -590,4 +590,99 @@ Trampa: **`zig build` mientras corre una campaña rompe la campaña.** El
 build reemplaza `zig-out\bin\*.exe`, y los hijos que el enjambre tiene
 abiertos dejan de existir a mitad: los cuelgues que se veían antes del fix
 eran, en parte, esto. Compila antes de lanzar el fuzzer, no durante.
+
+---
+
+## 11. La release 0.2.1: el binario que no arrancaba (AVX-512)
+
+### Qué pasó
+
+La release **0.2.0** se publicó con un `.exe` que **no arrancaba** en este
+equipo. No era un fallo de `zigrep`: era el workflow de release.
+
+El job de Windows compilaba sin `-Dtarget`, y eso significa `native`, es
+decir **"la CPU que tenga este runner"**. El runner `windows-latest` de GitHub
+tiene AVX-512, así que el binario publicado lleva instrucciones AVX-512 y
+muere al cargarse en cualquier x86_64 que no las tenga (Haswell, Broadwell,
+Zen 1...):
+
+```text
+zigrep.exe --version
+exit=-1073741795   (0xC000001D = STATUS_ILLEGAL_INSTRUCTION)
+```
+
+Cómo se aisló (comparando los prefijos de instrucción del `.text`):
+
+```text
+release (CI):        EVEX(0x62)=3499   VEX(0xC4/0xC5)=11671
+build local (este PC): EVEX(0x62)= 144   VEX(0xC4/0xC5)=12486
+```
+
+Prueba cruzada, compilando el mismo código con distintos targets:
+
+| Build | Arranca en esta CPU |
+|---|---|
+| `-Dtarget=x86_64-windows` (baseline SSE2) | **sí** |
+| `-Dtarget=x86_64-windows -Dcpu=skylake_avx512` | **no** (mismo crash) |
+| `native` en esta CPU (AVX2) | sí |
+| release 0.2.0 (`native` en el runner con AVX-512) | **no** |
+
+### El arreglo
+
+El workflow compila ahora para el target **explícito** `x86_64-windows`
+(baseline x86_64, SSE2), y además comprueba que el binario arranca antes de
+empaquetarlo:
+
+```yaml
+run: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast
+
+- name: Verify the binary runs
+  shell: pwsh
+  run: |
+    & .\zig-out\bin\zigrep.exe --version
+    if ($LASTEXITCODE -ne 0) { throw "zigrep.exe --version failed with $LASTEXITCODE" }
+```
+
+Coste medido en este host (Xeon E5-2678 v3, 2.639 ficheros / 522 MB, 10
+corridas cronometradas, 3 de calentamiento):
+
+| Build | Media | Mediana | Min | Max |
+|---|---|---|---|---|
+| baseline (SSE2) | 143,4 ms | 139,6 ms | 122,9 ms | 164,1 ms |
+| native (AVX2) | 141,2 ms | 139,7 ms | 123,7 ms | 172,0 ms |
+
+**1,6% de diferencia**, dentro del ruido: el trabajo está limitado por el
+disco, no por el SIMD.
+
+### Qué release usar
+
+* **`v0.2.1`**: la primera con el binario baseline. Es la que instala el
+  `irm ... | iex` por defecto (usa `releases/latest`).
+* **`v0.2.0`**: publicada pero **supersedida**. Su `.exe` no arranca en CPUs
+  sin AVX-512. No la borres del historial: está ahí como registro.
+
+Si tienes la 0.2.0 instalada y el binario te da error al arrancar, reinstala:
+
+```powershell
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.1/install.ps1 | iex
+```
+
+### Segundo arreglo del instalador: el fallback compilaba la versión equivocada
+
+Si la descarga del `.zip` falla, el instalador compila desde fuente. Antes
+clonaba la rama por defecto (`main`), que **no tenía el port de Windows**: el
+fallback construía un binario que ni siquiera compilaba en Windows. Ahora
+clona **el tag de la release**:
+
+```powershell
+$cloneRef = $null
+if ($Version -eq "latest") {
+    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" ...
+    $cloneRef = $rel.tag_name
+} else {
+    $cloneRef = $Version
+    if (-not $cloneRef.StartsWith("v")) { $cloneRef = "v$cloneRef" }
+}
+git clone --depth 1 --branch $cloneRef "https://github.com/$Repo.git" $repoDir
+```
 

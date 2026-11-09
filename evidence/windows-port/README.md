@@ -522,3 +522,141 @@ The exhaustive 373,248-cell sweep is therefore **DEMONSTRATED on native
 Windows**, not NOT_DEMONSTRATED: full coverage, 0 anomalies, 0 invariant
 violations, 0 crashes, in 10.84 seconds (34,433 cells/second) on 24 workers.
 
+---
+
+## Release verification (2026-11-09) and the third bug: a release binary that
+## could not start
+
+The Windows installer was verified end to end against the **published**
+GitHub release (not a local mock): `irm` the installer from the `v0.2.0` tag,
+execute it, and check what it installed.
+
+### What the published release did
+
+```text
+  ==> Architecture: x86_64
+  ==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+  ==> Downloading zigrep-windows-x86_64.zip
+  ==> Verifying SHA-256
+  OK  checksum matches (2dd2fe1261b179a48369adcde9beca653be65989c05a039ff9690d9d0a1e3fdd)
+  ==> Extracting
+  OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+  OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+    ZiGrep is ready.
+  exit=-1073741795
+```
+
+The install worked, the checksum matched, the files were copied and the user
+`PATH` was updated. **The installed binary then died immediately**:
+
+```text
+version reportada    : (empty)
+busqueda:            : (empty)
+exit=-1073741795
+```
+
+`-1073741795` is `0xC000001D` = `STATUS_ILLEGAL_INSTRUCTION`: the process was
+killed by the CPU before `main()` ran.
+
+### Root cause
+
+The release workflow built the Windows binary **without an explicit target**:
+
+```yaml
+- name: Build ReleaseFast (native Windows)
+  run: zig build -Doptimize=ReleaseFast
+```
+
+Without `-Dtarget`, Zig builds for `native`, which means "whatever CPU this
+runner happens to have". The `windows-latest` runner reports AVX-512, so the
+published binary contained AVX-512 instructions and could not start on any
+x86_64 CPU without them (Haswell, Broadwell, Zen 1, ...).
+
+### Evidence
+
+Instruction-prefix census over the `.text` section (EVEX `0x62` is the
+AVX-512 prefix, VEX `0xC4`/`0xC5` is AVX/AVX2):
+
+```text
+release (CI):         EVEX(0x62)=3499   VEX(0xC4/0xC5)=11671
+local build (this host): EVEX(0x62)= 144   VEX(0xC4/0xC5)=12486
+```
+
+Cross-check by compiling the same source for different targets and running
+each one on this host (Xeon E5-2678 v3, **no AVX-512**):
+
+| Build | Starts on this CPU |
+|---|---|
+| `-Dtarget=x86_64-windows` (baseline SSE2) | **yes** |
+| `-Dtarget=x86_64-windows -Dcpu=skylake_avx512` | **no** (same crash) |
+| `native` on this host (AVX2) | yes |
+| published `v0.2.0` (`native` on the AVX-512 runner) | **no** |
+
+### Fix and cost
+
+The workflow now builds for the explicit baseline target and verifies that
+the binary starts before packaging it:
+
+```yaml
+run: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast
+
+- name: Verify the binary runs
+  shell: pwsh
+  run: |
+    & .\zig-out\bin\zigrep.exe --version
+    if ($LASTEXITCODE -ne 0) { throw "zigrep.exe --version failed with $LASTEXITCODE" }
+```
+
+Performance cost, measured on this host (2,639 files / 522,454,982 bytes,
+`-F "pub fn"`, 3 warm-up rounds then 10 timed runs):
+
+| Build | Mean | Median | Min | Max |
+|---|---|---|---|---|
+| baseline `x86_64-windows` (SSE2) | 143.4 ms | 139.6 ms | 122.9 ms | 164.1 ms |
+| `native` on this host (AVX2) | 141.2 ms | 139.7 ms | 123.7 ms | 172.0 ms |
+
+**1.6% difference**, inside the run-to-run noise: the workload is I/O bound.
+
+### A fourth bug in the installer: the source-build fallback cloned the wrong
+### ref
+
+When the download failed, the installer fell back to building from source and
+cloned the **default branch** (`main`), which does not carry the Windows port.
+The fallback therefore built code that does not even compile on Windows. It
+now clones the release tag, and for `latest` it resolves the real tag through
+the GitHub API:
+
+```powershell
+$cloneRef = $null
+if ($Version -eq "latest") {
+    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" ...
+    $cloneRef = $rel.tag_name
+} else {
+    $cloneRef = $Version
+    if (-not $cloneRef.StartsWith("v")) { $cloneRef = "v$cloneRef" }
+}
+git clone --depth 1 --branch $cloneRef "https://github.com/$Repo.git" $repoDir
+```
+
+### Release outcome
+
+* **`v0.2.0`** was published and then found to ship an unusable Windows
+  binary. It is **superseded** and is left in place as a record (releases are
+  not rewritten).
+* **`v0.2.1`** is the first release with the baseline binary, the installer
+  fix and the corrected fallback.
+
+### A network note (not a defect in the release)
+
+The first attempt to download the freshly published assets returned
+`HTTP 504 Gateway Time-out` from this host, while the same assets downloaded
+normally a few minutes later and the published `SHA256SUMS.txt` downloaded
+immediately. All three assets of `v0.2.0` were verified byte for byte
+against the published checksums once the CDN had propagated:
+
+```text
+OK   zigrep-linux-x86_64.tar.gz   0e66d6d2f44309f3e9b325fb63d6ab7e68e1e7887b5604c545f2255f21c4bfd7
+OK   zigrep-linux-aarch64.tar.gz  14eac390f29ab651d43260eea3e34348d765e00027202318c320c3e7a9c3ce3f
+OK   zigrep-windows-x86_64.zip    2dd2fe1261b179a48369adcde9beca653be65989c05a039ff9690d9d0a1e3fdd
+```
+
