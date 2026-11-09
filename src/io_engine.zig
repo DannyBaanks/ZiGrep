@@ -182,5 +182,10 @@ test "estado: promote_misses misses cierran la muestra en uring" {
 
 test "sonda: fuera de Linux responde unsupported, nunca caliente" {
     if (builtin.os.tag == .linux) return error.SkipZigTest;
-    try testing.expect(probe(0, undefined[0..0]) == .unsupported);
+    // Ojo: `undefined[0..0]` no compila en Windows (el slice de un `undefined`
+    // tipado no es válido allí), y eso rompía el job de Windows del CI.
+    var empty: [0]u8 = undefined;
+    try testing.expect(probe(0, empty[0..0]) == .unsupported);
+    // Y sobre una ruta tampoco debe abrir nada: contesta "no sé" y ya.
+    try testing.expect(probePath(undefined, "src/main.zig") == .unsupported);
 }
