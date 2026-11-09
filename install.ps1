@@ -36,6 +36,35 @@ function Write-Ok($msg) { Write-Host "OK  $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "WARN $msg" -ForegroundColor Yellow }
 function Write-Err($msg) { Write-Host "ERR $msg" -ForegroundColor Red }
 
+# Run a native command without letting its stderr abort the installer.
+#
+# $ErrorActionPreference = "Stop" turns a native command's stderr into a
+# terminating NativeCommandError in Windows PowerShell. zigrep prints its
+# version on stdout, but git prints "Cloning into ..." on stderr, so the
+# installer used to die on a perfectly healthy install.
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [switch]$Capture
+    )
+    # Function scope: the caller's preference is not modified.
+    $ErrorActionPreference = "Continue"
+    if ($Capture) {
+        $raw = & $FilePath @Arguments 2>&1
+        $code = $LASTEXITCODE
+        # A native command's stderr arrives as ErrorRecord objects; render
+        # them as plain text instead of the "NativeCommandError" decoration.
+        $parts = foreach ($item in $raw) {
+            if ($item -is [System.Management.Automation.ErrorRecord]) { $item.ToString() }
+            else { [string]$item }
+        }
+        return [pscustomobject]@{ Output = (($parts -join "`n")).Trim(); ExitCode = $code }
+    }
+    & $FilePath @Arguments
+    return [pscustomobject]@{ Output = ""; ExitCode = $LASTEXITCODE }
+}
+
 # Defined before the first call: PowerShell resolves function names at
 # runtime, not at parse time.
 function Install-ToPath {
@@ -66,7 +95,13 @@ function Install-ToPath {
 
     Write-Host ""
     Write-Host "  Version check:" -ForegroundColor Cyan
-    & (Join-Path $InstallDir "zigrep.exe") --version
+    # Run the check through Invoke-Native: the binary may write on stderr and
+    # that must not abort the installer.
+    $check = Invoke-Native -FilePath (Join-Path $InstallDir "zigrep.exe") -Arguments @("--version") -Capture
+    if ($check.Output) { Write-Host "    $($check.Output)" }
+    if ($check.ExitCode -ne 0) {
+        Write-Warn "the version check returned exit code $($check.ExitCode)"
+    }
     Write-Host ""
     Write-Host "  Try it:" -ForegroundColor Cyan
     Write-Host "    zigrep --help"
@@ -154,12 +189,22 @@ try {
             }
             Write-Step "Cloning $Repo at $cloneRef and building..."
             $repoDir = Join-Path $tmp "repo"
-            git clone --depth 1 --branch $cloneRef "https://github.com/$Repo.git" $repoDir | Out-Null
+            $clone = Invoke-Native -FilePath "git" -Arguments @("clone", "--depth", "1", "--branch", $cloneRef, "https://github.com/$Repo.git", $repoDir) -Capture
+            if ($clone.ExitCode -ne 0) {
+                Write-Err "git clone failed with exit code $($clone.ExitCode)"
+                if ($clone.Output) { Write-Host $clone.Output -ForegroundColor DarkGray }
+                exit 1
+            }
             Push-Location $repoDir
             try {
-                zig build -Doptimize=ReleaseFast
+                $build = Invoke-Native -FilePath "zig" -Arguments @("build", "-Doptimize=ReleaseFast") -Capture
             } finally {
                 Pop-Location
+            }
+            if ($build.ExitCode -ne 0) {
+                Write-Err "zig build failed with exit code $($build.ExitCode)"
+                if ($build.Output) { Write-Host $build.Output -ForegroundColor DarkGray }
+                exit 1
             }
             New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
             Copy-Item (Join-Path $repoDir "zig-out\bin\zigrep.exe") (Join-Path $InstallDir "zigrep.exe") -Force
