@@ -56,7 +56,17 @@ const SwarmConfig = struct {
     master_seed: u64 = 0,
     knob: u8 = 3, // 1: Gentle, 2: Flags, 3: Grammar, 4: ReDoS, 5: Chaos
     exe_path: []const u8 = if (builtin.os.tag == .windows) "zig-out/bin/zigrep.exe" else "zig-out/bin/zigrep",
+    /// Print every spawned CLI argv to stderr. Off by default because it
+    /// floods the output; useful to identify a hanging child.
+    trace_cli: bool = false,
+    /// Hard limit for a CLI child. Without it a child that never terminates
+    /// blocks the whole swarm forever (the swarm has no watchdog).
+    cli_timeout_ms: u64 = 10_000,
 };
+
+/// Counter used by the `--trace-cli` diagnostic to pair every spawned CLI
+/// argv with its completion, so a child that never finishes is identifiable.
+var trace_counter = std.atomic.Value(u64).init(0);
 
 // ---------------------------------------------------------------------------
 // Reproducer Writer
@@ -418,17 +428,59 @@ fn runAdversary2(
             sub_argv.append(arena, a) catch return;
         }
 
-        // Limit pipe buffer capture to 4 KB (bloc de notas / dummy sink)
-        const limit = std.Io.Limit.limited(4096);
+        const trace_id = if (cfg.trace_cli) trace_counter.fetchAdd(1, .monotonic) else 0;
+        if (cfg.trace_cli) {
+            var line: std.ArrayList(u8) = .empty;
+            defer line.deinit(gpa);
+            for (sub_argv.items) |a| {
+                line.appendSlice(gpa, a) catch {};
+                line.append(gpa, ' ') catch {};
+            }
+            line.append(gpa, '\n') catch {};
+            std.debug.print("[CLI #{d} START] {s}", .{ trace_id, line.items });
+        }
+
+        // NEVER truncate the captured streams.
+        //
+        // std.process.run stops reading a stream once it exceeds its limit,
+        // but the child keeps writing. On Windows the pipe buffer is 8 KB, so
+        // the child blocks forever on a full pipe while the parent waits for
+        // it: a deadlock. Measured with Zig 0.16.0 on Windows 11:
+        //   stdout_limit = 4096  -> the call took 294 s and then reported
+        //                          error.StreamTooLong (the deferred kill did
+        //                          not rescue it)
+        //   stdout_limit = .unlimited -> the same call returned in 57 ms
+        // The captured output is bounded by the fuzzer's own corpus (the
+        // repository tree), so draining it is safe.
         const res = std.process.run(arena, io, .{
             .argv = sub_argv.items,
-            .stdout_limit = limit,
-            .stderr_limit = limit,
-        }) catch {
-            // Failed to spawn (e.g. process limit) is not a bug in zigrep
+            .stdout_limit = .unlimited,
+            .stderr_limit = .unlimited,
+            // A child that never terminates would block the whole swarm: the
+            // swarm has no watchdog of its own.
+            .timeout = .{ .duration = .{
+                .raw = .fromMilliseconds(@intCast(cfg.cli_timeout_ms)),
+                .clock = .awake,
+            } },
+        }) catch |err| {
+            // Failed to spawn (e.g. process limit) is not a bug in zigrep.
+            // A timeout is a finding, not a bug in the fuzzer: report it and
+            // keep going instead of hanging forever.
+            if (cfg.trace_cli) {
+                std.debug.print("[CLI #{d} END] (error: {s})\n", .{ trace_id, @errorName(err) });
+            }
+            if (err == error.Timeout) {
+                _ = stats.anomalies.fetchAdd(1, .monotonic);
+                const desc = std.fmt.allocPrint(arena, "CLI child timed out after {d} ms", .{cfg.cli_timeout_ms}) catch "CLI child timed out";
+                saveReproducer(io, gpa, "CLI_Permutator", seed, desc, "", sub_argv.items);
+            }
             _ = stats.adv2_ops.fetchAdd(1, .monotonic);
             return;
         };
+
+        if (cfg.trace_cli) {
+            std.debug.print("[CLI #{d} END] code={d}\n", .{ trace_id, common.termCode(res.term) });
+        }
 
         const code = common.termCode(res.term);
         // Valid exit codes: 0 = match, 1 = no match, 2 = usage error
@@ -759,6 +811,13 @@ pub fn main(init: std.process.Init) !void {
             if (std.fmt.parseInt(u64, val, 10)) |s| {
                 cfg.master_seed = s;
             } else |_| {}
+        } else if (std.mem.eql(u8, arg, "--trace-cli")) {
+            cfg.trace_cli = true;
+        } else if (std.mem.startsWith(u8, arg, "--cli-timeout-ms=")) {
+            const val = arg["--cli-timeout-ms=".len..];
+            if (std.fmt.parseInt(u64, val, 10)) |t| {
+                if (t > 0) cfg.cli_timeout_ms = t;
+            } else |_| {}
         } else if (std.mem.startsWith(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             common.printOut(init.io,
                 \\Adversarial Entropic Fuzzer Swarm for ZiGrep
@@ -771,6 +830,8 @@ pub fn main(init: std.process.Init) !void {
                 \\  --adversary=N     1: Regex, 2: CLI, 3: Corrupt Buffers, 4: Oracle Invariants, all: Swarm
                 \\  --cli-rate=N      1 in N CLI runs will execute full subprocess (default: 100)
                 \\  --seed=N          master PRNG seed (default: monotonic clock)
+                \\  --trace-cli       print every spawned CLI argv to stderr
+                \\  --cli-timeout-ms=N  hard limit for a CLI child (default: 10000)
                 \\  --help            show this help message
                 \\
             , .{});
