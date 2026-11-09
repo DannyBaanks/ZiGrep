@@ -27,6 +27,12 @@ const Allocator = std.mem.Allocator;
 
 const version = "0.1.0";
 
+/// Size budget for the zero-thread micro-tree fast path: a tree whose regular
+/// files add up to less than this is scanned on the calling thread, with no
+/// thread pool and without the upward `.dataignore`/`.gitignore` walk.
+/// `--force-swarm` opts out and restores the concurrent swarm.
+const micro_tree_max_bytes: usize = 2 * 1024 * 1024;
+
 const usage =
     \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
     \\
@@ -78,6 +84,9 @@ const usage =
     \\      --no-default-ignore
     \\                    do not apply built-in default ignore lists
     \\      --no-hidden   skip hidden files and directories
+    \\      --force-swarm
+    \\                    always use the concurrent kamikaze swarm (never the
+    \\                    zero-thread micro-tree fast path)
     \\      --algo MODE   auto | bmh | memchr   (default: auto)
     \\      --stats       print timing and throughput to stderr
     \\      --uring       use Linux io_uring asynchronous batched I/O engine
@@ -111,6 +120,9 @@ pub const Options = struct {
     nav_plan: nav.NavPlan = .{},
     no_ignore: bool = false,
     no_default_ignore: bool = false,
+    /// Always use the concurrent kamikaze swarm; never the zero-thread
+    /// micro-tree fast path.
+    force_swarm: bool = false,
     exclude_dirs: [64][]const u8 = undefined,
     exclude_dirs_count: usize = 0,
     exclude_exts: [64][]const u8 = undefined,
@@ -453,6 +465,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.no_ignore = true;
             } else if (std.mem.eql(u8, body, "no-default-ignore")) {
                 opts.no_default_ignore = true;
+            } else if (std.mem.eql(u8, body, "force-swarm") or std.mem.eql(u8, body, "swarm")) {
+                opts.force_swarm = true;
             } else if (std.mem.startsWith(u8, body, "exclude-dir=")) {
                 if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
                     opts.exclude_dirs[opts.exclude_dirs_count] = trimQuotes(body["exclude-dir=".len..]);
@@ -866,13 +880,9 @@ pub fn main(init: std.process.Init) !void {
             try filter_engine.addIncludedPattern(p);
         }
 
-        // Discover .dataignore and .gitignore in current dir and search roots (walking upwards to repo root):
-        if (!opts.no_ignore) {
-            filter_engine.loadUpwardIgnoreFiles(".");
-            for (valid_operands.items) |root| {
-                filter_engine.loadUpwardIgnoreFiles(root);
-            }
-        }
+        // The upward `.dataignore` / `.gitignore` walk is *not* done here: the
+        // pipeline defers it until it knows the tree is too big for the
+        // zero-thread micro-tree fast path.
 
         const scan_cfg = scan.ScanConfig{
             .invert = opts.invert_match,
@@ -892,6 +902,8 @@ pub fn main(init: std.process.Init) !void {
             worker_count,
             &k_stats,
             opts.use_uring,
+            opts.force_swarm,
+            micro_tree_max_bytes,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
             std.process.exit(2);
@@ -906,7 +918,7 @@ pub fn main(init: std.process.Init) !void {
             else
                 0;
             std.debug.print(
-                "kamikaze: dirs={d} files={d} bytes={d} matched_files={d} matched_lines={d} threads={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
+                "kamikaze: dirs={d} files={d} bytes={d} matched_files={d} matched_lines={d} threads={d} micro_path={s} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
                 .{
                     k_stats.dirs_scouted,
                     k_stats.files_scanned,
@@ -914,6 +926,7 @@ pub fn main(init: std.process.Init) !void {
                     k_stats.matched_files,
                     k_stats.matched_lines,
                     worker_count,
+                    if (k_stats.micro_path) "yes" else "no",
                     elapsed_s,
                     mb_s,
                 },
@@ -949,12 +962,7 @@ pub fn main(init: std.process.Init) !void {
         try filter_engine.addIncludedPattern(p);
     }
 
-    if (!opts.no_ignore) {
-        filter_engine.loadUpwardIgnoreFiles(".");
-        for (valid_operands.items) |root| {
-            filter_engine.loadUpwardIgnoreFiles(root);
-        }
-    }
+    filter_engine.loadIgnoreFiles(valid_operands.items);
 
     var files: std.ArrayList([:0]const u8) = .empty;
     for (valid_operands.items) |op| {
@@ -1289,6 +1297,32 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
+    }
+}
+
+test "parseArgs: --force-swarm opts out of the zero-thread micro-tree path" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--force-swarm", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.force_swarm);
+        try std.testing.expect(o.kamikaze); // the swarm stays the engine
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--swarm", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.force_swarm);
+    }
+    {
+        // The micro-tree fast path is the default: no flag means no swarm.
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(!o.force_swarm);
     }
 }
 

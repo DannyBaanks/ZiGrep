@@ -8,10 +8,12 @@
 //!      Discovered subdirectories are pushed back to the pool, while regular files
 //!      are batched into `WorkPool.batch_queue`.
 //!
-//!   2. Zero-Spawn Fast Path for Micro-Directories:
-//!      When searching a single small flat folder (<= 64 files, 0 subdirectories),
-//!      the main thread scans files directly with 0 thread spawns, achieving < 1.5ms
-//!      execution latency and outperforming single-threaded C grep.
+//!   2. Zero-Spawn Fast Path for Micro-Trees:
+//!      When searching a single micro-tree (regular files adding up to less
+//!      than 2 MB), the main thread scans every file directly with 0 thread
+//!      spawns and without the upward `.dataignore`/`.gitignore` walk,
+//!      beating single-threaded C grep. `--force-swarm` disables it and
+//!      restores the swarm-only behaviour.
 //!
 //!   3. Zero-Latency Early Exit:
 //!      In `-q` (quiet) or `-l` (files with match) mode, the first hit flips an
@@ -48,6 +50,8 @@ pub const KamikazeStats = struct {
     matched_files: usize = 0,
     matched_lines: usize = 0,
     early_aborted: bool = false,
+    /// True when the run was served by the zero-thread micro-tree fast path.
+    micro_path: bool = false,
 };
 
 pub const SpinLock = struct {
@@ -541,62 +545,124 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
     }
 }
 
-/// Zero-Spawn Fast Path for small single directories (e.g. src/ with <= 64 files).
-fn tryQuickSingleDirScan(
+/// Zero-Spawn Fast Path for micro-trees.
+///
+/// A micro-tree is a directory whose regular files add up to `max_bytes`
+/// (2 MB by default) and that stays inside the file/dir/depth budgets. It is
+/// scanned on the calling thread: no worker pool, no mutexes, no io_uring —
+/// and, because ignore-file upkeep is pointless in a tree that small, no
+/// upward `.dataignore` / `.gitignore` inspection either.
+///
+/// Returns `null` when the tree is not a micro-tree; the caller then hands
+/// the run over to the full concurrent swarm.
+fn tryQuickTreeScan(
     gpa: Allocator,
     searcher: *const Searcher,
-    dir: [:0]const u8,
+    root: [:0]const u8,
     filter_engine: *const FilterEngine,
     mode: Mode,
     binary: bool,
     show_path: bool,
     scan_config: scan.ScanConfig,
+    max_bytes: usize,
     stats: *KamikazeStats,
 ) ?bool {
-    const rc = linux.openat(linux.AT.FDCWD, dir, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return null;
-    const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
+    var arena_inst = std.heap.ArenaAllocator.init(gpa);
+    defer arena_inst.deinit();
+    const arena = arena_inst.allocator();
 
+    var dir_queue: std.ArrayList(DirTask) = .empty;
     var files: std.ArrayList([:0]const u8) = .empty;
-    defer {
-        for (files.items) |f| gpa.free(f);
-        files.deinit(gpa);
-    }
 
+    // Budgets: a micro-tree is small by construction. Anything bigger belongs
+    // to the swarm, which parallelises the I/O. The size budget is the real
+    // gate; the file/dir/depth caps only bound the work spent discovering
+    // that the tree is too big.
+    const max_files: usize = 2048;
+    const max_dirs: usize = 512;
+    const max_depth: usize = 32;
+
+    dir_queue.append(arena, .{ .path = root, .depth = 0 }) catch return null;
+
+    var dirs_visited: usize = 0;
+    var total_bytes: u64 = 0;
     var buf: [32 * 1024]u8 = undefined;
-    while (true) {
-        const n = linux.getdents64(fd, &buf, buf.len);
-        if (linux.errno(n) != .SUCCESS or n == 0) break;
 
-        var off: usize = 0;
-        while (off < n) {
-            const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
-            const reclen: usize = ent.reclen;
-            if (reclen == 0) break;
-            const name: [:0]const u8 = std.mem.sliceTo(
-                @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
-                0,
-            );
-            off += reclen;
+    // --- Phase 1: collect the candidate files ------------------------------
+    // Every candidate is statx'd *before* a single byte is read: the budget is
+    // measured in bytes, so a tree that is too big goes to the swarm without
+    // any wasted I/O.
+    while (dir_queue.items.len > 0) {
+        const task = dir_queue.pop().?;
+        const rc = linux.openat(linux.AT.FDCWD, task.path, .{ .DIRECTORY = true, .CLOEXEC = true }, 0);
+        if (linux.errno(rc) != .SUCCESS) continue;
+        const fd: i32 = @intCast(@as(isize, @bitCast(rc)));
+        defer _ = linux.close(fd);
 
-            if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+        dirs_visited += 1;
+        if (dirs_visited > max_dirs) return null; // Exceeds micro-tree limit -> handoff to parallel swarm
 
-            const kind = ent.type;
-            if (kind == linux.DT.DIR) {
-                if (!filter_engine.isDirExcluded(name)) return null; // Subdirectory present -> use parallel swarm!
-            } else if (kind == linux.DT.REG) {
-                if (filter_engine.isFileExcluded(name)) continue;
-                if (files.items.len >= 64) return null; // Large directory -> use parallel swarm!
-                const child_name = gpa.dupeZ(u8, name) catch return null;
-                files.append(gpa, child_name) catch return null;
-            } else {
-                return null;
+        while (true) {
+            const n = linux.getdents64(fd, &buf, buf.len);
+            if (linux.errno(n) != .SUCCESS or n == 0) break;
+
+            var off: usize = 0;
+            while (off < n) {
+                const ent: *align(1) const linux.dirent64 = @ptrCast(&buf[off]);
+                const reclen: usize = ent.reclen;
+                if (reclen == 0) break;
+                const name: [:0]const u8 = std.mem.sliceTo(
+                    @as([*:0]const u8, @ptrCast(buf[off + @offsetOf(linux.dirent64, "name") ..].ptr)),
+                    0,
+                );
+                off += reclen;
+
+                if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) continue;
+
+                const kind = ent.type;
+                if (kind == linux.DT.DIR) {
+                    if (filter_engine.isDirExcluded(name)) continue;
+                    if (task.depth >= max_depth) return null;
+                    const child_dir = joinPathSentinel(arena, task.path, name) catch return null;
+                    dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1 }) catch return null;
+                } else if (kind == linux.DT.REG) {
+                    if (filter_engine.isFileExcluded(name)) continue;
+                    if (files.items.len >= max_files) return null; // Exceeds micro-tree limit -> handoff to parallel swarm
+                    const full_path = joinPathSentinel(arena, task.path, name) catch return null;
+                    var stx: linux.Statx = undefined;
+                    if (linux.errno(linux.statx(linux.AT.FDCWD, full_path, linux.AT.STATX_DONT_SYNC, .{ .SIZE = true }, &stx)) == .SUCCESS) {
+                        total_bytes += stx.size;
+                        if (total_bytes > @as(u64, max_bytes)) return null;
+                    }
+                    files.append(arena, full_path) catch return null;
+                } else if (kind == linux.DT.UNKNOWN) {
+                    // Some filesystems leave d_type empty: resolve it the same
+                    // way the concurrent scout does (symlinks are never followed).
+                    const full_p = joinPathSentinel(arena, task.path, name) catch return null;
+                    var stx: linux.Statx = undefined;
+                    if (linux.errno(linux.statx(linux.AT.FDCWD, full_p, @intCast(linux.AT.SYMLINK_NOFOLLOW), .{ .TYPE = true, .SIZE = true }, &stx)) == .SUCCESS) {
+                        const m = stx.mode & linux.S.IFMT;
+                        if (m == linux.S.IFDIR) {
+                            if (filter_engine.isDirExcluded(name)) continue;
+                            if (task.depth >= max_depth) return null;
+                            dir_queue.append(arena, .{ .path = full_p, .depth = task.depth + 1 }) catch return null;
+                        } else if (m == linux.S.IFREG) {
+                            if (filter_engine.isFileExcluded(name)) continue;
+                            if (files.items.len >= max_files) return null;
+                            total_bytes += stx.size;
+                            if (total_bytes > @as(u64, max_bytes)) return null;
+                            files.append(arena, full_p) catch return null;
+                        }
+                    }
+                }
+                // Symlinks, sockets, fifos and device nodes are skipped, exactly
+                // like the concurrent scout does.
             }
         }
     }
 
-    // Flat small directory with <= 64 files: scan immediately on current thread!
+    // --- Phase 2: scan on the calling thread -------------------------------
+    // Micro-tree verified: scan sequentially on the calling thread!
     const scratch = gpa.alloc(u8, 256 * 1024) catch null;
     defer if (scratch) |s| gpa.free(s);
 
@@ -604,18 +670,9 @@ fn tryQuickSingleDirScan(
     defer local_out.deinit(gpa);
 
     var matched_any = false;
-    stats.dirs_scouted += 1;
+    stats.dirs_scouted += dirs_visited;
 
-    var path_buf: [linux.PATH_MAX]u8 = undefined;
-    for (files.items) |fname| {
-        const stack_path = formatPathBuf(&path_buf, dir, fname);
-        var heap_path: ?[:0]const u8 = null;
-        const full_path: [:0]const u8 = stack_path orelse blk: {
-            heap_path = joinPathSentinel(gpa, dir, fname) catch continue;
-            break :blk heap_path.?;
-        };
-        defer if (heap_path) |hp| gpa.free(hp);
-
+    for (files.items) |full_path| {
         const res = scan.scanFile(
             gpa,
             searcher,
@@ -710,12 +767,37 @@ fn tryQuickQuietProbe(
     return false;
 }
 
-/// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
-pub fn runKamikazePipeline(
+/// Zero-Latency Probe for Quiet Mode (-q), run over every root.
+fn quietProbeHit(
     gpa: Allocator,
     searcher: *const Searcher,
     roots: []const [:0]const u8,
     filter_engine: *const FilterEngine,
+    binary: bool,
+    scan_config: scan.ScanConfig,
+    stats: *KamikazeStats,
+) bool {
+    for (roots) |root| {
+        if (tryQuickQuietProbe(gpa, searcher, root, filter_engine, binary, scan_config)) {
+            stats.early_aborted = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").
+///
+/// `force_swarm` disables the zero-thread micro-tree fast path and restores
+/// the old swarm-only behaviour (including the upward ignore-file walk and
+/// the quiet probe running before any traversal).
+/// `micro_max_bytes` is the size budget under which a tree qualifies as a
+/// micro-tree and is scanned on the calling thread.
+pub fn runKamikazePipeline(
+    gpa: Allocator,
+    searcher: *const Searcher,
+    roots: []const [:0]const u8,
+    filter_engine: *FilterEngine,
     nav_plan: nav.NavPlan,
     mode: Mode,
     binary: bool,
@@ -724,31 +806,46 @@ pub fn runKamikazePipeline(
     threads_count: usize,
     stats: *KamikazeStats,
     use_uring: bool,
+    force_swarm: bool,
+    micro_max_bytes: usize,
 ) !bool {
-    // 0. Zero-Latency Early Probe for Quiet Mode (-q):
-    if (mode == .quiet and !scan_config.invert and nav_plan.len == 0) {
-        for (roots) |root| {
-            if (tryQuickQuietProbe(gpa, searcher, root, filter_engine, binary, scan_config)) {
-                stats.early_aborted = true;
-                return true;
-            }
+    const probe_early = mode == .quiet and !scan_config.invert and nav_plan.len == 0;
+
+    if (force_swarm) {
+        // 0. Old flow, exactly: the ignore files are loaded up front and the
+        //    quiet probe answers before any traversal happens.
+        filter_engine.loadIgnoreFiles(roots);
+        if (probe_early and quietProbeHit(gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
+            return true;
         }
-    }
-    // 1. Zero-Spawn Fast Path for small flat folders (beats single-threaded C grep):
-    if (roots.len == 1 and nav_plan.len == 0) {
-        const root = roots[0];
-        var stx: linux.Statx = undefined;
-        if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
-            const m = stx.mode & linux.S.IFMT;
-            if (m == linux.S.IFDIR) {
-                if (tryQuickSingleDirScan(gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, stats)) |matched| {
-                    return matched;
+    } else {
+        // 1. Zero-Spawn Fast Path for micro-trees (no threads, no ignore files).
+        //    The tree size decides the path, so this runs before the quiet
+        //    probe: a micro-tree and the swarm do not see the same file set.
+        if (roots.len == 1 and nav_plan.len == 0) {
+            const root = roots[0];
+            var stx: linux.Statx = undefined;
+            if (linux.errno(linux.statx(linux.AT.FDCWD, root, 0, .{ .TYPE = true }, &stx)) == .SUCCESS) {
+                const m = stx.mode & linux.S.IFMT;
+                if (m == linux.S.IFDIR) {
+                    if (tryQuickTreeScan(gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats)) |matched| {
+                        stats.micro_path = true;
+                        return matched;
+                    }
                 }
             }
         }
+        // 2. The tree is too big for the fast path: the upward
+        //    `.dataignore` / `.gitignore` walk happens here, and the quiet
+        //    probe now sees the same file set as the swarm.
+        filter_engine.loadIgnoreFiles(roots);
+        if (probe_early and quietProbeHit(gpa, searcher, roots, filter_engine, binary, scan_config, stats)) {
+            return true;
+        }
     }
 
-    // 2. Full Parallel Kamikaze Swarm:
+    // 3. Full Parallel Kamikaze Swarm.
+
     var pool = WorkPool.init(gpa);
     defer pool.deinit();
 

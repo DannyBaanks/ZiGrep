@@ -44,6 +44,35 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 
 > *El reporte exhaustivo de las 10 corridas individuales, desviaciones estándar y datos crudos está en [`PRUEBAS.md`](PRUEBAS.md).*
 
+### 🧬 Micro-Tree Fast Path vs Swarm (medición dedicada)
+
+Medido con `scripts/bench.zig` (medianas, rondas intercaladas y rotativas, host con
+carga externa: `loadavg` 11–17). Binario `ReleaseFast`, corpus `corpus_50`
+(50 archivos, 1.64 MB, 69 directorios):
+
+| Herramienta | Mediana (15 corridas) | Ruta usada |
+|---|---:|---|
+| `GNU grep -rnIF` | **2.52 ms** | — |
+| `zigrep` (por defecto → micro path) | 3.13 ms | `micro_path=yes` |
+| `zigrep --force-swarm` | 3.18 ms | 12 hilos + walk de ignores |
+| `zigrep -j 1` | 3.32 ms | 1 hilo (pool) |
+| `ripgrep -nF` | 5.28 ms | — |
+
+Con **sin salida** (búsqueda muda, `-q`), donde el coste de formato de líneas
+desaparece y sólo queda el trabajo de E/S + arranque, la diferencia sí es
+estructural:
+
+| Comando | Mediana |
+|---|---:|
+| `zigrep -q` (micro path, 0 hilos) | **2.00 ms** |
+| `zigrep --force-swarm -q` (12 hilos) | 3.35 ms |
+
+En el árbol medio (`corpus_1000`, 1.000 archivos, 32.8 MB) la micro path
+*mide* el presupuesto de tamaño y entrega el árbol al enjambre: el sondeo
+cuesta **+0.23 ms** frente a `--force-swarm` (6.82 ms vs 6.59 ms), y el
+enjambre sigue siendo 4,3× más rápido que `GNU grep` (11.91 ms) y 1,3× más
+rápido que `ripgrep` (9.13 ms).
+
 ---
 
 ## 🛠 Architectural Highlights
@@ -57,19 +86,22 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
 3. **Lazy Thread Spawning & Instant Early-Exit**:
    For small directories ($\le 32$ files), execution completes on the main thread with 0 thread spawns, eliminating `clone()` syscall overhead. In `-q` mode, a 3-file probe runs prior to worker initialization for sub-millisecond exits.
 
-4. **Rarest-Byte SIMD Vector Scanning**:
+4. **Zero-Thread Micro-Tree Fast Path (default)**:
+   A tree whose regular files add up to **less than 2 MB** is scanned entirely on the calling thread: **0 worker threads, 0 mutexes, 0 `clone()` syscalls**, and — because ignore-file upkeep is pointless in a tree that small — **no upward `.dataignore`/`.gitignore` inspection either**. The size budget is measured with `statx` *before* any byte is read, so a tree that is too big is handed to the swarm without any wasted I/O. `--force-swarm` restores the old swarm-only behaviour (threads + upward ignore walk) for every tree size.
+
+5. **Rarest-Byte SIMD Vector Scanning**:
    Scans 32-byte chunks (`@Vector(32, u8)`) anchored on the statistically least frequent byte of the needle (using a compile-time frequency matrix) and verifies candidates with `@ctz` bitmasks.
 
-5. **Unicode Latin-1 Case-Folding & UTF-16 Decoding**:
+6. **Unicode Latin-1 Case-Folding & UTF-16 Decoding**:
    `-i` applies SIMD bit-masking supporting both ASCII and Latin-1 supplement (Á/á, Ñ/ñ, Ü/ü, etc.) with zero throughput penalty on the critical path. Files with UTF-16 Little-Endian or Big-Endian Byte Order Marks (BOM `0xFF 0xFE` / `0xFE 0xFF`) are automatically detected and decoded transparently.
 
-6. **Linear Regex Engine (Thompson NFA + Lazy DFA)**:
+7. **Linear Regex Engine (Thompson NFA + Lazy DFA)**:
    Supports common extended regex syntax (`.`, `[a-z]`, `[^x]`, `\d`, `\w`, `\s`, `*`, `+`, `?`, `{n,m}`, `|`, `()`, `^`, `$`). Translates to a thread-local cached DFA with automatic transition interning and required literal SIMD pre-filtering. Guarantees $O(N)$ execution with zero catastrophic backtracking.
 
-7. **Universal FilterEngine & Upward Gitignore Discovery**:
-   Prunes branches directly at the `getdents64` syscall level. Discovers `.gitignore` and `.dataignore` by traversing upwards to the repository root, skipping build artifacts, caches (`.git`, `node_modules`, `target`, `.zig-cache`, `.venv`), and ignored files before `openat` or `statx`.
+8. **Universal FilterEngine & Upward Gitignore Discovery**:
+   Prunes branches directly at the `getdents64` syscall level. Discovers `.gitignore` and `.dataignore` by traversing upwards to the repository root, skipping build artifacts, caches (`.git`, `node_modules`, `target`, `.zig-cache`, `.venv`), and ignored files before `openat` or `statx`. The upward walk is **deferred**: micro-trees (< 2 MB) skip it entirely, and every other tree pays for it exactly once, right before the swarm starts.
 
-8. **Befunge 2D Vector Scout Navigation (`-m`, `--nav`, `--befunge SPEC`)**:
+9. **Befunge 2D Vector Scout Navigation (`-m`, `--nav`, `--befunge SPEC`)**:
    Treats the filesystem hierarchy as a 2D Cartesian plane ($X$ = sibling directory entries, $Y$ = filesystem depth) using 2-bit navigation tokens:
    * `v` / `d` (down): descend `openat` into child subdirectories.
    * `^` / `u` (up): ascend / prune subtree traversal.
@@ -79,20 +111,20 @@ Cada valor representa la **media aritmética ($\mu$) de 10 corridas cronometrada
      * `v^` / `du` (**Depth Ceiling**): Scans depth 0 root files and bounces child subdirectories without descending.
      * `^v` / `ud` (**Trampoline / Leapfrog**): Skips shallow root clutter entirely and dives straight into child subdirectories.
 
-9. **Topological Ticket Pruning ("Poda en Decremento")**:
+10. **Topological Ticket Pruning ("Poda en Decremento")**:
    Standard grep utilities stall threads and buffer entire output streams in memory when sorting (`--sort path`). `ZiGrep` implements a speculative, lock-free order-preserving pipeline:
    * The Scout assigns monotonic sequence tickets ($0, 1, 2, \dots$) as directory entries stream in from `getdents64`.
    * Workers run SIMD scans on their assigned batches in parallel.
    * Files yielding zero matches are pruned instantaneously with a single atomic memory write (`ready = true, matched = false`), advancing the emission window without memory buffering.
    * Matching results stream out in exact ticket order at bus speeds without latency spikes.
 
-10. **Zero-Allocation Stack Path Formatting**:
+11. **Zero-Allocation Stack Path Formatting**:
    Path formatting in directory walks formats directly into stack-allocated buffers (`formatPathBuf`) with zero heap allocations (`joinPathSentinel` / `allocPrintSentinel`), reducing allocator pressure and cache pollution to zero during deep monorepo scans.
 
-11. **256 KB Reusable Scratch Buffers & Elevated MMAP Threshold**:
+12. **256 KB Reusable Scratch Buffers & Elevated MMAP Threshold**:
    Worker thread scratch buffers are sized at 256 KB and the file memory-mapping threshold is elevated to 256 KB, completely eliminating `mmap`/`munmap` syscall churn on small-to-medium files.
 
-12. **Native Linux `io_uring` Asynchronous Dispatch Engine (`--uring`)**:
+13. **Native Linux `io_uring` Asynchronous Dispatch Engine (`--uring`)**:
    Direct submission/completion queue engine interfacing with the Linux NVMe/filesystem kernel driver via `io_uring_setup` and `io_uring_enter` with zero external libc dependencies. Batches up to 16 asynchronous file reads in a single kernel syscall, falling back gracefully to synchronous workers when files exceed buffer capacity or on unsupported environments.
 
 ---
@@ -125,7 +157,7 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (52/52)
+# Run all unit tests (53/53)
 zig build test --summary all
 
 # Run pure Zig differential oracle against GNU grep & ripgrep (26/26)
@@ -139,21 +171,40 @@ Binaries are installed at `zig-out/bin/zigrep` (and symlinked `zgrep`).
 
 ---
 
-## 🧵 Thread Scaling & Environment Variable (`ZIGREP_THREADS`)
+## 🧵 Thread Scaling, Micro-Trees & Environment Variable (`ZIGREP_THREADS`)
+
+### Micro-trees are zero-thread by default
+
+A tree whose regular files add up to **less than 2 MB** is served by the
+zero-thread fast path: the search runs on the calling thread, with no worker
+pool and without the upward `.dataignore`/`.gitignore` walk. No flag is
+needed for it.
+
+```sh
+# Micro-tree (< 2 MB): zero threads, no ignore-file walk — this is the default
+zigrep "pattern" micro_folder/
+
+# Same tree, old swarm behaviour restored: 12 workers + upward ignore walk
+zigrep --force-swarm "pattern" micro_folder/
+```
+
+`--stats` reports which path served the run (`micro_path=yes|no`).
+
+### Thread count for everything else
 
 You can control worker threads either via CLI flag (`-j N`, `--threads N`) or dynamically in front of any command with environment variables:
 
 ```sh
-# Force single-threaded zero-spawn execution (fastest for micro-trees < 100 files):
-ZIGREP_THREADS=1 zigrep "pattern" micro_folder/
+# Force single-threaded execution on a big tree (rarely useful):
+ZIGREP_THREADS=1 zigrep "pattern" /large/monorepo/
 
 # Optimal physical core scaling for large monorepos (5-6 threads on 6-core Ryzen):
 ZIGREP_THREADS=6 zigrep "pattern" /large/monorepo/
 ```
 
 ### Empirical Thread Scaling Curve (Ryzen 5: 6 Cores / 12 SMT Threads):
-* **Micro-trees (`corpus_50`: 50 files, 1.6 MB)**: **1 Thread is optimal (5.59 ms)**. Spawning 12 threads causes kernel creation/join overhead, taking 11.97 ms (2× slower).
-* **Medium-trees (`corpus_1000`: 1,000 files, 32.8 MB)**: **2–4 Threads** achieve 90% of scaling (21 ms vs 35 ms single-threaded).
+* **Micro-trees (`corpus_50`: 50 files, 1.6 MB)**: **0 threads is optimal** — the zero-thread micro path avoids the `clone()`/join overhead entirely (the old `-j 1` pool measured 3.32 ms, the micro path 3.13 ms, and the 12-thread swarm 3.18 ms on the same corpus).
+* **Medium-trees (`corpus_1000`: 1,000 files, 32.8 MB)**: **2–4 Threads** achieve 90% of scaling (21 ms vs 35 ms single-threaded). The micro path measures the size budget and hands the tree to the swarm automatically (+0.23 ms of probing).
 * **Large Monorepos (`assembly`: 5,338 files, 655 MB)**: **5–6 Threads is optimal (68.80 ms vs 152 ms single-threaded)**. Beyond 6 threads, SMT cache/execution port contention between paired hyperthreads starts adding slight overhead (~84 ms at 12 threads).
 
 ---
@@ -211,6 +262,9 @@ options:
       --no-default-ignore
                     do not apply built-in default ignore lists
       --no-hidden   skip hidden files and directories
+      --force-swarm
+                    always use the concurrent kamikaze swarm (never the
+                    zero-thread micro-tree fast path)
       --algo MODE   auto | bmh | memchr (default: auto)
       --stats       print timing and throughput to stderr
       --uring       use Linux io_uring asynchronous batched I/O engine
@@ -223,7 +277,7 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 52/52 tests covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O.
+* **Unit Tests**: 53/53 tests covering memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O.
 * **Differential Oracle (`zig build oracle`)**: 26 automated multi-way verification checks against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, io_uring asynchronous batched engine `--uring`, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input).
 * **Adversarial Entropic Fuzzer Swarm (`zig build fuzz`)**: A parallel multi-core stress testing swarm featuring 4 specialized adversaries:
   1. **The Grammar Shatterer**: Mutates regex grammars, unbalanced groups, quantifier overflows, nested alternations, control bytes, and catastrophic backtracking patterns.

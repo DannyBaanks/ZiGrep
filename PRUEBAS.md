@@ -155,3 +155,81 @@ Medido en **Ubuntu 24.04 LTS (Kernel Linux x86_64, 12 hilos CPU, NVMe)**.
 * `ripgrep`: `[22.37, 16.8, 18.3, 18.93, 32.17, 31.61, 23.31, 20.39, 22.82, 32.26]` ms
 * `GNU grep`: `[60.26, 64.24, 70.72, 58.08, 77.9, 74.73, 70.92, 63.36, 62.94, 85.68]` ms
 
+---
+
+## 🧬 Anexo A. Micro-Tree Fast Path vs Enjambre (medición dedicada, 2026-11-08)
+
+Protocolo: `scripts/bench.zig` (rondas intercaladas y rotativas entre grupos,
+3 rondas de calentamiento, salida a `/dev/null`), binario `ReleaseFast`
+(`zig build -Doptimize=ReleaseFast`), host con carga externa (`loadavg` 11–17
+durante la toma) — por eso las cifras absolutas suben respecto a la tabla
+principal, pero **las comparaciones dentro de cada bloque sí son válidas**.
+
+### A.1 Micro-árbol — `corpus_50` (50 archivos, 1.64 MB, 69 directorios), 15 corridas
+
+| Herramienta | Mediana | Mínimo | Máximo | Media | σ | Ruta |
+|---|---:|---:|---:|---:|---:|---|
+| `GNU grep -rnIF` | **2.52 ms** | 1.96 ms | 3.13 ms | 2.58 ms | 0.32 ms | — |
+| **`zigrep` (default → micro path)** | 3.13 ms | 2.46 ms | 3.90 ms | 3.17 ms | 0.40 ms | `micro_path=yes`, 0 hilos |
+| `zigrep --force-swarm` | 3.18 ms | 2.86 ms | 4.09 ms | 3.43 ms | 0.42 ms | 12 hilos + walk de ignorados |
+| `zigrep -j 1` | 3.32 ms | 2.61 ms | 4.20 ms | 3.31 ms | 0.37 ms | 1 hilo (pool) |
+| `ripgrep -nF` | 5.28 ms | 4.30 ms | 6.81 ms | 5.42 ms | 0.77 ms | — |
+
+Muestras crudas (ns):
+
+* `GNU grep`: `[2447160, 3127332, 1955384, 2733890, 2861220, 2353924, 2686932, 2272862, 2819161, 2368642, 2517744, 2244158, 2507825, 2978381, 2779226]`
+* `zigrep` (micro): `[3068370, 3022695, 2460125, 3489704, 2872432, 3182084, 2825402, 2646766, 3163178, 3395145, 3103767, 3133493, 3899476, 3699589, 3621312]`
+* `zigrep --force-swarm`: `[3160764, 3690723, 3066647, 3756366, 4048307, 3959709, 3148271, 3080183, 3136389, 2859446, 3053322, 3488822, 4089645, 3184499, 3779049]`
+* `zigrep -j 1`: `[3529218, 3618997, 3543245, 3444459, 3176655, 2606370, 3253419, 3332448, 3323081, 3263188, 2918819, 3336756, 2831705, 3239122, 4196196]`
+* `ripgrep`: `[4809551, 6472033, 4744388, 6289929, 6809088, 4298097, 5277222, 4849385, 4490409, 5167104, 4883530, 5565605, 5949378, 5488910, 6205310]`
+
+### A.2 El coste real de la micro path: búsqueda muda (sin formato de salida), 15 corridas
+
+Con `-q` desaparece el coste de emitir/formatear líneas y queda sólo
+arranque + E/S + búsqueda, que es exactamente donde la micro path elimina
+trabajo (0 hilos, 0 `clone()`, 0 mutexes, sin walk de ignorados):
+
+| Comando | Mediana | Media | σ |
+|---|---:|---:|---:|
+| **`zigrep -q` (micro path)** | **2.00 ms** | 1.98 ms | 0.43 ms |
+| `zigrep --force-swarm -q` (12 hilos) | 3.35 ms | 3.51 ms | 0.58 ms |
+
+⇒ **1.67× más rápido** que el enjambre en el modo donde el enjambre sólo
+añade overhead.
+
+### A.3 Árbol medio — `corpus_1000` (1.000 archivos, 32.8 MB), 10 corridas
+
+| Herramienta | Mediana | Mínimo | Máximo | Media | σ |
+|---|---:|---:|---:|---:|---:|
+| `GNU grep -rnIF` | 11.91 ms | 10.86 ms | 12.61 ms | 11.88 ms | 0.58 ms |
+| **`zigrep` (default: sondeo + enjambre)** | 6.82 ms | 5.92 ms | 7.17 ms | 6.70 ms | 0.41 ms |
+| `zigrep --force-swarm` (enjambre puro) | 6.59 ms | 5.84 ms | 7.14 ms | 6.47 ms | 0.44 ms |
+| `zigrep -j 1` | 28.69 ms | 27.12 ms | 33.63 ms | 28.87 ms | 1.85 ms |
+| `ripgrep -nF` | 9.13 ms | 8.81 ms | 9.82 ms | 9.19 ms | 0.33 ms |
+
+El **sondeo de tamaño cuesta +0.23 ms** (3.5 %) frente al enjambre puro:
+la micro path mide el presupuesto con `statx` antes de leer un solo byte y
+entrega el árbol al enjambre en cuanto lo ve demasiado grande, sin E/S
+desperdiciada. `--force-swarm` elimina incluso ese coste.
+
+### A.4 Verificación funcional del comportamiento
+
+Árbol de prueba (`/tmp/opencode/igtest2/parent/child`), con un `.gitignore`
+en el directorio **padre** que ignora `kid.txt`:
+
+| Comando | Archivos escaneados | Resultado |
+|---|---:|---|
+| `zigrep --stats -F NEEDLE <ruta>` (default) | 1 | `kid.txt` **sí** se busca (walk ascendente omitido) |
+| `zigrep --stats --force-swarm -F NEEDLE <ruta>` | 0 | `kid.txt` **no** se busca (comportamiento anterior restaurado) |
+| `grep -rnIF NEEDLE <ruta>` (referencia GNU) | 1 | coincide con el default: GNU grep tampoco lee `.gitignore` |
+
+Salida cruda:
+
+```
+# default (micro path)
+kamikaze: dirs=1 files=1 bytes=13 matched_files=1 matched_lines=1 threads=12 micro_path=yes ...
+/tmp/opencode/igtest2/parent/child/kid.txt:1:NEEDLE child
+
+# --force-swarm (walk ascendente respetado)
+kamikaze: dirs=1 files=0 bytes=0 matched_files=0 matched_lines=0 threads=12 micro_path=no ...
+```

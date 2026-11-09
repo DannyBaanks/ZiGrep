@@ -10,8 +10,8 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 49/49 tests passed
-zig build oracle                      # oráculo diferencial puro Zig (25/25 tests passed)
+zig build test --summary all          # 53/53 tests passed
+zig build oracle                      # oráculo diferencial puro Zig (26/26 tests passed)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -84,6 +84,19 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 2. **Archivos `.dataignore` y `.gitignore`:**
    * `zigrep` busca y respeta automáticamente archivos `.dataignore` y `.gitignore` presentes en el directorio raíz o de ejecución.
    * En `.dataignore` puedes escribir patrones estilo glob (`*.csv`, `logs/`, `temp_*`).
+   * **Micro-árboles (< 2 MB): el walk ascendente se omite.** Por defecto, un
+     árbol cuyos archivos regulares sumen menos de 2 MB se escanea en el
+     hilo llamante, con 0 hilos y **sin** inspeccionar `.dataignore` /
+     `.gitignore` hacia arriba: en un árbol tan pequeño el mantenimiento de
+     ignorados es ruido. Si necesitas ese comportamiento *sí* (o el
+     rendimiento del enjambre), pídelo explícitamente:
+
+     ```sh
+     zigrep --force-swarm "patrón" .
+     ```
+
+     `--force-swarm` restaura el comportamiento anterior completo: 12 hilos
+     Kamikaze y walk ascendente de `.dataignore` / `.gitignore`.
 
 3. **Anulación para escaneo en bruto (`--no-ignore`):**
    * Si necesitas buscar en absolutamente todo (incluyendo `.git`, binarios, cachés y `.dataignore`):
@@ -94,6 +107,21 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
      ```sh
      zigrep -k --no-default-ignore "patrón" .
      ```
+
+   * `--no-ignore` desactiva también las exclusiones por defecto (`.git`,
+     `node_modules`, `*.log`, …): es un escaneo en bruto.
+
+### Cómo saber qué ruta se usó
+
+`--stats` imprime `micro_path=yes|no` por stderr:
+
+```sh
+zigrep --stats -F "const" . 2>&1 >/dev/null | grep micro_path
+# kamikaze: dirs=… files=… micro_path=yes elapsed_s=… throughput_MBps=…
+```
+
+`micro_path=yes` ⇒ 0 hilos, sin walk de ignorados. `micro_path=no` ⇒ el
+enjambre (árbol ≥ 2 MB, varias rutas, `--sort`, `--force-swarm`, …).
 
 ### Cómo se interpreta el resultado
 
@@ -125,6 +153,7 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 zgrep -F "const" RUTA                    # el default ya usa el kernel más rápido
 zgrep -j 4 -F "const" RUTA               # limitar hilos
 zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
+zgrep --force-swarm -F "const" RUTA     # siempre enjambre (nunca micro path)
 ```
 
 * `--algo=auto` (por defecto) busca el **byte más raro** del patrón con
@@ -177,8 +206,8 @@ zgrep --stats -F "const" RUTA            # informa por stderr: tiempo y MB/s
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 49/49 tests passed
-zig build oracle                 # 25/25 differential oracle tests passed
+zig build test --summary all     # 53/53 tests passed
+zig build oracle                 # 26/26 differential oracle tests passed
 ```
 
 ---

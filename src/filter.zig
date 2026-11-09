@@ -97,6 +97,10 @@ pub const FilterEngine = struct {
     use_defaults: bool = true,
     skip_hidden: bool = false,
     no_ignore: bool = false,
+    /// Set once `loadIgnoreFiles` has run. The upward `.dataignore` /
+    /// `.gitignore` walk is deferred until a run actually needs it, so a
+    /// micro-tree never pays for it.
+    ignore_files_loaded: bool = false,
 
     excluded_dirs: std.ArrayList([]const u8),
     excluded_exts: std.ArrayList([]const u8),
@@ -221,6 +225,23 @@ pub const FilterEngine = struct {
             const parent = std.fs.path.dirname(cur) orelse break;
             if (parent.len == 0 or std.mem.eql(u8, parent, cur) or std.mem.eql(u8, parent, "/")) break;
             cur = parent;
+        }
+    }
+
+    /// Loads `.dataignore` / `.gitignore` for the current directory and every
+    /// search root, walking upwards to the project root.
+    ///
+    /// Idempotent on purpose: the micro-tree fast path defers this call until
+    /// it knows the tree is too big for the single-threaded path, so a tiny
+    /// tree never pays for the upward walk, and a big one never pays twice.
+    pub fn loadIgnoreFiles(self: *FilterEngine, roots: []const [:0]const u8) void {
+        if (self.ignore_files_loaded) return;
+        self.ignore_files_loaded = true;
+        if (self.no_ignore) return;
+
+        self.loadUpwardIgnoreFiles(".");
+        for (roots) |root| {
+            self.loadUpwardIgnoreFiles(root);
         }
     }
 
