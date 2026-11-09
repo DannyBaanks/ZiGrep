@@ -85,9 +85,6 @@ const Parser = struct {
             if (self.peek() == '|') {
                 self.i += 1;
                 try branches.append(self.a, try self.parseCat());
-            } else if (self.peek() == '\\' and self.i + 1 < self.src.len and self.src[self.i + 1] == '|') {
-                self.i += 2;
-                try branches.append(self.a, try self.parseCat());
             } else {
                 break;
             }
@@ -100,7 +97,6 @@ const Parser = struct {
         var items: std.ArrayList(*Node) = .empty;
         while (self.peek()) |c| {
             if (c == '|' or c == ')') break;
-            if (c == '\\' and self.i + 1 < self.src.len and self.src[self.i + 1] == '|') break;
             const n = try self.parseRepeat();
             // Flatten plain groups so literal runs stay contiguous.
             switch (n.*) {
@@ -616,6 +612,16 @@ pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
 // ---------------------------------------------------------------------------
 
 const unknown: u32 = std.math.maxInt(u32);
+/// A match location inside a line: `data[start..end)`.
+pub const Span = struct {
+    start: usize,
+    end: usize,
+
+    pub fn slice(self: Span, data: []const u8) []const u8 {
+        return data[self.start..self.end];
+    }
+};
+
 const match_state: u32 = 0;
 const max_states = 3000;
 
@@ -623,6 +629,9 @@ const State = struct {
     nodes: []const u32,
     /// -1 unknown, 0 no, 1 yes: does the state accept at end of line?
     accept_end: i8 = -1,
+    /// True when the state's NFA set contains the match node: a match just
+    /// completed. Used by the span runner (`nextMatch`) to recover WHERE.
+    accepting: bool = false,
 };
 
 pub const Dfa = struct {
@@ -632,8 +641,14 @@ pub const Dfa = struct {
     arena: std.heap.ArenaAllocator,
     states: std.ArrayList(State) = .empty,
     trans: std.ArrayList(u32) = .empty,
+    /// Same transitions as `trans`, but WITHOUT injecting `prog.start` on
+    /// every byte. That second table is what makes the span runner possible:
+    /// "match anywhere" collapses the instant a match completes (it cannot
+    /// say where it started), while "match from position p" runs anchored.
+    trans_span: std.ArrayList(u32) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     init_bol: u32 = 0,
+    init_mid: u32 = 0,
     /// Incremented whenever the state cache is flushed (state ids die).
     flushes: u32 = 0,
     // scratch
@@ -662,6 +677,7 @@ pub const Dfa = struct {
         self.gpa.free(self.mark);
         self.states.deinit(self.gpa);
         self.trans.deinit(self.gpa);
+        self.trans_span.deinit(self.gpa);
         self.index.deinit(self.gpa);
         self.stack.deinit(self.gpa);
         self.work.deinit(self.gpa);
@@ -672,21 +688,27 @@ pub const Dfa = struct {
     fn reset(self: *Dfa) Allocator.Error!void {
         self.states.clearRetainingCapacity();
         self.trans.clearRetainingCapacity();
+        self.trans_span.clearRetainingCapacity();
         self.index.clearRetainingCapacity();
         _ = self.arena.reset(.retain_capacity);
         self.flushes +%= 1;
-        // state 0 = absorbing "line matched"
-        try self.states.append(self.gpa, .{ .nodes = &.{}, .accept_end = 1 });
+        // state 0 is the absorbing dead state (kept for id stability).
+        try self.states.append(self.gpa, .{ .nodes = &.{}, .accept_end = 0 });
         try self.trans.appendNTimes(self.gpa, 0, 256);
+        try self.trans_span.appendNTimes(self.gpa, 0, 256);
         self.seeds.clearRetainingCapacity();
         try self.seeds.append(self.gpa, self.prog.start);
-        const r = try self.closure(true, false);
-        self.init_bol = try self.intern(r);
+        self.init_bol = try self.intern(try self.closure(true, false));
+        self.seeds.clearRetainingCapacity();
+        try self.seeds.append(self.gpa, self.prog.start);
+        self.init_mid = try self.intern(try self.closure(false, false));
     }
 
-    /// Epsilon closure of `self.seeds`. Returns a sorted node list (set, eol
-    /// and match nodes only) or `null` if it contains the match node.
-    fn closure(self: *Dfa, at_bol: bool, at_eol: bool) Allocator.Error!?[]const u32 {
+    /// Epsilon closure of `self.seeds`, collecting the set, eol and match
+    /// nodes into a sorted list. The match node stays IN the list (instead of
+    /// aborting the closure): that is what lets a state mean "a match just
+    /// completed here" and keeps scanning for a longer one.
+    fn closure(self: *Dfa, at_bol: bool, at_eol: bool) Allocator.Error![]const u32 {
         self.gen +%= 1;
         if (self.gen == 0) {
             @memset(self.mark, 0);
@@ -712,25 +734,45 @@ pub const Dfa = struct {
                 } else {
                     try self.work.append(self.gpa, id);
                 },
-                .match => return null,
+                .match => try self.work.append(self.gpa, id),
             }
         }
         std.mem.sort(u32, self.work.items, {}, std.sort.asc(u32));
         return self.work.items;
     }
 
-    fn intern(self: *Dfa, nodes: ?[]const u32) Allocator.Error!u32 {
-        const list = nodes orelse return match_state;
-        const key = std.mem.sliceAsBytes(list);
+    /// Does the interned node list mean "a match completed"?
+    fn has_match(list: []const u32, match_node: u32) bool {
+        for (list) |id| {
+            if (id == match_node) return true;
+        }
+        return false;
+    }
+
+    pub fn isAccepting(self: *const Dfa, s: u32) bool {
+        return self.states.items[s].accepting;
+    }
+
+    /// True when no NFA thread is alive in `s` (it can never accept again).
+    fn is_dead(self: *const Dfa, s: u32) bool {
+        const nodes = self.states.items[s].nodes;
+        for (nodes) |id| {
+            if (id != self.prog.match_node) return false;
+        }
+        return true;
+    }
+
+    fn intern(self: *Dfa, nodes: []const u32) Allocator.Error!u32 {
+        const key = std.mem.sliceAsBytes(nodes);
         if (self.index.get(key)) |id| return id;
         if (self.states.items.len >= max_states) {
             // Cache full: flush and start over. Callers must not reuse old ids.
-            const copy = try self.gpa.dupe(u32, list);
+            const copy = try self.gpa.dupe(u32, nodes);
             defer self.gpa.free(copy);
             try self.reset();
             return self.internFresh(copy);
         }
-        return self.internFresh(list);
+        return self.internFresh(nodes);
     }
 
     fn internFresh(self: *Dfa, list: []const u32) Allocator.Error!u32 {
@@ -738,8 +780,12 @@ pub const Dfa = struct {
         if (self.index.get(key)) |id| return id;
         const owned = try self.arena.allocator().dupe(u32, list);
         const id: u32 = @intCast(self.states.items.len);
-        try self.states.append(self.gpa, .{ .nodes = owned });
+        try self.states.append(self.gpa, .{
+            .nodes = owned,
+            .accepting = has_match(list, self.prog.match_node),
+        });
         try self.trans.appendNTimes(self.gpa, unknown, 256);
+        try self.trans_span.appendNTimes(self.gpa, unknown, 256);
         try self.index.put(self.gpa, std.mem.sliceAsBytes(owned), id);
         return id;
     }
@@ -755,7 +801,7 @@ pub const Dfa = struct {
         }
         var ok = false;
         if (self.seeds.items.len > 0) {
-            ok = (try self.closure(false, true)) == null;
+            ok = has_match(try self.closure(false, true), prog.match_node);
         }
         // `st` may dangle only if states grew; closure() never interns.
         self.states.items[s].accept_end = if (ok) 1 else 0;
@@ -770,7 +816,6 @@ pub const Dfa = struct {
 
     fn firstMatchingLineImpl(self: *Dfa, data: []const u8, from: usize, to: usize) Allocator.Error!?usize {
         var s = self.init_bol;
-        if (s == match_state) return from;
         var ls = from;
         var i = from;
         while (i < to) {
@@ -783,8 +828,8 @@ pub const Dfa = struct {
                 continue;
             }
             var t = self.trans.items[@as(usize, s) * 256 + b];
-            if (t == unknown) t = try self.stepRaw(s, b);
-            if (t == match_state) return ls;
+            if (t == unknown) t = try self.step(s, b, true);
+            if (self.isAccepting(t)) return ls;
             s = t;
             i += 1;
         }
@@ -793,7 +838,12 @@ pub const Dfa = struct {
     }
 
     /// Computes (and caches) the transition of `s` on byte `b`.
-    fn stepRaw(self: *Dfa, s: u32, b: u8) Allocator.Error!u32 {
+    ///
+    /// `inject` re-seeds `prog.start` every step, which is what "the regex
+    /// matches somewhere after here" needs. The span runner passes `false`:
+    /// it must know where a match STARTED, so no new threads may appear
+    /// mid-run.
+    fn step(self: *Dfa, s: u32, b: u8, inject: bool) Allocator.Error!u32 {
         const gen_before = self.flushes;
         self.seeds.clearRetainingCapacity();
         const prog = self.prog;
@@ -801,14 +851,52 @@ pub const Dfa = struct {
             const n = prog.nodes[id];
             if (n.kind == .set and prog.sets[n.set][b]) try self.seeds.append(self.gpa, n.out);
         }
-        try self.seeds.append(self.gpa, prog.start);
+        if (inject) try self.seeds.append(self.gpa, prog.start);
         const r = try self.closure(false, false);
         const target = try self.intern(r);
         // Never cache across a flush: `s` no longer names the same state.
         if (self.flushes == gen_before) {
-            self.trans.items[@as(usize, s) * 256 + b] = target;
+            const table = if (inject) &self.trans else &self.trans_span;
+            table.items[@as(usize, s) * 256 + b] = target;
         }
         return target;
+    }
+
+    /// Leftmost-longest match inside `data[from..to)`, with both ends.
+    /// `data` is a single line (no '\n' expected); position 0 is BOL.
+    ///
+    /// Restarting at every position makes this the classic $O(n^2)$ worst
+    /// case, which is exactly what a POSIX leftmost-longest engine does; in
+    /// practice callers only reach it for lines that already matched.
+    pub fn nextMatch(self: *Dfa, data: []const u8, from: usize, to: usize) ?Span {
+        return self.nextMatchImpl(data, from, to) catch null;
+    }
+
+    fn nextMatchImpl(self: *Dfa, data: []const u8, from: usize, to: usize) Allocator.Error!?Span {
+        var p = from;
+        while (p <= to) : (p += 1) {
+            var s = if (p == 0) self.init_bol else self.init_mid;
+            var best_end: ?usize = null;
+            // `$` is an end-of-LINE assertion, and `nextMatch` is handed one
+            // line: it can only fire once the whole slice is consumed (or
+            // immediately on an empty line). Asking acceptEnd at every step
+            // would let `a$` match the first 'a' of "aaaa".
+            if (self.isAccepting(s)) best_end = p;
+            if (best_end == null and to == p and try self.acceptEnd(s)) best_end = p;
+            var i = p;
+            while (i < to) : (i += 1) {
+                const b = data[i];
+                var t = self.trans_span.items[@as(usize, s) * 256 + b];
+                if (t == unknown) t = try self.step(s, b, false);
+                if (self.isAccepting(t)) best_end = i + 1;
+                if (best_end == null and i + 1 == to and try self.acceptEnd(t)) best_end = i + 1;
+                if (self.is_dead(t)) break;
+                s = t;
+            }
+            if (best_end) |e| return .{ .start = p, .end = e };
+            if (p == to) break;
+        }
+        return null;
     }
 };
 
@@ -861,9 +949,11 @@ test "regex: repeats and alternation" {
     try std.testing.expect(try testMatch("colou?r", "color", plain));
     try std.testing.expect(try testMatch("cat|dog", "hotdog", plain));
     try std.testing.expect(!try testMatch("cat|dog", "bird", plain));
-    try std.testing.expect(try testMatch("cat\\|dog", "hotdog", plain));
-    try std.testing.expect(try testMatch("webgpu\\|wgpu\\|dawn", "this is dawn here", plain));
-    try std.testing.expect(try testMatch("webgpu\\|wgpu\\|dawn", "wgpu backend", plain));
+    // ERE, same dialect as rg and `grep -E`: `\|` is a LITERAL pipe.
+    try std.testing.expect(!try testMatch("cat\\|dog", "hotdog", plain));
+    try std.testing.expect(try testMatch("cat\\|dog", "cat|dog", plain));
+    try std.testing.expect(!try testMatch("webgpu\\|wgpu\\|dawn", "this is dawn here", plain));
+    try std.testing.expect(try testMatch("webgpu\\|wgpu\\|dawn", "webgpu|wgpu|dawn", plain));
     try std.testing.expect(!try testMatch("webgpu\\|wgpu\\|dawn", "vulkan only", plain));
     try std.testing.expect(try testMatch("(ab){2}", "xababx", plain));
     try std.testing.expect(!try testMatch("(ab){2}", "xabax", plain));

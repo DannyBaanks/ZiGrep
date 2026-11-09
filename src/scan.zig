@@ -14,6 +14,7 @@ const builtin = @import("builtin");
 const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
+const Match = @import("search.zig").Match;
 const io_engine = @import("io_engine.zig");
 
 pub const Mode = enum {
@@ -21,6 +22,8 @@ pub const Mode = enum {
     lines,
     /// `path:count` for every scanned file (grep `-c` behaviour).
     count,
+    /// `path:count` where count is the number of MATCHES (rg `--count-matches`).
+    count_matches,
     /// `path` for files with at least one match.
     files,
     /// `path` for files with NO matches (-L behaviour).
@@ -39,6 +42,22 @@ pub const ScanConfig = struct {
     show_line_no: bool = true,
     /// `-Z`: terminate file names with NUL instead of ':' / newline.
     null_filename: bool = false,
+    /// `-o`: one output line per (non-empty) match instead of per line.
+    only_matching: bool = false,
+    /// `--column`: print the 1-based byte column of the first match.
+    column: bool = false,
+    /// `--color=always`: highlight the match spans.
+    color: bool = false,
+    /// `-r REPLACEMENT` (rg): emit the matches with the replacement text.
+    replace: ?[]const u8 = null,
+    /// `--passthru` with `-r`: also print the lines that do not match.
+    passthru: bool = false,
+
+    /// True when the emission needs the match spans, so the fast
+    /// "jump to the next match" path cannot be used.
+    pub fn needs_spans(self: ScanConfig) bool {
+        return self.only_matching or self.column or self.color or self.replace != null or self.passthru;
+    }
 };
 
 /// NUL probe window used to decide a file is binary, aligned with GNU grep's
@@ -82,6 +101,8 @@ pub const mmap_threshold = 256 * 1024;
 pub const FileScan = struct {
     matched: bool = false,
     lines: usize = 0,
+    /// Matches, not lines (only filled when `--count-matches` is on).
+    matches: usize = 0,
     /// Bytes actually searched (excludes binary skips and failures).
     bytes: usize = 0,
     err: ?linux.E = null,
@@ -90,6 +111,8 @@ pub const FileScan = struct {
 pub const BufferResult = struct {
     matched: bool = false,
     lines: usize = 0,
+    /// Matches, not lines: only filled when `--count-matches` is on.
+    matches: usize = 0,
 };
 
 fn appendDecimal(out: *std.ArrayList(u8), gpa: Allocator, value: usize) Allocator.Error!void {
@@ -128,6 +151,113 @@ fn emitLine(
     out.appendAssumeCapacity('\n');
 }
 
+const color_off = "\x1b[0m";
+const color_match = "\x1b[01;31m";
+const color_lineno = "\x1b[32m";
+
+/// Shared `path<sep>line<sep>` prefix. `colored` wraps the line number the way
+/// GNU grep does (green); `sep` is ':' for a match and '-' for context.
+fn emitPrefix(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: []const u8,
+    show_path: bool,
+    show_line_no: bool,
+    sep: u8,
+    line_no: usize,
+    null_filename: bool,
+    colored: bool,
+) Allocator.Error!void {
+    if (show_path) {
+        try out.appendSlice(gpa, path);
+        try out.append(gpa, if (null_filename) 0 else sep);
+    }
+    if (!show_line_no) return;
+    if (colored) try out.appendSlice(gpa, color_lineno);
+    var buf: [24]u8 = undefined;
+    const t = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+    try out.appendSlice(gpa, t);
+    if (colored) try out.appendSlice(gpa, color_off);
+    try out.append(gpa, sep);
+}
+
+/// One output line per non-empty match (`grep -o`, `rg -r REPLACEMENT`).
+/// Zero-width matches are dropped, exactly like grep -o.
+fn emitMatches(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    searcher: *const Searcher,
+    cfg: ScanConfig,
+    path: []const u8,
+    show_path: bool,
+    line_no: usize,
+    line: []const u8,
+) Allocator.Error!void {
+    var from: usize = 0;
+    while (from <= line.len) {
+        const m = searcher.matchSpan(line, from) orelse break;
+        if (m.end > m.start) {
+            try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color);
+            try out.appendSlice(gpa, if (cfg.replace) |rep| rep else line[m.start..m.end]);
+            try out.append(gpa, '\n');
+        }
+        from = if (m.end == m.start) m.start + 1 else m.end;
+    }
+}
+
+/// The whole line, optionally with `--column` after the line number and the
+/// match spans highlighted (`--color`).
+fn emitLineSpanned(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    searcher: *const Searcher,
+    cfg: ScanConfig,
+    path: []const u8,
+    show_path: bool,
+    line_no: usize,
+    line: []const u8,
+) Allocator.Error!void {
+    var first: ?Match = null;
+    if (cfg.column) first = searcher.matchSpan(line, 0);
+    if (show_path) {
+        try out.appendSlice(gpa, path);
+        try out.append(gpa, if (cfg.null_filename) 0 else ':');
+    }
+    if (cfg.show_line_no) {
+        if (cfg.color) try out.appendSlice(gpa, color_lineno);
+        var buf: [24]u8 = undefined;
+        const t = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+        try out.appendSlice(gpa, t);
+        if (cfg.color) try out.appendSlice(gpa, color_off);
+        try out.append(gpa, ':');
+    }
+    if (first) |m| {
+        var cbuf: [24]u8 = undefined;
+        const c = std.fmt.bufPrint(&cbuf, "{d}:", .{m.start + 1}) catch unreachable;
+        try out.appendSlice(gpa, c);
+    }
+    if (!cfg.color) {
+        try out.appendSlice(gpa, line);
+        try out.append(gpa, '\n');
+        return;
+    }
+    var from: usize = 0;
+    while (from < line.len) {
+        const m = searcher.matchSpan(line, from) orelse break;
+        if (m.end == m.start) {
+            from = m.start + 1;
+            continue;
+        }
+        try out.appendSlice(gpa, line[from..m.start]);
+        try out.appendSlice(gpa, color_match);
+        try out.appendSlice(gpa, line[m.start..m.end]);
+        try out.appendSlice(gpa, color_off);
+        from = m.end;
+    }
+    try out.appendSlice(gpa, line[from..]);
+    try out.append(gpa, '\n');
+}
+
 const LineRef = struct { start: usize, end: usize, no: usize };
 
 /// Ordered line scan used by `-v` and by `-A`/`-B`/`-C`. The jump-to-next-match
@@ -156,6 +286,7 @@ fn scanBufferLines(
     // Group separators only exist with context enabled: without `-A/-B/-C`
     // the old ordered path printed nothing but matching lines.
     const context_enabled = config.before_context > 0 or config.after_context > 0;
+    const spans = config.needs_spans();
 
     var line_start: usize = 0;
     var line_no: usize = 1;
@@ -175,29 +306,56 @@ fn scanBufferLines(
             res.lines += 1;
             if (mode == .quiet or mode == .files or mode == .files_without_match) return res;
 
-            if (mode == .lines) {
-                if (ring.len > 0 and ring_len > 0) {
-                    const first = if (line_no > config.before_context) line_no - config.before_context else 1;
-                    var k: usize = 0;
-                    while (k < ring_len) : (k += 1) {
-                        const at = (ring_pos + ring.len - ring_len + k) % ring.len;
-                        const ref = ring[at];
-                        if (ref.no < first or ref.no <= last_printed) continue;
-                        if (printed_any and ref.no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                        try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename);
-                        last_printed = ref.no;
-                        printed_any = true;
-                    }
+            if (mode == .count_matches) {
+                var from: usize = 0;
+                while (from <= line_slice.len) {
+                    const m = searcher.matchSpan(line_slice, from) orelse break;
+                    if (m.end > m.start) res.matches += 1;
+                    from = if (m.end == m.start) m.start + 1 else m.end;
                 }
-                if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
-                last_printed = line_no;
-                printed_any = true;
+            }
+
+            if (mode == .lines) {
+                if (spans and (config.only_matching or config.replace != null)) {
+                    // `grep -o -v` prints nothing: -o describes the matches of
+                    // a selected line, and with -v there are none.
+                    if (!config.invert) {
+                        try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_slice);
+                    }
+                } else if (spans) {
+                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
+                } else {
+                    if (ring.len > 0 and ring_len > 0) {
+                        const first = if (line_no > config.before_context) line_no - config.before_context else 1;
+                        var k: usize = 0;
+                        while (k < ring_len) : (k += 1) {
+                            const at = (ring_pos + ring.len - ring_len + k) % ring.len;
+                            const ref = ring[at];
+                            if (ref.no < first or ref.no <= last_printed) continue;
+                            if (context_enabled and printed_any and ref.no > last_printed + 1) try out.appendSlice(gpa, "--\n");
+                            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename);
+                            last_printed = ref.no;
+                            printed_any = true;
+                        }
+                    }
+                    if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
+                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
+                    last_printed = line_no;
+                    printed_any = true;
+                }
             }
 
             after_left = if (mode == .lines) config.after_context else 0;
             if (config.max_count) |mc| {
                 if (res.lines >= mc) maxed = true;
+            }
+        } else if (config.passthru and mode == .lines and !selected) {
+            // --passthru prints the non-matching lines untouched; with -r the
+            // matches of the matching lines were already substituted above.
+            if (!spans) {
+                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
+            } else {
+                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
             }
         } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
             if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
@@ -248,7 +406,7 @@ pub fn scanBuffer(
 
     // Inverted matching and/or line context both need every line in order;
     // the jump-to-next-match fast path below cannot provide context.
-    if (config.invert or config.before_context > 0 or config.after_context > 0) {
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans()) {
         return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
@@ -441,6 +599,7 @@ fn processBuffer(
         };
         res.matched = match.matched;
         res.lines = match.lines;
+        res.matches = match.matches;
         res.bytes = data.len;
         return;
     }
@@ -551,6 +710,8 @@ fn scanFileLinux(
                         };
                         res.matched = br.matched;
                         res.lines = br.lines;
+                    res.matches = br.matches;
+                        res.matches = br.matches;
                         res.bytes = data.len;
                     } else |_| {}
                 } else {
@@ -560,6 +721,7 @@ fn scanFileLinux(
                     };
                     res.matched = br.matched;
                     res.lines = br.lines;
+                    res.matches = br.matches;
                     res.bytes = data.len;
                 }
             }
@@ -675,12 +837,12 @@ pub fn emitOncePerFile(
     res: FileScan,
     null_filename: bool,
 ) ?linux.E {
-    if (mode == .count) {
+    if (mode == .count or mode == .count_matches) {
         if (show_path) {
             out.appendSlice(gpa, path) catch return .NOMEM;
             out.append(gpa, if (null_filename) 0 else ':') catch return .NOMEM;
         }
-        appendDecimal(out, gpa, res.lines) catch return .NOMEM;
+        appendDecimal(out, gpa, if (mode == .count_matches) res.matches else res.lines) catch return .NOMEM;
         out.append(gpa, '\n') catch return .NOMEM;
     } else if (mode == .files and res.matched) {
         out.appendSlice(gpa, path) catch return .NOMEM;

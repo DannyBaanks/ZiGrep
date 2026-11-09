@@ -100,6 +100,16 @@ pub fn toLowerByte(b: u8) u8 {
 
 pub const Kind = enum { literal, regex, never };
 
+/// A match location inside a line: `hay[start..end)`.
+pub const Match = struct {
+    start: usize,
+    end: usize,
+
+    pub fn slice(self: Match, hay: []const u8) []const u8 {
+        return hay[self.start..self.end];
+    }
+};
+
 pub const Searcher = struct {
     needle: []const u8,
     algo: Algo,
@@ -168,6 +178,24 @@ pub const Searcher = struct {
         if (self.kind == .regex) return self.findRegex(hay, start);
         if (self.word) return self.findWord(hay, start);
         return self.findRaw(hay, start);
+    }
+
+    /// Leftmost-longest match at or after `from` in `hay` (a single line).
+    ///
+    /// The span-aware twin of `find`: `find` answers "does this line match"
+    /// and collapses the instant it does (so it cannot say where the match
+    /// started); this one keeps both ends because it drives the DFA through
+    /// the no-injection table (`Dfa.nextMatch`). Zero-width matches are
+    /// returned too (start == end); callers that model `grep -o` drop them.
+    pub fn matchSpan(self: *const Searcher, hay: []const u8, from: usize) ?Match {
+        if (self.kind == .never) return null;
+        if (self.kind == .literal) {
+            const m = self.find(hay, from) orelse return null;
+            return .{ .start = m, .end = m + self.needle.len };
+        }
+        const dfa = regex.threadDfa(self.prog.?) catch return null;
+        const span = dfa.nextMatch(hay, from, hay.len) orelse return null;
+        return .{ .start = span.start, .end = span.end };
     }
 
     fn findRaw(self: *const Searcher, hay: []const u8, start: usize) ?usize {

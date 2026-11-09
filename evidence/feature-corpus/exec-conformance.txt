@@ -1,0 +1,5 @@
+PASS --exec == grep -rl | xargs
+PASS --exec set == -l set
+PASS --exec sin {} añade la ruta
+rc comando fallido=2 (esperado 2)
+rc sin match=1 (esperado 1)

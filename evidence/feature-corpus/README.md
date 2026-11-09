@@ -64,3 +64,28 @@ coincide**: en ERE los paréntesis son grupos. Con `\(` y `\)` coinciden
 `zgrep`, `rg` y `grep -E` (verificado en `.opencode/role_doctor/doctor.py:552`).
 No es un defecto de `-x`: es la frontera BRE/ERE, anotada en la fila `-G` del
 corpus y como trampa 10 de la guía del monorepo.
+
+## La inversión del motor y su veredicto medido
+
+El motor (`regex.zig`) pasó de responder *"¿coincide esta línea?"* a responder
+***"¿dónde coincide?"***: el match ya no colapsa el estado, se conserva dentro
+del conjunto de estados del NFA, y el runner de spans usa una tabla de
+transición **sin inyección de `start`** para saber dónde empieza el match.
+Verificado con el oráculo perfecto para esto, `grep -E -o`:
+**1419/1419 casos idénticos** (patrones × líneas), cero desajustes.
+
+Eso desbloqueó `-o`, `--column`, `--color`, `-r/--replace` y `--count-matches`.
+
+### ¿Y ejecutar Python desde zgrep? Medido, no opinado
+
+`--exec` ejecuta un comando por cada fichero que coincide. La pregunta de si
+Zig puede *ejecutar Python más rápido* se responde con dos números:
+
+| Escenario | python3 directo | zgrep --execute | Lectura |
+|---|---:|---:|---|
+| Un fichero, 1,2 M líneas, mismo trabajo | 183,4 ms | 189,1 ms | **+5,7 ms (1,03×)**: no lo acelera (haría falta un intérprete) pero tampoco lo frena |
+| 40 ficheros, solo 6 marcan | 776,8 ms (shell loop) | 121,1 ms | **6,4×**, y un 11 % mejor que `grep -rl 'marca' | xargs` |
+
+El coste fijo de Python (~19 ms por arranque) no se quita desde fuera. Lo que
+sí se quita es **ejecutarlo donde no hace falta**: filtrar antes de lanzar el
+proceso. `--exec` es ese filtro, sin tubería intermedia.

@@ -75,6 +75,19 @@ const usage =
     \\  -h                do not print the file name with each result
     \\  -a                treat binary files as text
     \\  -Z, -0, --null    print a NUL after each file name
+    \\  -o, --only-matching
+    \\                    print only the matched part of each line
+    \\      --count-matches
+    \\                    like --count, but counting matches instead of lines
+    \\      --column     print the 1-based byte column of the first match (rg)
+    \\      --color[=WHEN]
+    \\                    highlight matches (always|never|auto; auto = never)
+    \\      --replace=TEXT
+    \\                    with -o semantics, print TEXT instead of each match (rg)
+    \\      --passthru   also print the lines that do not match (with -r)
+    \\      --exec, --execute, -X CMD
+    \\                    run CMD for every file with a match; {} is the path.
+    \\                    Without {} the path is appended (find -exec style)
     \\  -s, --no-messages suppress error messages about unreadable files
     \\  -j, --threads N   worker threads (default: number of CPUs)
     \\  -k, --kamikaze, --dataflow
@@ -122,6 +135,10 @@ const usage =
     \\exit status: 0 match found, 1 no match, 2 error
     \\
 ;
+
+/// `--color` tri-state. `auto` is deliberately folded to `never`: deciding
+/// it properly needs isatty(stdout), which is not worth the flag.
+pub const ColorMode = enum { never, always, auto };
 
 pub const usage_error = error{Usage};
 
@@ -177,6 +194,19 @@ pub const Options = struct {
     /// `-f FILE`: patterns come from files as well.
     pattern_files: [16][]const u8 = undefined,
     pattern_files_count: usize = 0,
+    /// `-o`: one output line per (non-empty) match.
+    only_matching: bool = false,
+    /// `--column`: print the 1-based byte column of the first match (rg).
+    column: bool = false,
+    /// `--color=always|never|auto` (auto degrades to never off a TTY).
+    color: ColorMode = .never,
+    /// `--replace=TEXT` (rg): like -o, but prints TEXT instead of the match.
+    replace: ?[]const u8 = null,
+    /// `--passthru`: also print lines that do not match.
+    passthru: bool = false,
+    /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
+    /// Turns off the normal output; the command's streams are inherited.
+    exec_cmd: ?[]const u8 = null,
     patterns: [16][]const u8 = undefined,
     patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
@@ -222,6 +252,9 @@ const Ctx = struct {
     next: std.atomic.Value(usize) = .init(0),
     emit_cursor: std.atomic.Value(usize) = .init(0),
     found: std.atomic.Value(bool) = .init(false),
+    /// `--exec` runs with the quiet mode (no output) but must NOT stop the
+    /// scan at the first match: every matching file has to be collected.
+    exec_mode: bool = false,
 };
 
 const default_scratch_bytes = 256 * 1024; // 256 KB covers ~99.5% of files
@@ -256,7 +289,7 @@ fn worker(ctx: *Ctx) void {
     defer if (scratch) |s| ctx.gpa.free(s);
 
     while (true) {
-        if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
+        if (ctx.mode == .quiet and !ctx.exec_mode and ctx.found.load(.acquire)) return;
         const idx = ctx.next.fetchAdd(1, .monotonic);
         if (idx >= ctx.files.len) return;
         // Bounded run-ahead: keep at most `window` files' output alive.
@@ -332,6 +365,100 @@ fn parseContextArg(opts: *Options, value: []const u8, what: []const u8) usage_er
         opts.fail = .{ .what = what, .arg = value };
         return error.Usage;
     };
+}
+
+pub const max_exec_args = 64;
+
+/// The argv of one `--exec` command. Returned BY VALUE: the array lives inside
+/// this struct, so the caller owns a copy. Returning a slice to a local array
+/// here is what a first version did, and it silently truncated the path
+/// appended at the end (stack reuse) while the `{}`-substituted tokens, which
+/// are heap-allocated by `concat`, still worked.
+pub const ExecArgv = struct {
+    items: [max_exec_args][]const u8 = undefined,
+    len: usize = 0,
+
+    pub fn slice(self: *const ExecArgv) []const []const u8 {
+        return self.items[0..self.len];
+    }
+};
+
+/// Splits an `--exec` template into argv:
+///   * whitespace separates arguments (no quoting: use `sh -c '...'` for that)
+///   * `{}` anywhere inside an argument is replaced by the file path, which is
+///     what makes `python3 main.py {}` work (find only allows `{}` alone)
+///   * if no `{}` appears at all, the path is appended (find -exec style)
+pub fn expandExecArgv(gpa: Allocator, template: []const u8, path: []const u8) ExecArgv {
+    var argv = ExecArgv{};
+    var replaced = false;
+    var it = std.mem.tokenizeAny(u8, template, " \t");
+    while (it.next()) |tok| {
+        if (argv.len >= max_exec_args) break;
+        if (std.mem.indexOf(u8, tok, "{}")) |at| {
+            replaced = true;
+            argv.items[argv.len] = std.mem.concat(gpa, u8, &.{
+                tok[0..at],
+                path,
+                tok[at + 2 ..],
+            }) catch tok;
+        } else {
+            argv.items[argv.len] = tok;
+        }
+        argv.len += 1;
+    }
+    if (!replaced and argv.len < max_exec_args) {
+        argv.items[argv.len] = path;
+        argv.len += 1;
+    }
+    return argv;
+}
+
+/// Runs one `--exec` command with all three streams inherited, so the child
+/// behaves exactly as if the user had typed it. Returns the exit code, or
+/// `null` when the process could not be spawned at all.
+fn runExecCmd(io: std.Io, argv: []const []const u8) ?u8 {
+    var child = std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .inherit,
+    }) catch return null;
+    const term = child.wait(io) catch return null;
+    return switch (term) {
+        .exited => |code| code,
+        else => 128,
+    };
+}
+
+/// Applies `--exec` to every file that matched. Sequential on purpose for v1:
+/// the command is arbitrary user code (a Python interpreter, say) and running
+/// N of them in parallel produces interleaved, useless output.
+fn runExecAll(
+    io: std.Io,
+    gpa: Allocator,
+    files: []const [:0]const u8,
+    matched: []const bool,
+    template: []const u8,
+    no_messages: bool,
+) bool {
+    var ok = true;
+    for (files, 0..) |path, idx| {
+        if (idx >= matched.len or !matched[idx]) continue;
+        // The argv is copied into a local buffer before the spawn: the struct
+        // returned by `expandExecArgv` is 1 KB and ReleaseFast kept parts of it
+        // in registers, which made the last argument (the appended path) read
+        // as empty inside the child.
+        var argv_buf: [max_exec_args][]const u8 = undefined;
+        const argv = expandExecArgv(gpa, template, path);
+        @memcpy(argv_buf[0..argv.len], argv.items[0..argv.len]);
+        if (runExecCmd(io, argv_buf[0..argv.len])) |code| {
+            if (code != 0) ok = false;
+        } else {
+            if (!no_messages) std.debug.print("zgrep: could not run: {s}\n", .{argv.items[0]});
+            ok = false;
+        }
+    }
+    return ok;
 }
 
 fn parseCount(value: []const u8) ?usize {
@@ -551,6 +678,50 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.show_line_no = true;
             } else if (std.mem.eql(u8, body, "null")) {
                 opts.null_filename = true;
+            } else if (std.mem.startsWith(u8, body, "replace=")) {
+                opts.replace = body["replace=".len..];
+                opts.only_matching = true; // rg: --replace implies -o output
+            } else if (std.mem.eql(u8, body, "replace")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.replace = args[i];
+                opts.only_matching = true; // rg: --replace implies -o output
+            } else if (std.mem.startsWith(u8, body, "exec=")) {
+                opts.exec_cmd = body["exec=".len..];
+            } else if (std.mem.startsWith(u8, body, "execute=")) {
+                opts.exec_cmd = body["execute=".len..];
+            } else if (std.mem.eql(u8, body, "exec") or std.mem.eql(u8, body, "execute")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.exec_cmd = args[i];
+            } else if (std.mem.eql(u8, body, "only-matching")) {
+                opts.only_matching = true;
+            } else if (std.mem.eql(u8, body, "count-matches")) {
+                opts.mode = .count_matches;
+            } else if (std.mem.eql(u8, body, "column")) {
+                opts.column = true;
+            } else if (std.mem.eql(u8, body, "passthru")) {
+                opts.passthru = true;
+            } else if (std.mem.eql(u8, body, "color") or std.mem.eql(u8, body, "colour")) {
+                opts.color = .always;
+            } else if (std.mem.startsWith(u8, body, "color=")) {
+                const v = body["color=".len..];
+                opts.color = if (std.mem.eql(u8, v, "always"))
+                    .always
+                else if (std.mem.eql(u8, v, "never"))
+                    .never
+                else if (std.mem.eql(u8, v, "auto"))
+                    .auto
+                else {
+                    opts.fail = .{ .what = "bad value for --color (expected always|never|auto)", .arg = v };
+                    return error.Usage;
+                };
             } else if (std.mem.eql(u8, body, "text")) {
                 opts.binary = true;
             } else if (std.mem.startsWith(u8, body, "after-context=")) {
@@ -731,6 +902,20 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 'n' => opts.show_line_no = true,
                 's' => opts.no_messages = true,
                 'x' => opts.line_regexp = true,
+                'o' => opts.only_matching = true,
+                'X' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    opts.exec_cmd = value;
+                    ci = chars.len;
+                },
                 'Z', '0' => opts.null_filename = true,
                 'F' => opts.fixed = true,
                 'i', 'y' => opts.ignore_case = true,
@@ -1000,6 +1185,16 @@ pub fn main(init: std.process.Init) !void {
     else
         !(operands.len == 1 and isRegularFile(init.io, operands[0]));
 
+    // `--exec` needs to know WHICH files matched, which only the ordered
+    // path keeps; the streaming pipeline reports a single boolean. For v1 the
+    // exec therefore runs on the sorted path, after the scan. This changes
+    // nothing about the bytes read, only the order the commands run in.
+    if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+    // find -exec has no normal output. The quiet early-exits below are what
+    // make `-q` fast, but they would stop the scan at the FIRST match and the
+    // command would never reach the other files, so they stay off with --exec.
+    if (opts.exec_cmd != null) opts.mode = .quiet;
+
     const t0 = nowMonotonicNs(init.io);
 
     const searcher = search.build(gpa, patterns, .{
@@ -1049,6 +1244,11 @@ pub fn main(init: std.process.Init) !void {
             .after_context = opts.after_context,
             .show_line_no = opts.show_line_no,
             .null_filename = opts.null_filename,
+            .only_matching = opts.only_matching,
+            .column = opts.column,
+            .color = opts.color == .always,
+            .replace = opts.replace,
+            .passthru = opts.passthru,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -1162,6 +1362,11 @@ pub fn main(init: std.process.Init) !void {
             .after_context = opts.after_context,
             .show_line_no = opts.show_line_no,
             .null_filename = opts.null_filename,
+            .only_matching = opts.only_matching,
+            .column = opts.column,
+            .color = opts.color == .always,
+            .replace = opts.replace,
+            .passthru = opts.passthru,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -1269,6 +1474,19 @@ pub fn main(init: std.process.Init) !void {
     defer gpa.free(slots);
     for (slots) |*s| s.* = .{};
 
+    // `--exec`: which files matched, so the command can run on them.
+    var exec_matched: []bool = &.{};
+    var exec_buf: []bool = &.{};
+    defer if (exec_buf.len > 0) gpa.free(exec_buf);
+    if (opts.exec_cmd) |_| {
+        const allocd: ?[]bool = gpa.alloc(bool, files.items.len) catch null;
+        if (allocd) |m| {
+            @memset(m, false);
+            exec_buf = m;
+            exec_matched = m;
+        }
+    }
+
     // Lazy thread spawning: clone()ing a pool costs more than reading a small
     // tree (measured: ~2 ms vs ~0.3 ms for 8 files), so the main thread runs
     // small jobs alone and only wakes the pool past this many files.
@@ -1293,9 +1511,15 @@ pub fn main(init: std.process.Init) !void {
             .after_context = opts.after_context,
             .show_line_no = opts.show_line_no,
             .null_filename = opts.null_filename,
+            .only_matching = opts.only_matching,
+            .column = opts.column,
+            .color = opts.color == .always,
+            .replace = opts.replace,
+            .passthru = opts.passthru,
         },
         .gpa = gpa,
         .window = window,
+        .exec_mode = opts.exec_cmd != null,
     };
 
     var out: Out = .{ .io = init.io };
@@ -1310,8 +1534,9 @@ pub fn main(init: std.process.Init) !void {
     if (!use_threads) {
         var idx: usize = 0;
         while (idx < files.items.len) : (idx += 1) {
-            if (opts.mode == .quiet and ctx.found.load(.acquire)) break;
+            if (opts.mode == .quiet and opts.exec_cmd == null and ctx.found.load(.acquire)) break;
             scanOne(&ctx, idx, main_scratch);
+            if (idx < exec_matched.len) exec_matched[idx] = slots[idx].matched;
             if (opts.mode != .quiet) {
                 if (slots[idx].buf.items.len > 0) {
                     if (context_mode and prev_emitted) out.writeAll("--\n");
@@ -1326,7 +1551,7 @@ pub fn main(init: std.process.Init) !void {
     } else {
         // -q probe: scan the first few files on this thread while nothing
         // else exists yet; a hit exits without ever spawning a worker.
-        if (opts.mode == .quiet) {
+        if (opts.mode == .quiet and opts.exec_cmd == null) {
             const probe = @min(@as(usize, 3), files.items.len);
             var k: usize = 0;
             while (k < probe and !ctx.found.load(.acquire)) : (k += 1) scanOne(&ctx, k, main_scratch);
@@ -1341,7 +1566,7 @@ pub fn main(init: std.process.Init) !void {
             threads.append(gpa, t) catch break;
         }
 
-        if (opts.mode == .quiet) {
+        if (opts.mode == .quiet and opts.exec_cmd == null) {
             for (threads.items) |t| t.join();
         } else {
             // Emit in file order while workers run ahead, helping with the
@@ -1350,6 +1575,7 @@ pub fn main(init: std.process.Init) !void {
             var miss: usize = 0;
             while (w < slots.len) {
                 if (slots[w].ready.load(.acquire)) {
+                    if (w < exec_matched.len) exec_matched[w] = slots[w].matched;
                     if (slots[w].buf.items.len > 0) {
                         if (context_mode and prev_emitted) out.writeAll("--\n");
                         out.writeAll(slots[w].buf.items);
@@ -1368,6 +1594,7 @@ pub fn main(init: std.process.Init) !void {
                     const idx = ctx.next.fetchAdd(1, .monotonic);
                     if (idx < slots.len) {
                         scanOne(&ctx, idx, main_scratch);
+                        if (idx < exec_matched.len) exec_matched[idx] = slots[idx].matched;
                         miss = 0;
                         continue;
                     }
@@ -1413,6 +1640,17 @@ pub fn main(init: std.process.Init) !void {
         s.buf = .empty;
     }
 
+    // `--exec`: run the command on every file that matched. A non-zero child
+    // exit is an error (grep's exit 2 slot), never a "no match".
+    var exec_failed = false;
+    if (opts.exec_cmd) |tmpl| {
+        if (exec_matched.len > 0) {
+            if (!runExecAll(init.io, gpa, files.items, exec_matched, tmpl, opts.no_messages)) {
+                exec_failed = true;
+            }
+        }
+    }
+
     const t1 = nowMonotonicNs(init.io);
     if (opts.show_stats) {
         const elapsed_ns: u64 = t1 -| t0;
@@ -1424,6 +1662,7 @@ pub fn main(init: std.process.Init) !void {
         );
     }
 
+    if (exec_failed) std.process.exit(2);
     if (had_error or stats_err > 0) std.process.exit(2);
     if (stats_matched_files > 0) std.process.exit(0);
     std.process.exit(1);
@@ -1665,6 +1904,61 @@ test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.sort);
         try std.testing.expect(!o.kamikaze);
+    }
+}
+
+test "expandExecArgv: {} substitution and find -exec appending" {
+    const gpa = std.testing.allocator;
+    {
+        const argv = expandExecArgv(gpa, "echo {}", "a.txt");
+        try std.testing.expectEqual(@as(usize, 2), argv.len);
+        try std.testing.expectEqualStrings("echo", argv.items[0]);
+        try std.testing.expectEqualStrings("a.txt", argv.items[1]);
+        gpa.free(argv.items[1]); // substituted tokens own their memory
+    }
+    {
+        // no {}: the path is appended, like find -exec
+        // sin {}: el path se ANADE al final (regresion: devolvia slice al
+        // stack y llegaba vacio)
+        const argv = expandExecArgv(gpa, "wc -l", "b.txt");
+        try std.testing.expectEqual(@as(usize, 3), argv.len);
+        try std.testing.expectEqualStrings("b.txt", argv.items[2]);
+    }
+    {
+        // repeated spaces must not create empty arguments
+        const argv = expandExecArgv(gpa, "cmd   arg   {}", "c.txt");
+        try std.testing.expectEqual(@as(usize, 3), argv.len);
+        try std.testing.expectEqualStrings("c.txt", argv.items[2]);
+        gpa.free(argv.items[2]);
+    }
+}
+
+test "parseArgs: --exec, --execute, -X" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--exec", "echo {}", "pat", "dir" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--execute=echo {}", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-X", "echo {}", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--exec" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
     }
 }
 

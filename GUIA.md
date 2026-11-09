@@ -344,6 +344,57 @@ zgrep --text "patron" RUTA           # alias largo de -a
 Lo que **no** está y por qué, en `evidence/feature-corpus/CORPUS.md`
 (PCRE2/-P, multilínea, `-o`, `--color`, `--replace`, `--json`…).
 
+## 4c. Los spans: -o, --column, --color, -r, --count-matches
+
+El motor dejó de responder "¿coincide?" y responde "¿dónde?" (leftmost-longest,
+la semántica POSIX que usa `grep`). Verificado contra `grep -E -o`: **1419/1419
+casos idénticos**.
+
+```sh
+zgrep -o '\d+\.\d+' fichero.txt          # solo la parte que coincide
+zgrep -o -n 'cat' a.txt b.txt               # con numero de linea
+zgrep --column 'cat' fichero.txt            # columna (1-based) del primer match
+zgrep --color=always 'cat' fichero.txt      # resalta SOLO los spans
+zgrep --count-matches -c 'a' fichero.txt    # cuenta matches, no lineas
+zgrep -r NUEVO -o 'a' fichero.txt           # reemplaza cada match (literal)
+zgrep --passthru -r NUEVO 'a' fichero.txt   # e imprime tambien las que no coinciden
+```
+
+Notas honestas:
+
+* `-r/--replace` es **reemplazo literal**: `$1` no existe porque el motor no
+  guarda capturas.
+* El formato de bytes de `--color` es el nuestro (línea en verde, match en
+  `01;31`), no el de `grep` (que además rellena con `\e[K`); la paridad se
+  compara quitando el ANSI.
+* Ojo con el dialecto: es ERE (el de `rg`), no el BRE de `grep` (ver 4b).
+
+## 4d. `--exec`: de "encontré" a "actúo" (nuevo en 0.3.0)
+
+```sh
+zgrep -e MARCADOR --exec 'python3 main.py {}' .
+zgrep -e MARCADOR -X 'sh -c "echo ruta=\$1" {}' .
+zgrep -e MARCADOR --exec 'wc -l' .        # sin {} la ruta se añade al final
+```
+
+Por cada fichero que coincide, ejecuta el comando con la ruta; las corrientes
+del hijo se heredan, así que se ve exactamente lo que escribirías a mano.
+`{}` se sustituye en cualquier parte del argumento (no solo como palabra
+completa, que es lo que exige `find`).
+
+Medido cara a cara (`evidence/feature-corpus/README.md`):
+
+| Escenario | Resultado |
+|---|---|
+| Un fichero, mismo trabajo que Python | +5,7 ms (1,03×) → **no acelera Python, no lo frena** |
+| 40 ficheros, 6 marcados | **6,4×** más rápido que el shell loop; 11 % mejor que `grep -rl | xargs` |
+
+La ganancia no está en ejecutar Python más rápido (para eso haría falta un
+intérprete de Python), sino en **no ejecutarlo donde no hace falta**: el filtro
+ocurre antes de lanzar el proceso. Detalles de implementación: secuencial a
+propósito (procesos arbitrarios en paralelo dan salida entrelazada) y usa el
+camino ordenado, que es el que sabe qué ficheros coincidieron.
+
 ---
 
 ## 5. Cuándo usarlo — y cuándo no
