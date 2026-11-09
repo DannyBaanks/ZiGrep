@@ -27,7 +27,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.2.1";
+const version = "0.2.2";
 
 const usage =
     \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
@@ -132,6 +132,10 @@ pub const Options = struct {
     /// Set when `parseArgs` fails so the caller can print one clean message.
     /// `parseArgs` itself never writes to a stream, which keeps it testable.
     fail: ?Failure = null,
+    /// `--help` / `--version` were requested. They are answers, not
+    /// diagnostics, so the caller prints them on stdout and exits with 0.
+    print_help: bool = false,
+    print_version: bool = false,
 };
 
 pub const Failure = struct {
@@ -329,11 +333,11 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         if (a[1] == '-') {
             const body = a[2..];
             if (std.mem.eql(u8, body, "help")) {
-                std.debug.print("{s}", .{usage});
-                std.process.exit(0);
+                opts.print_help = true;
+                return .{ .pattern = "", .operands = &[_][:0]const u8{} };
             } else if (std.mem.eql(u8, body, "version")) {
-                std.debug.print("zgrep {s}\n", .{version});
-                std.process.exit(0);
+                opts.print_version = true;
+                return .{ .pattern = "", .operands = &[_][:0]const u8{} };
             } else if (std.mem.eql(u8, body, "stats")) {
                 opts.show_stats = true;
             } else if (std.mem.startsWith(u8, body, "algo=")) {
@@ -604,8 +608,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 'h' => opts.show_path = false,
                 'a' => opts.binary = true,
                 'V' => {
-                    std.debug.print("zgrep {s}\n", .{version});
-                    std.process.exit(0);
+                    opts.print_version = true;
+                    return .{ .pattern = "", .operands = &[_][:0]const u8{} };
                 },
                 'e' => {
                     const rest = chars[ci + 1 ..];
@@ -689,6 +693,20 @@ pub fn main(init: std.process.Init) !void {
     };
     const pattern = parsed.pattern;
     const operands = parsed.operands;
+
+    // `--help` and `--version` are answers, not diagnostics: they go to
+    // stdout, like every other grep. Printing them to stderr made PowerShell
+    // show a red RemoteException on a perfectly healthy run, and it aborted
+    // the installer (which runs with $ErrorActionPreference = "Stop", where a
+    // native command writing to stderr raises a terminating error).
+    if (opts.print_help or opts.print_version) {
+        if (opts.print_version) {
+            _ = platform.writeStdout(init.io, std.fmt.comptimePrint("zgrep {s}\n", .{version}));
+        } else {
+            _ = platform.writeStdout(init.io, usage);
+        }
+        std.process.exit(0);
+    }
 
     if (opts.threads == 0) {
         if (init.environ_map.get("ZIGREP_THREADS") orelse
@@ -1264,6 +1282,36 @@ test "parseArgs: -- ends option parsing" {
     const p = try parseArgs(arena.allocator(), &a, &o);
     try std.testing.expectEqualStrings("-not-a-flag", p.pattern);
     try std.testing.expectEqual(@as(usize, 1), p.operands.len);
+}
+
+test "parseArgs: --version and -V ask for the version instead of searching" {
+    // The version is an answer, not a diagnostic: it goes to stdout, so
+    // PowerShell does not show a red RemoteException on a healthy run (and
+    // the installer, which runs with $ErrorActionPreference = "Stop", does
+    // not abort on it).
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--version" };
+        _ = try parseArgs(arena.allocator(), &a, &o);
+        try std.testing.expect(o.print_version);
+        try std.testing.expect(!o.print_help);
+        try std.testing.expect(o.fail == null);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-V" };
+        _ = try parseArgs(arena.allocator(), &a, &o);
+        try std.testing.expect(o.print_version);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--help" };
+        _ = try parseArgs(arena.allocator(), &a, &o);
+        try std.testing.expect(o.print_help);
+        try std.testing.expect(!o.print_version);
+    }
 }
 
 test "parseArgs: unknown option is a usage error with a reason" {
