@@ -159,11 +159,16 @@ pub const UringScanner = struct {
                 const n: usize = @intCast(bytes_read);
 
                 result.files_scanned += 1;
-                result.bytes_scanned += n;
 
                 // If file was larger than BUFFER_SIZE, fallback to scanFile for remaining content:
                 if (n == BUFFER_SIZE) {
-                    const fs = scan.scanFile(io, gpa, searcher, path, show_path, mode, binary, config, out, null);
+                    // `scanFile` re-lee el fichero entero: sus `bytes` son el
+                    // tamaño completo (0 si es binario o ilegible), así que se
+                    // cuenta UNA vez. Antes se sumaba el primer trozo del
+                    // anillo y se descartaba el resto: --stats mentía a la baja
+                    // justo en frío, que es donde se usa el uring.
+                    const fs = scan.scanFile(io, gpa, searcher, path, show_path, mode, binary, config, out, null, null);
+                    result.bytes_scanned += fs.bytes;
                     const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;
                     if (is_hit) {
                         result.matched_files += 1;
@@ -182,6 +187,9 @@ pub const UringScanner = struct {
                     const utf16_bom = scan.isUtf16Bom(data);
                     const is_bin = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
                     if (!is_bin) {
+                        // Solo los bytes que de verdad se escanean (mismo
+                        // criterio que el camino síncrono: un binario no suma).
+                        result.bytes_scanned += n;
                         if (utf16_bom) |bom| {
                             if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
                                 defer gpa.free(decoded);

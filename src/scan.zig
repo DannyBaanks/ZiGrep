@@ -14,6 +14,7 @@ const builtin = @import("builtin");
 const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
+const io_engine = @import("io_engine.zig");
 
 pub const Mode = enum {
     /// `path:line:text`
@@ -215,6 +216,12 @@ const map_failed: usize = @bitCast(@as(isize, -1));
 ///
 /// An optional `scratch` buffer (e.g. 128 KB) enables zero-allocation reads for
 /// small/medium files, completely avoiding allocator mutex lock contention.
+///
+/// `probe_state` solo llega con `--io-engine=auto`: mientras la muestra siga
+/// abierta, la primera lectura del fichero se intenta con
+/// `preadv2(RWF_NOWAIT)` y, si devuelve bytes, se escanean (la sonda y la
+/// lectura son la misma). Con `sync`/`uring` o fuera de Linux llega `null` y
+/// el camino es exactamente el de siempre.
 pub fn scanFile(
     io: std.Io,
     gpa: Allocator,
@@ -226,11 +233,12 @@ pub fn scanFile(
     config: ScanConfig,
     out: *std.ArrayList(u8),
     scratch: ?[]u8,
+    probe_state: ?*io_engine.State,
 ) FileScan {
     if (builtin.os.tag == .linux) {
-        return scanFileLinux(gpa, searcher, path, show_path, mode, binary, config, out, scratch);
+        return scanFileLinux(gpa, searcher, path, show_path, mode, binary, config, out, scratch, probe_state);
     }
-    return scanFilePortable(io, gpa, searcher, path, show_path, mode, binary, config, out, scratch);
+    return scanFilePortable(io, gpa, searcher, path, show_path, mode, binary, config, out, scratch, probe_state);
 }
 
 fn scanFilePortable(
@@ -244,7 +252,11 @@ fn scanFilePortable(
     config: ScanConfig,
     out: *std.ArrayList(u8),
     scratch: ?[]u8,
+    probe_state: ?*io_engine.State,
 ) FileScan {
+    // `preadv2(RWF_NOWAIT)` es de Linux; fuera de Linux no hay sonda que
+    // fusionar y el modo `auto` degrada a síncrono sin más.
+    _ = probe_state;
     var res: FileScan = .{};
     const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| {
         res.err = mapIoError(err);
@@ -374,6 +386,7 @@ fn scanFileLinux(
     config: ScanConfig,
     out: *std.ArrayList(u8),
     scratch: ?[]u8,
+    probe_state: ?*io_engine.State,
 ) FileScan {
     var res: FileScan = .{};
 
@@ -390,6 +403,29 @@ fn scanFileLinux(
     if (scratch) |sbuf| {
         var got: usize = 0;
         var read_err: ?linux.E = null;
+
+        // Motor híbrido, rebanada 2: mientras el modo `auto` no haya decidido,
+        // la primera lectura ES la sonda. En caliente `preadv2` devuelve los
+        // bytes del fichero y se escanean tal cual (antes se tiraban y el
+        // fichero se volvía a leer: dos copias del mismo trozo). En frío el
+        // EAGAIN cuesta 2,3 µs y la lectura de abajo hace el trabajo normal.
+        if (probe_state) |st| {
+            if (st.armed()) {
+                const p = io_engine.probe(fd, sbuf);
+                switch (p) {
+                    .cached => |n| {
+                        got = n;
+                        // `preadv2` no mueve el offset del fd: hay que dejarlo
+                        // donde terminó la sonda o la lectura de abajo
+                        // repetiría los primeros bytes.
+                        if (n > 0) _ = linux.lseek(fd, @intCast(n), linux.SEEK.SET);
+                    },
+                    .cold, .unsupported => {},
+                }
+                _ = st.record(p);
+            }
+        }
+
         while (got < sbuf.len) {
             const rr = linux.read(fd, sbuf.ptr + got, sbuf.len - got);
             const e = linux.errno(rr);
@@ -700,9 +736,39 @@ test "scanFile: files-without-match (-L)" {
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(gpa);
     const searcher = Searcher.init("non_existent_token_xyz", .auto);
-    const res = scanFile(std.testing.io, gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null);
+    const res = scanFile(std.testing.io, gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null, null);
     try std.testing.expect(!res.matched);
     try std.testing.expectEqualStrings("src/root.zig\n", out.items);
+}
+
+test "scanFile: en auto la sonda es la primera lectura y sus bytes se escanean" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const gpa = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const body = "alpha\nbeta needle\ngamma\n";
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "f.txt", .data = body });
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buf, ".zig-cache/tmp/{s}/f.txt", .{tmp.sub_path[0..]});
+
+    var scratch: [4096]u8 = undefined;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+    const searcher = Searcher.init("needle", .auto);
+    var st = io_engine.State{};
+
+    const res = scanFile(std.testing.io, gpa, &searcher, path, false, .lines, false, .{}, &out, &scratch, &st);
+    try std.testing.expect(res.err == null);
+    try std.testing.expect(res.matched);
+    try std.testing.expectEqual(@as(usize, 1), res.lines);
+    try std.testing.expectEqual(body.len, res.bytes);
+    try std.testing.expectEqualStrings("2:beta needle\n", out.items);
+    // La sonda corrió sobre el mismo fd: un hit y ningún miss. Si el offset
+    // del fd no se hubiera colocado tras la sonda, la lectura habría repetido
+    // los primeros bytes y `bytes`/`lines` no darían esto.
+    try std.testing.expectEqual(@as(u32, 1), st.probes.load(.monotonic));
+    try std.testing.expectEqual(@as(u32, 1), st.hits.load(.monotonic));
+    try std.testing.expectEqual(@as(u32, 0), st.misses.load(.monotonic));
 }
 
 test "utf16: BOM detection and LE decoding" {

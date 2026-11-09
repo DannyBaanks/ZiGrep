@@ -220,4 +220,110 @@ sobre NVMe, el coste que Argon atribuye a las IPIs no es el cuello de botella.
    runtime en lugar de con un flag fijo.
 4. **`scan.scanBuffer` ya existe** (`src/scan.zig:120`) y es una función pura
    sobre un buffer: el camino caliente de la sonda puede reutilizar sus bytes
-   sin tocar el motor de expresiones regulares. Queda como rebanada siguiente.
+   sin tocar el motor de expresiones regulares. Hecho en §5.1.
+
+
+---
+
+## 5. Rebanadas 2 y 3: la sonda se fusiona y `auto` pasa a ser el default
+
+### 5.1 Rebanada 2 — la primera lectura ES la sonda
+
+La sonda de la rebanada 1 abría el fichero, leía 256 KB con `RWF_NOWAIT`,
+cerraba y tiraba los bytes; después `scanFile` volvía a abrir y a leer el mismo
+trozo. Ahora `scanFile` recibe el estado de la muestra (`probe_state`, solo en
+`auto`) y, en el camino de scratch (256 KB por trabajador), la **primera
+lectura** se intenta con `preadv2(RWF_NOWAIT)` sobre el mismo fd:
+
+- **Hit**: los bytes devueltos son el contenido real del fichero. Se coloca el
+  offset del fd donde terminó la sonda (`preadv2` no lo mueve) y se sigue
+  leyendo desde ahí. El fichero se escanea una sola vez.
+- **Miss (`EAGAIN`)**: se anota y la lectura bloqueante de siempre hace el
+  trabajo desde el offset 0.
+- **`unsupported`**: cierra la muestra en síncrono, como antes.
+- Si el fichero no cabe en el scratch (≥ 256 KB), los bytes de la sonda se
+  descartan y se cae a mmap igual que antes: la fusión no inventa un escáner
+  por trozos, que es donde se romperían las líneas y los matches de frontera.
+
+`probePath` desapareció: ya no hay ningún sitio que abra un fichero dos veces
+para preguntar por su caché.
+
+**Evidencia por syscalls** (árbol de 96 ficheros × 64 KB, `--force-swarm
+--io-engine=auto -q`, `strace -f -c`):
+
+| | openat | close | read | preadv2 | total |
+|---|---|---|---|---|---|
+| antes | 206 | 198 | 200 | 96 | **700** |
+| ahora | 110 | 102 | 104 | 96 | **412** |
+
+Exactamente **96 `openat` y 96 `close` menos** (uno por sonda), con los mismos
+96 `preadv2` y 96 lecturas menos. −41% de syscalls en el tramo de la muestra.
+
+**Latencia** (9 corridas intercaladas por lado, mismo árbol, caliente):
+
+| | mediana | rango |
+|---|---|---|
+| antes | 4,80 ms | 4,4–6,3 ms |
+| ahora | 4,70 ms | 4,1–5,3 ms |
+
+El ahorro mediano es **0,1 ms (2,1%), dentro del ruido**. La ganancia de esta
+rebanada es de arquitectura (una lectura, un open), no de segundos; decirlo de
+otra forma sería vender humo.
+
+### 5.2 Rebanada 3 — `auto` es el motor por defecto
+
+`Options.io_engine_mode` pasa de `.sync` a `.auto`. `--io-engine=sync` sigue
+existiendo y reproduce el comportamiento anterior byte a byte; `--uring` sigue
+siendo alias exacto de `--io-engine=uring`.
+
+Matriz diferencial de 540 casos (9 árboles × 20 juegos de flags × 3 patrones),
+mismo binario nuevo en las dos columnas que importan:
+
+| comparación | resultado |
+|---|---|
+| default (`auto`) ≡ `--io-engine=sync` | **540/540**, 0 diferencias |
+| default (`auto`) ≡ baseline `aa81c9b` | 520/540, las **mismas 20** de `ignored` que ya tenía `sync` |
+| `--force-swarm` (`auto`) ≡ baseline | **540/540** |
+| `--force-swarm --io-engine=sync` ≡ baseline | **540/540** |
+
+Las 20 diferencias de `ignored` son las del cambio de carga de ignore-files
+(preexistente, documentado en el commit del pipeline), no del motor: el
+conjunto de casos que difieren es **idéntico** entre `sync` y `auto`.
+
+Resto de la batería, ejecutado tras el cambio:
+
+- `zig build test`: **65 pass, 1 skip** (66; antes 64).
+- `zig build oracle`: **26/26** (GNU grep 3.11 + ripgrep 14.1.0).
+- Fuzz entrópico: **100.003 ops, 0 anomalías**, 0 crashes, 0 exit codes > 2.
+- Cell fuzzer, **200.000 celdas**: digest por celda **idéntico byte a byte**
+  al código anterior sobre el mismo payload (`0784eb36…`).
+- Windows: el binario y el binario de tests compilan; la sonda contesta
+  `unsupported` fuera de Linux y `auto` degrada a síncrono.
+
+### 5.3 El bug que apareció al mirar los números: `--stats` del camino uring mentía
+
+Con el árbol frío, `--io-engine=sync` reportaba 399.767.528 bytes y
+`--io-engine=uring` 330.579.857: **69 MB de diferencia**. No era la fusión: el
+camino uring sumaba el primer trozo del anillo (`n`) y, cuando el fichero
+desbordaba `BUFFER_SIZE`, llamaba a `scanFile` para el resto **sin sumar sus
+bytes**. Los ficheros grandes aportaban solo su primer trozo.
+
+Corregido en `src/uring_linux.zig`: el fallback suma `fs.bytes` una sola vez
+(el tamaño completo; 0 si es binario o ilegible) y el camino inline suma `n`
+solo si el fichero se escanea de verdad. Después del arreglo, los dos motores
+reportan **exactamente los mismos bytes** (399.767.528) y el throughput del
+uring en frío pasa de un falso 370 MB/s a 486 MB/s reales.
+
+El bug existía desde antes de esta sesión; lo destapó medir el frío con la
+fusión puesta. Queda anotado aquí porque `--stats` es una promesa, no un adorno.
+
+### 5.4 Corrección de las cifras "caliente" de §4.1
+
+La tabla de §4.1 (253 / 275 / 266 ms) se midió con el árbol **parcialmente**
+cacheado: la sonda veía 96 hits porque los primeros ficheros estaban en RAM,
+pero los 400 MB del árbol no. Con el árbol realmente caliente (tras una pasada
+completa), el mismo escaneo tarda **25–28 ms**; en frío, 780 ms con uring y
+1.003–1.028 ms con síncrono (mismo árbol, misma condición, medidas de esta
+sesión). El orden relativo de §4.1 no cambia, pero sus valores absolutos no son
+el caso "todo caliente". La lección es la misma de §4.4: la sonda es una
+muestra del comienzo del recorrido, no una garantía sobre los 400 MB.

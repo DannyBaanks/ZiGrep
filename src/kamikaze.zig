@@ -419,8 +419,6 @@ fn scanBatch(
         };
         defer if (heap_path) |hp| ctx.gpa.free(hp);
 
-        _ = probeEngine(ctx, full_path);
-
         const res = scan.scanFile(
             ctx.io,
             ctx.gpa,
@@ -432,6 +430,9 @@ fn scanBatch(
             ctx.scan_config,
             local_out,
             scratch,
+            // Rebanada 2: en `auto` la primera lectura es la sonda. El estado
+            // solo se pasa en ese modo; `sync`/`uring` no cambian ni un syscall.
+            if (ctx.io_engine_mode == .auto) ctx.engine else null,
         );
 
         local_files += 1;
@@ -465,25 +466,13 @@ fn scanBatch(
     }
 }
 
-/// Sonda acotada de page cache (`preadv2` + `RWF_NOWAIT`).
+/// Sonda acotada de page cache: **ya no vive aquí**.
 ///
-/// Solo corre en modo `auto` y mientras la muestra no esté cerrada. NO Sustituye
-/// a la lectura: abre el fichero, pregunta al kernel y cierra. Por eso está
-/// limitada por `io_engine.probe_budget`: el miss cuesta 2,3 µs y no devuelve
-/// bytes (medido en evidence/hybrid-io-engine/).
-///
-/// Devuelve la decision si esta sonda cierra la muestra (para que quien llama
-/// pueda promocionar su anillo); `null` si toca seguir sondeando.
-fn probeEngine(ctx: *KamikazeContext, full_path: [:0]const u8) ?io_engine.Decision {
-    const st = ctx.engine orelse return null;
-    if (ctx.io_engine_mode != .auto) return null;
-    if (st.settled()) return null;
-    if (st.probes.load(.monotonic) >= io_engine.probe_budget) return null;
-
-    const dec = st.record(io_engine.probePath(ctx.io, full_path)) orelse return null;
-    if (dec == .uring) st.verdict.store(2, .release);
-    return dec;
-}
+/// La sonda se fusionó con la primera lectura del fichero
+/// (`scan.scanFile` → `scanFileLinux`), así que en caliente sus bytes se
+/// escanean en vez de descartarse. Este módulo solo decide *cuándo* hay
+/// muestra (`ctx.engine`) y *cuándo* promocionar el anillo (`ensureUring`);
+/// el kernel se toca únicamente dentro de `scan.zig`.
 
 /// Promocion perezosa: el trabajador crea su anillo io_uring la primera vez que
 /// ve que la muestra se cerro en `uring`. Un anillo por trabajador es la
@@ -692,6 +681,7 @@ fn tryQuickTreeScan(
             scan_config,
             &local_out,
             scratch,
+            null, // el camino ordenado (`--sort`) no tiene muestra de motor
         );
 
         stats.files_scanned += 1;
@@ -764,6 +754,7 @@ fn tryQuickQuietProbe(
             scan_config,
             &out,
             &scratch,
+            null, // sonda temprana de -q: no decide el motor de la corrida
         );
         if (res.matched) return true;
         probed += 1;

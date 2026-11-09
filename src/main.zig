@@ -94,9 +94,11 @@ const usage =
     \\      --stats       print timing and throughput to stderr
     \\      --uring       use Linux io_uring asynchronous batched I/O engine
     \\                     (exact alias of --io-engine=uring)
-    \\      --io-engine=  sync | uring | auto. auto probes the page cache with
-    \\                     preadv2(RWF_NOWAIT) and promotes to io_uring only
-    \\                     when the tree is cold
+    \\      --io-engine=  sync | uring | auto   (default: auto). auto makes the
+    \\                     first read of each probed file a preadv2(RWF_NOWAIT)
+    \\                     probe: if the page is in RAM its bytes are scanned
+    \\                     directly; if the tree is cold it promotes to
+    \\                     io_uring. sync is the old behaviour, byte for byte
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
@@ -122,10 +124,11 @@ pub const Options = struct {
     kamikaze: bool = true,
     sort: bool = false,
     use_uring: bool = false,
-    /// `sync` | `uring` | `auto`. `--uring` sigue siendo un alias exacto de
-    /// `uring`: el oraculo diferencial y el cell fuzzer no pueden cambiar de
-    /// significado.
-    io_engine_mode: io_engine.Mode = .sync,
+    /// `sync` | `uring` | `auto` (default `auto`). `--uring` sigue siendo un
+    /// alias exacto de `uring`. `auto` arranca en el enjambre síncrono y
+    /// promociona a io_uring si la sonda ve el árbol frío; `sync` reproduce
+    /// el comportamiento anterior byte a byte.
+    io_engine_mode: io_engine.Mode = .auto,
     invert_match: bool = false,
     max_count: ?usize = null,
     nav_plan: nav.NavPlan = .{},
@@ -210,6 +213,7 @@ fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
         ctx.scan_config,
         &slot.buf,
         scratch,
+        null, // el camino ordenado no participa en la muestra del motor
     );
     slot.done = true;
     slot.matched = res.matched;

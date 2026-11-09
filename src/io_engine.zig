@@ -8,6 +8,11 @@
 //! medido) y en frío cuesta 2,3 µs sin comprar nada, por lo que se paga un
 //! número acotado de veces y nunca por fichero.
 //!
+//! La sonda no se desperdicia: cuando el modo `auto` aún no ha decidido, la
+//! primera lectura del fichero ES la sonda (`scan.scanFile` la hace sobre el
+//! mismo fd y, si devuelve bytes, los escanea en vez de descartarlos). Así el
+//! camino caliente paga una lectura, no dos.
+//!
 //! Evidencia completa: evidence/hybrid-io-engine/DISENO.md.
 //!
 //! No se usa `RWF_DONTCACHE`: medido en ext4/kernel 7.0, se acepta pero no
@@ -44,6 +49,11 @@ pub const Probe = union(enum) {
 /// Sonda de page cache sin bloqueo. Linux-only por construcción: `preadv2` es
 /// de Linux, así que en cualquier otro objetivo la respuesta honesta es
 /// "no sé", no "caliente".
+///
+/// Se llama sobre un fd ya abierto, en el offset 0, y no lo mueve. No hay
+/// variante "por ruta": la sonda se fusiona con la primera lectura del fichero
+/// (`scanFileLinux`), así que abrir por separado solo serviría para leer dos
+/// veces el mismo trozo.
 pub fn probe(fd: linux.fd_t, buf: []u8) Probe {
     if (builtin.os.tag != .linux) return .unsupported;
     var iov = [1]std.posix.iovec{.{ .base = buf.ptr, .len = buf.len }};
@@ -56,21 +66,6 @@ pub fn probe(fd: linux.fd_t, buf: []u8) Probe {
         .NOSYS, .OPNOTSUPP, .INVAL => .unsupported,
         else => .unsupported,
     };
-}
-
-/// Sonda de page cache sin bloqueo sobre una ruta: abre, pregunta y cierra.
-/// El `open` va aquí para que `kamikaze.zig` no tenga que importar nada de
-/// Linux: el modulo entero es Linux-only por construcción, y fuera de Linux
-/// responde `unsupported` sin abrir nada.
-pub fn probePath(io: std.Io, path: [:0]const u8) Probe {
-    if (builtin.os.tag != .linux) return .unsupported;
-    const rc = linux.openat(linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0);
-    if (linux.errno(rc) != .SUCCESS) return .unsupported;
-    const fd: linux.fd_t = @intCast(@as(isize, @bitCast(rc)));
-    defer _ = linux.close(fd);
-    var buf: [256 * 1024]u8 = undefined;
-    _ = io;
-    return probe(fd, &buf);
 }
 
 /// Estado compartido por los trabajadores de una corrida. Los contadores son
@@ -86,6 +81,14 @@ pub const State = struct {
 
     pub fn settled(self: *const State) bool {
         return self.verdict.load(.acquire) != 0;
+    }
+
+    /// ¿Toca sondear esta lectura? Solo mientras la muestra siga abierta y
+    /// quede presupuesto. La comprobación y el `record` no son atómicos: como
+    /// mucho se cuelan `n_threads` sondas de más, que es ruido frente a las 96
+    /// del presupuesto.
+    pub fn armed(self: *const State) bool {
+        return !self.settled() and self.probes.load(.monotonic) < probe_budget;
     }
 
     pub fn decision(self: *const State) Decision {
@@ -180,12 +183,20 @@ test "estado: promote_misses misses cierran la muestra en uring" {
     try testing.expectEqual(Decision.uring, st.decision());
 }
 
+test "estado: armed solo mientras la muestra esta abierta y queda presupuesto" {
+    var st = State{};
+    try testing.expect(st.armed());
+    // Agotar el presupuesto sin misses cierra la muestra en sincrono.
+    var i: u32 = 0;
+    while (i < probe_budget) : (i += 1) _ = st.record(.{ .cached = 1 });
+    try testing.expect(st.settled());
+    try testing.expect(!st.armed());
+}
+
 test "sonda: fuera de Linux responde unsupported, nunca caliente" {
     if (builtin.os.tag == .linux) return error.SkipZigTest;
     // Ojo: `undefined[0..0]` no compila en Windows (el slice de un `undefined`
     // tipado no es válido allí), y eso rompía el job de Windows del CI.
     var empty: [0]u8 = undefined;
     try testing.expect(probe(0, empty[0..0]) == .unsupported);
-    // Y sobre una ruta tampoco debe abrir nada: contesta "no sé" y ya.
-    try testing.expect(probePath(undefined, "src/main.zig") == .unsupported);
 }
