@@ -8,7 +8,7 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
 ```
 
 > La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
@@ -21,7 +21,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -43,9 +43,11 @@ src\search.zig
 
 `-l` lista los archivos con coincidencias; quítalo para mostrar las líneas.
 
-### Salida real del instalador publicado (v0.2.2)
+### Salida real del instalador publicado (v0.2.2, histórica)
 
-Ejecutado de verdad contra la release publicada (no un simulacro), desde cero:
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero.
+La transcripción de la **v0.3.1** (la actual) está más abajo, con los hashes
+de sus assets.
 
 ```text
 === 0. estado inicial ===
@@ -104,6 +106,96 @@ OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
 Lo que se ve en `busqueda: 2:needle` es el binario **instalado** buscando
 `needle` en un fichero de prueba: la linea 2 es la que contenia la palabra.
 
+### Salida real del instalador publicado (v0.3.1)
+
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero,
+con la one-liner tal cual la escribe el usuario:
+
+```text
+=== 0. estado inicial ===
+  install dir existe : False
+  ya esta en el PATH  : False
+  install dir existe ahora : False
+=== 1. descargar el instalador (irm) ===
+  descargado: 12753 caracteres
+  primera linea: <#
+=== 2. ejecutar el instalador real (irm | iex) ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.1
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  exit=0
+  errores en la consola: 0
+=== 3. verificacion ===
+  zigrep.exe instalado : True
+  zgrep.exe  instalado : True
+  install.ps1 copiado  : True
+  version reportada    : zgrep 0.3.1
+  install dir en PATH   : True
+=== 4. uso real del binario instalado ===
+  busqueda: 2:needle
+=== 5. hash publicado vs asset real ===
+  SHA256SUMS.txt publicado:
+    708c6379136be5ccc1586398b9b65343c3100e5afd6cc06f4693217d818a9ba3  zigrep-linux-x86_64.tar.gz
+    bae614ed33e7c943cf86f7435b9da6a29ac180616a009abb0947413cad076174  zigrep-linux-aarch64.tar.gz
+    0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a  zigrep-windows-x86_64.zip
+=== 5b. el binario responde por stdout (no stderr) ===
+  stdout : 'zgrep 0.3.1'
+  stderr : ''
+  exit   : 0
+=== 6. el escenario que abortaba en la 0.3.0 ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.1
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  errores en la consola: 0
+  instalado : True
+  version   : zgrep 0.3.1
+  el $InstallDir del usuario sigue siendo: 'C:\predefinido'
+=== 7. estado de la maquina restaurado ===
+  install dir sigue en el PATH: False
+  install dir existe          : False
+=== fin ===
+```
+
+Lo importante de esa transcripción:
+
+* `errores en la consola: 0` — **ni un `RemoteException`**, que era el
+  requisito: el instalador no aborta.
+* `exit=0` y `ZiGrep is ready.`.
+* El `checksum matches` es el hash **publicado** de la release (0dae279f…),
+  no uno inventado.
+* El bloque 6 es el escenario que **abortaba** en la 0.3.0 (§4i): ahora
+  instala sin errores y **no toca** el `$InstallDir` del usuario.
+* Al final la máquina queda como estaba (sin el directorio de ZiGrep y sin su
+  entrada en el `PATH`): la prueba no deja rastro.
+
 ### Qué hace el instalador (y cómo leer su salida)
 
 | Salida | Significado | Qué hacer |
@@ -149,8 +241,8 @@ Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 56/56 tests passed (Linux y native Windows)
-zig build oracle                      # oráculo diferencial puro Zig (26/26 Linux, 25/25 native Windows)
+zig build test --summary all          # 97/98 tests passed, 1 skip (Linux-only io_uring)
+zig build oracle                      # oráculo diferencial puro Zig (29/29 native Windows)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -486,6 +578,111 @@ se entremezclarían y una cabecera apuntaría al clúster equivocado.
 
 ---
 
+## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
+
+Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y
+`grep`** en esta máquina, y todos tienen ya su test o su caso de oráculo.
+
+| # | Bug | Síntoma medido | Arreglo |
+|---|---|---|---|
+| 1 | `--count-matches` | imprimía **`0`** siempre | el contador se incrementaba en una rama que el informe no leía |
+| 2 | `-z` / `--null-data` | `1\0texto` en vez de `1:texto` | el NUL es separador de **registro**, no de campo |
+| 3 | `--crlf` | numeraba **1, 3, 5…** y borraba el CR | cada CRLF contaba como dos terminadores |
+| 4 | `--exclude-from` | **ignorado** en la ruta streaming | solo se aplicaba en el camino ordenado |
+| 5 | `--heading` | **sin cabecera** al pasar un directorio | la regla era `len(operandos) > 1`, no "¿se imprime la ruta?" |
+| 6 | `--replace` | se comía **el resto de la línea** | sustituía el match y descartaba la cola |
+| 7 | `--help` | decía que `\b` **no** está soportado (y mostraba `\\d`, `\\b`) | el texto estaba viejo y los backslashes iban dobles |
+
+Comprobar que siguen arreglados (salidas reales, `rg` 15.0.0 en el `PATH`):
+
+```powershell
+$z = ".\zig-out\bin\zigrep.exe"
+
+# 1. count-matches: 35 lineas, 35 matches; rg dice lo mismo
+& $z --count-matches Searcher src\search.zig   # 35
+rg --count-matches -F Searcher src/search.zig  # 35
+
+# 3. crlf: numeros consecutivos, y el CR sigue ahi
+#    (fichero con "needle one\r\nneedle two\r\nplain\r\n")
+& $z --crlf needle f.txt
+# 1:needle one
+# 2:needle two
+# bytes reales: b'1:needle one\r\n2:needle two\r\n'  (el CR NO se pierde)
+
+# 4. exclude-from: src\search.zig ya no aparece; 28 lineas, las mismas que rg
+& $z --exclude-from=scripts/fixtures/exclude.txt -F Searcher src
+rg -n -F --ignore-file=scripts/fixtures/exclude.txt Searcher src
+
+# 5. heading: la ruta va en su propia linea, y solo cuando toca
+& $z --heading -F "pub const Searcher" src\search.zig src\scan.zig
+# src\search.zig
+# 114:pub const Searcher = struct {
+& $z --heading -F "pub const Searcher" src\search.zig   # un solo fichero: sin cabecera
+
+# 7. help: los backslashes salen simples y \b ya no se declara ausente
+& $z --help | Select-String "word boundaries"
+# word boundaries \b and \B are supported (zero-width assertions).
+```
+
+**Trampa que costó 20 minutos:** el test de `--crlf` pasaba por la ruta del
+**prefiltro**, que entrega a `firstMatchingLine` un `to` = índice del `\n`. Con
+la guarda `i + 1 < to` el par CRLF justo en el borde no se veía nunca, así que
+el bug solo aparecía con patrones que activan el prefiltro. Ahora la guarda es
+`i + 1 < data.len`.
+
+**Segundo bug, este en el binding de Python y no en `zigrep`:** 8 tests de
+paridad morían con `ValueError: the environment variable is longer than 32767
+characters`. pytest deriva el id del test del propio parámetro, y los parámetros
+son buffers de 200 KB; `PYTEST_CURRENT_TEST` choca con el límite de
+`SetEnvironmentVariable`. El test era correcto: el **id** no era portable.
+Con `ids=IDS` explícitos: **42/42 en Windows**.
+
+---
+
+## 4i. El instalador y el ámbito de PowerShell (corregido en 0.3.1)
+
+Este bug salió al **verificar la release de verdad**, no leyendo el código:
+el `irm ... | iex` de la 0.3.0 abortaba **sin instalar nada** en una sesión que
+ya tuviera una variable `$InstallDir` (o `$Version`, ...) en un ámbito
+superior:
+
+```text
+iex : No puede sobrescribirse la variable InstallDir porque se optimiza. ...
+    FullyQualifiedErrorId : VariableNotWritableRare,Microsoft.PowerShell.Commands.InvokeExpressionCommand
+```
+
+**Por qué.** `irm ... | iex` evalúa el script en el ámbito de **quien llama**.
+Al ejecutar un script con bloque `param()` así, PowerShell crea las variables
+de los parámetros en ese ámbito **como constantes**. El instalador luego
+asignaba a `$InstallDir` (para calcular la ruta por defecto) y esa asignación
+sobre una constante está prohibida: de ahí el "because it is optimized".
+
+**El arreglo (0.3.1).** Los parámetros ya no se asignan nunca (todo el trabajo
+happens sobre `$targetDir`, `$versionToUse`, `$baseUrlToUse`,
+`$skipPathUpdate`), y las variables de los parámetros llevan prefijo
+(`$RequestedVersion`, `$RequestedInstallDir`, ...) con alias para conservar la
+API pública: `-Version`, `-InstallDir`, `-BaseUrlOverride` y `-NoPathUpdate`
+siguen funcionando igual. Efecto secundario que también se arregla: el
+instalador ya **no pisa** las variables `$Version` / `$InstallDir` de tu
+sesión.
+
+Comprobarlo (Windows PowerShell 5.1):
+
+```powershell
+# Escenario que fallaba: variable con el mismo nombre en un ámbito padre
+$InstallDir = "C:\predefinido"
+& {
+    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
+}
+# 0.3.0: "No puede sobrescribirse la variable InstallDir porque se optimiza"
+# 0.3.1: instala, y tu $InstallDir sigue siendo "C:\predefinido"
+```
+
+**Trampa:** si ves ese error, no es tu máquina: es una versión del
+instalador anterior a la 0.3.1. Reinstala con la línea de arriba.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**
@@ -522,8 +719,8 @@ se entremezclarían y una cabecera apuntaría al clúster equivocado.
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 56/56 tests passed (Linux y native Windows)
-zig build oracle                 # 26/26 differential oracle tests passed (Linux), 25/25 (native Windows)
+zig build test --summary all     # 97/98 tests passed, 1 skip (Linux-only io_uring)
+zig build oracle                 # 29/29 differential oracle tests passed (native Windows)
 ```
 
 ---
@@ -591,7 +788,7 @@ $z = (Get-Command zig).Source
 Salida:
 
 ```text
-Build Summary: 7/7 steps succeeded
+Build Summary: 11/11 steps succeeded
 ```
 
 ```powershell
@@ -601,15 +798,20 @@ Build Summary: 7/7 steps succeeded
 Salida:
 
 ```text
-Build Summary: 3/3 steps succeeded; 54/54 tests passed
+Build Summary: 3/3 steps succeeded; 97/98 tests passed (1 skipped)
 test success
++- run test 97 pass, 1 skip (98 total) 478ms MaxRSS:18M
 ```
 
-> Ese 54/54 es la medición de la rama del port (2026-11-08), antes de
-> unificarla con el micro-tree fast path. En el árbol unificado la suite son
-> **56/56 también en Windows**, medido por el job nativo del CI
-> (run `42609558486`); el oráculo sigue siendo 25/25 en Windows porque el caso
-> de stdin POSIX se omite allí.
+> El único skip es el test de `io_uring`, que es Linux-only: en Windows el
+> motor `--uring` se acepta y cae a los workers síncronos. Los **mismos 97**
+> pasan también compilando para el target baseline `x86_64-windows`, que es el
+> que va en la release, y en Linux (CI, run `42908701408`):
+>
+> ```powershell
+> & $z build test -Dtarget=x86_64-windows --summary all
+> # Build Summary: 3/3 steps succeeded; 97/98 tests passed (1 skipped)
+> ```
 
 ```powershell
 # Requiere GNU grep y ripgrep en el PATH (en Windows: Git for Windows + ripgrep)
@@ -619,14 +821,21 @@ test success
 Salida:
 
 ```text
-Results: 25 PASSED, 0 FAILED (total 25)
-Build Summary: 10/10 steps succeeded
+Results: 29 PASSED, 0 FAILED (total 29)
+Build Summary: 14/14 steps succeeded
 oracle success
 ```
 
 El caso `stdin pipeline (pipe -> zigrep)` del oráculo se salta en Windows: usa
 `sh -c` y `printf`, que no están garantizados en el PATH nativo; en Linux son
-26 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+30 checks (medido en el CI, run `42908701408`: `Results: 30 PASSED, 0 FAILED`
+en `ubuntu-latest` y `Results: 29 PASSED, 0 FAILED` en Windows). La lectura
+por stdin sí funciona en Windows (ver abajo).
+
+Tres de los 29 casos nuevos no se pueden comparar contra GNU grep 3.0 porque
+grep no tiene esas opciones (`--count-matches`, `--replace`, `--column`): se
+comparan contra ripgrep y el campo `grep_args` queda en `null` de forma
+explícita, en vez de saltarse el caso en silencio.
 
 El smoke test usó un directorio con espacios y Unicode y un `.gitignore` que
 excluía `skip.txt`:
@@ -930,9 +1139,17 @@ disco, no por el SIMD.
 
 ### Qué release usar
 
-* **`v0.2.2`**: la actual. Binario baseline, instalador que no aborta y
-  `--version` en `stdout`. Es la que instala el `irm ... | iex` por defecto
-  (usa `releases/latest`).
+* **`v0.3.1`**: la actual. Corrige el instalador: `irm ... | iex` ya no
+  aborta (ni pisa tus variables) cuando la sesión ya tiene un `$InstallDir` o
+  un `$Version` (ver §4i). Los binarios son los de la 0.3.0 más el número de
+  versión.
+* **`v0.3.0`**: publicada y **supersedida** por la 0.3.1. Trae las flags
+  nuevas (`--count-matches`, `--exclude-from`, `--replace`, `--column`,
+  `--heading`) y los siete bugs corregidos, pero su `install.ps1` abortaba en
+  el escenario descrito arriba. Si ya la tienes instalada, **reinstala** con la
+  0.3.1.
+* **`v0.2.2`**: publicada y **supersedida** por la 0.3.0. Sigue siendo válida
+  para lo que hacía; no tiene las flags nuevas.
 * **`v0.2.1`**: publicada y **supersedida** por la 0.2.2. Su `.exe` ya es
   baseline y arranca en todas partes, pero su `install.ps1` (el que va dentro
   del `.zip`) abortaba en el "Version check".
@@ -943,7 +1160,7 @@ Si tienes una versión anterior instalada y el binario te da error al
 arrancar, reinstala:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
 ```
 
 ### Segundo arreglo del instalador: el fallback compilaba la versión equivocada

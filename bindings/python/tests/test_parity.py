@@ -58,25 +58,42 @@ DATA = [
     b"x" * 100000 + b"needle" + b"y" * 100000,
 ]
 
+# Ids cortos y explícitos. Sin ellos pytest deriva el id del propio parámetro
+# y, con un buffer de 200 KB, el id se mete en `PYTEST_CURRENT_TEST`: en Windows
+# eso revienta con `ValueError: the environment variable is longer than 32767
+# characters` (límite de `SetEnvironmentVariable`). El test es correcto; el id
+# no es portable.
+IDS = [
+    "vacio",
+    "solo_needle",
+    "needle_nl",
+    "una_linea",
+    "lineas_vacias",
+    "mayusculas",
+    "repetido",
+    "mixto",
+    "200k",
+]
 
-@pytest.mark.parametrize("data", DATA)
+
+@pytest.mark.parametrize("data", DATA, ids=IDS)
 def test_count(data):
     assert ziggrep.count(data, b"needle") == py_count(data, b"needle")
 
 
-@pytest.mark.parametrize("data", DATA)
+@pytest.mark.parametrize("data", DATA, ids=IDS)
 def test_count_matches(data):
     assert ziggrep.count_matches(data, b"needle") == py_count_matches(data, b"needle")
     assert ziggrep.count_matches(data, b"needle", overlapping=True) == \
         py_count_matches(data, b"needle", overlapping=True)
 
 
-@pytest.mark.parametrize("data", DATA)
+@pytest.mark.parametrize("data", DATA, ids=IDS)
 def test_count_icase(data):
     assert ziggrep.count_icase(data, b"needle") == py_count_icase(data, b"needle")
 
 
-@pytest.mark.parametrize("data", DATA)
+@pytest.mark.parametrize("data", DATA, ids=IDS)
 def test_line_sum(data):
     assert ziggrep.line_sum(data) == py_line_sum(data)
 

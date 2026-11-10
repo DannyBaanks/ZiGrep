@@ -29,7 +29,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.3.0";
+const version = "0.3.1";
 
 /// Size budget for the zero-thread micro-tree fast path: a tree whose regular
 /// files add up to less than this is scanned on the calling thread, with no
@@ -103,8 +103,8 @@ const usage =
     \\      --max-filesize=N[KMGT]
     \\                    skip files larger than N (rg)
     \\  -b, --byte-offset print the byte offset of each match in the file
-    \\      --crlf        treat CRLF as the line terminator, not just \\n
-    \\  -z, --null-data  NUL separates records instead of \\n (grep -z)
+    \\      --crlf        treat CRLF as the line terminator, not just \n
+    \\  -z, --null-data  NUL separates records instead of \n (grep -z)
     \\  -U, --multiline   a match may span newlines (rg)
     \\      --multiline-dotall
     \\                    with -U, `.` also crosses a newline
@@ -162,8 +162,9 @@ const usage =
     \\      --help        print this help
     \\  -V, --version     print the version
     \\
-    \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \\d \\w \\s * + ? {n,m} | ( ) ^ $
-    \\not supported (reported as an error): \\b, back-references, lookaround.
+    \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+    \\word boundaries \b and \B are supported (zero-width assertions).
+    \\not supported (reported as an error): back-references, lookaround.
     \\a plain string with no metacharacters takes the fast literal path.
     \\patterns containing a newline are rejected.
     \\when no PATH is given or when PATH is '-', standard input is read.
@@ -242,7 +243,8 @@ pub const Options = struct {
     column: bool = false,
     /// `--color=always|never|auto` (auto degrades to never off a TTY).
     color: ColorMode = .never,
-    /// `--replace=TEXT` (rg): like -o, but prints TEXT instead of the match.
+    /// `--replace=TEXT` (rg): substitute every match with TEXT. The rest of
+    /// the line survives (rg); with `-o` the record is just the replacement.
     replace: ?[]const u8 = null,
     /// `--passthru`: also print lines that do not match.
     passthru: bool = false,
@@ -917,7 +919,10 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.null_filename = true;
             } else if (std.mem.startsWith(u8, body, "replace=")) {
                 opts.replace = body["replace=".len..];
-                opts.only_matching = true; // rg: --replace implies -o output
+                // rg does NOT imply -o here: `rg --replace X needle` prints the
+                // WHOLE line with the match substituted (`needle here` ->
+                // `X here`). Only with an explicit `-o` does the record shrink
+                // to the replacement.
             } else if (std.mem.eql(u8, body, "replace")) {
                 i += 1;
                 if (i >= args.len) {
@@ -925,7 +930,6 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     return error.Usage;
                 }
                 opts.replace = args[i];
-                opts.only_matching = true; // rg: --replace implies -o output
             } else if (std.mem.startsWith(u8, body, "exec=")) {
                 opts.exec_cmd = body["exec=".len..];
             } else if (std.mem.startsWith(u8, body, "execute=")) {
@@ -1515,6 +1519,19 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
 // main
 // ---------------------------------------------------------------------------
 
+/// Whether `--heading` actually turns the per-line path prefix into a header.
+///
+/// The header replaces a path that WOULD have been printed, so it is bound to
+/// `show_path` and nothing else. It used to be `valid_operands.len > 1`, which
+/// is a different question: `--heading` with a single directory operand
+/// recursed into several files and printed no headers at all, while `-H` with
+/// one file printed none either. `show_path` already encodes both rules.
+///
+/// Pinned by `test "headingOn follows show_path, not the operand count"`.
+fn headingOn(heading: bool, show_path: bool) bool {
+    return heading and show_path;
+}
+
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const arena = init.arena.allocator();
@@ -1797,12 +1814,12 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // rg prints the header only with more than one input: with a single
-    // file it would waste a line. The roots are what every path can see
-    // without walking the tree, so the rule is identical everywhere.
-    const heading_on = opts.heading and valid_operands.items.len > 1;
-    // Output separator and heading are per-run, not per-line.
+    // file it would waste a line. The rule is about the FILES, not about the
+    // operands: `zgrep --heading pat dir/` prints the header even when the
+    // directory holds one file, because that is what rg does. The file list
+    // is only known on the ordered path, and `--heading` forces it.
+    // Output separator is per-run, not per-line.
     scan.out_sep = if (opts.null_data) 0 else '\n';
-    scan.heading_mode = heading_on;
 
     // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
     if (!opts.sort) {
@@ -1831,6 +1848,10 @@ pub fn main(init: std.process.Init) !void {
             try filter_engine.addIncludedPattern(p);
         }
         applyTypes(&filter_engine, &opts);
+        // `--exclude-from` has to be loaded on THIS path too: the ordered path
+        // did it and the streaming one did not, so the globs were silently
+        // ignored unless `--sort` was passed.
+        loadExcludeFrom(init.io, arena, &filter_engine, &opts);
 
         // The upward `.dataignore` / `.gitignore` walk is *not* done here: the
         // pipeline defers it until it knows the tree is too big for the
@@ -1850,7 +1871,9 @@ pub fn main(init: std.process.Init) !void {
             .passthru = opts.passthru,
             .byte_offset = opts.byte_offset,
             .crlf = opts.crlf,
-            .heading = heading_on,
+            // `--heading` forces the ordered path (see above), so it can never
+            // be on here.
+            .heading = false,
             .vimgrep = opts.vimgrep,
             .null_data = opts.null_data,
             .multiline = opts.multiline,
@@ -1962,6 +1985,14 @@ pub fn main(init: std.process.Init) !void {
             };
         }
     }
+
+    // rg prints the path as a header line instead of a per-line prefix, and
+    // only when the path would be printed AT ALL: one explicit file and no
+    // `-H` means no path and therefore no header, while a directory (even
+    // with a single file inside) or `-H` means a header. That is exactly the
+    // `show_path` rule, so the header follows the path.
+    const heading_on = headingOn(opts.heading, show_path);
+    scan.heading_mode = heading_on;
 
     const slots: []Slot = try gpa.alloc(Slot, files.items.len);
     defer gpa.free(slots);
@@ -2877,4 +2908,28 @@ test "parseArgs: options after pattern and mixed include globs" {
     try std.testing.expectEqual(@as(usize, 2), p.operands.len);
     try std.testing.expectEqualStrings("dir1", p.operands[0]);
     try std.testing.expectEqualStrings("dir2", p.operands[1]);
+}
+
+test "headingOn follows show_path, not the operand count" {
+    // `--heading` turns the per-line path prefix into a header line. It only
+    // makes sense where a prefix WOULD be printed, so it is `heading and
+    // show_path` and nothing else.
+    //
+    // The regression this pins: the rule used to be `valid_operands.len > 1`.
+    // One directory operand recurses into many files, so rg/zigrep must print
+    // headers; with the operand count it printed none. The opposite case (a
+    // single `-H` file) has show_path = true and must print a header.
+    try std.testing.expect(headingOn(true, true));
+    // One explicit file, no -H: no prefix, so a header would be noise (rg
+    // behaves the same way).
+    try std.testing.expect(!headingOn(true, false));
+    // No --heading: show_path only controls the per-line prefix.
+    try std.testing.expect(!headingOn(false, true));
+    try std.testing.expect(!headingOn(false, false));
+
+    // The three shapes main() derives show_path from, spelled out so the
+    // coupling is explicit rather than implied by a comment.
+    try std.testing.expect(headingOn(true, true)); // one DIRECTORY operand
+    try std.testing.expect(headingOn(true, true)); // -H with one file
+    try std.testing.expect(!headingOn(true, false)); // one file, no -H
 }

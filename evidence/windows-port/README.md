@@ -335,6 +335,25 @@ over the raw working-tree bytes: on this Windows host `core.autocrlf=true`
 rewrites line endings on checkout, so a working-tree hash would not match a
 blob hash and would not be reproducible on Linux.
 
+### 1b. The same manifest, regenerated for the 0.3.1 round (2026-11-10)
+
+The `GUIA.md` entry changes on every documentation round, so the manifest is
+regenerated the same way (LF-canonical bytes taken from the git index, i.e.
+exactly what the commit stores) and re-verified against the committed blobs.
+The `GUIA.md` entry after the 0.3.1 round:
+
+```text
+F4031A8B1BB2803EDC7B5302A03661F11FD2C370F1FEDF00E7ACBA31592DA7AC  GUIA.md
+```
+
+The entry for this `README.md` cannot be quoted here: any edit to this file
+changes its own hash, so the manifest is the only place where it is written.
+Re-verify the whole manifest with `sha256sum -c evidence/windows-port/SHA256SUMS.txt`
+(after checking out with LF endings).
+
+Note that the manifest lists the paths with `/` separators: the older entry
+used `\`, which is not what `sha256sum -c` expects on a POSIX host.
+
 ### 2. The root `evidence/SHA256SUMS.txt` is stale and was left intact
 
 The root manifest has 163 entries; **131 match** their committed blobs and

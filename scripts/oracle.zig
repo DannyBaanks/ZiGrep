@@ -22,7 +22,11 @@ const Allocator = std.mem.Allocator;
 const TestCase = struct {
     name: []const u8,
     zigrep_args: []const []const u8,
-    grep_args: []const []const u8,
+    /// `null` = GNU grep cannot express this check here. The baseline on this
+    /// host is grep 3.0 (the one Git for Windows ships), which has no
+    /// --count-matches and no --replace. Such a case must still carry
+    /// `rg_args`, or it would only be checking that zigrep exits.
+    grep_args: ?[]const []const u8 = null,
     rg_args: ?[]const []const u8 = null,
     expected_exit: u8 = 0,
     check_output: bool = true,
@@ -218,6 +222,37 @@ const cases = [_]TestCase{
         .expected_exit = 0,
         .check_output = true,
     },
+    // Features added after the first Windows port. Each one had a real bug at
+    // some point, so each one gets a differential case against the reference
+    // implementation that can express it.
+    .{
+        .name = "count-matches --count-matches",
+        .zigrep_args = &.{ "--count-matches", "Searcher", "src/search.zig" },
+        .grep_args = null, // grep 3.0 has no --count-matches
+        .rg_args = &.{ "--count-matches", "-F", "Searcher", "src/search.zig" },
+        .expected_exit = 0,
+    },
+    .{
+        .name = "replace --replace ZZ (rest of line)",
+        .zigrep_args = &.{ "--replace", "ZZ", "-F", "Searcher", "src/search.zig" },
+        .grep_args = null, // grep 3.0 has no --replace
+        .rg_args = &.{ "-n", "--replace", "ZZ", "-F", "Searcher", "src/search.zig" },
+        .expected_exit = 0,
+    },
+    .{
+        .name = "column --column 'Searcher'",
+        .zigrep_args = &.{ "--column", "-F", "Searcher", "src/search.zig" },
+        .grep_args = null, // grep has no --column
+        .rg_args = &.{ "--column", "-F", "Searcher", "src/search.zig" },
+        .expected_exit = 0,
+    },
+    .{
+        .name = "exclude-from drops search.zig",
+        .zigrep_args = &.{ "--exclude-from=scripts/fixtures/exclude.txt", "-F", "Searcher", "src" },
+        .grep_args = &.{ "-rnIF", "--exclude-from=scripts/fixtures/exclude.txt", "Searcher", "src" },
+        .rg_args = &.{ "-n", "-F", "--ignore-file=scripts/fixtures/exclude.txt", "Searcher", "src" },
+        .expected_exit = 0,
+    },
 };
 
 fn runCmd(arena: Allocator, io: anytype, argv: []const []const u8) !struct { code: u8, stdout: []const u8, stderr: []const u8 } {
@@ -266,11 +301,6 @@ pub fn main(init: std.process.Init) !void {
         try z_argv.append(arena, exe);
         try z_argv.appendSlice(arena, c.zigrep_args);
 
-        // 2. Build grep argv
-        var g_argv: std.ArrayList([]const u8) = .empty;
-        try g_argv.append(arena, "grep");
-        try g_argv.appendSlice(arena, c.grep_args);
-
         // Run zigrep
         const z_res = runCmd(arena, init.io, z_argv.items) catch |err| {
             common.printOut(init.io, "  [FAIL] {s:<42} failed to run zigrep: {s}\n", .{ c.name, @errorName(err) });
@@ -278,32 +308,47 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
-        // Run grep
-        const g_res = runCmd(arena, init.io, g_argv.items) catch |err| {
-            common.printOut(init.io, "  [FAIL] {s:<42} failed to run grep: {s}\n", .{ c.name, @errorName(err) });
-            failed += 1;
-            continue;
-        };
+        // 2. Run GNU grep, unless this case cannot be expressed with it.
+        const g_res: ?@TypeOf(z_res) = if (c.grep_args) |ga| blk: {
+            var g_argv: std.ArrayList([]const u8) = .empty;
+            try g_argv.append(arena, "grep");
+            try g_argv.appendSlice(arena, ga);
+            break :blk runCmd(arena, init.io, g_argv.items) catch |err| {
+                common.printOut(init.io, "  [FAIL] {s:<42} failed to run grep: {s}\n", .{ c.name, @errorName(err) });
+                failed += 1;
+                continue;
+            };
+        } else null;
 
-        // Check exit codes
-        var ok = (z_res.code == c.expected_exit) and (z_res.code == g_res.code);
-        var reason: []const u8 = "OK";
+        // Check exit codes: against the frozen expectation always, and against
+        // grep only when grep can express the case.
+        var ok = z_res.code == c.expected_exit;
+        var reason: []const u8 = if (ok) "OK" else "EXIT_CODE_MISMATCH";
 
-        if (!ok) {
-            reason = "EXIT_CODE_MISMATCH";
-        } else if (c.check_output) {
-            const z_lines = try common.sortLines(arena, z_res.stdout);
-            const g_lines = try common.sortLines(arena, g_res.stdout);
+        if (ok) {
+            if (g_res) |g| {
+                if (z_res.code != g.code) {
+                    ok = false;
+                    reason = "EXIT_CODE_MISMATCH";
+                }
+            }
+        }
 
-            if (z_lines.len != g_lines.len) {
-                ok = false;
-                reason = "LINE_COUNT_MISMATCH";
-            } else {
-                for (z_lines, g_lines) |zl, gl| {
-                    if (!std.mem.eql(u8, zl, gl)) {
-                        ok = false;
-                        reason = "CONTENT_MISMATCH";
-                        break;
+        if (ok and c.check_output) {
+            if (g_res) |g| {
+                const z_lines = try common.sortLines(arena, z_res.stdout);
+                const g_lines = try common.sortLines(arena, g.stdout);
+
+                if (z_lines.len != g_lines.len) {
+                    ok = false;
+                    reason = "LINE_COUNT_MISMATCH";
+                } else {
+                    for (z_lines, g_lines) |zl, gl| {
+                        if (!std.mem.eql(u8, zl, gl)) {
+                            ok = false;
+                            reason = "CONTENT_MISMATCH";
+                            break;
+                        }
                     }
                 }
             }
@@ -350,13 +395,21 @@ pub fn main(init: std.process.Init) !void {
             });
         } else {
             failed += 1;
-            common.printOut(init.io, "  [FAIL] {s:<42} reason={s} (zigrep code={d}, grep code={d})\n", .{
-                c.name,
-                reason,
-                z_res.code,
-                g_res.code,
-            });
-            if (g_res.stderr.len > 0) common.printOut(init.io, "         grep stderr: {s}", .{g_res.stderr});
+            if (g_res) |g| {
+                common.printOut(init.io, "  [FAIL] {s:<42} reason={s} (zigrep code={d}, grep code={d})\n", .{
+                    c.name,
+                    reason,
+                    z_res.code,
+                    g.code,
+                });
+                if (g.stderr.len > 0) common.printOut(init.io, "         grep stderr: {s}", .{g.stderr});
+            } else {
+                common.printOut(init.io, "  [FAIL] {s:<42} reason={s} (zigrep code={d}, grep n/a)\n", .{
+                    c.name,
+                    reason,
+                    z_res.code,
+                });
+            }
             if (z_res.stderr.len > 0) common.printOut(init.io, "         zigrep stderr: {s}", .{z_res.stderr});
         }
     }
