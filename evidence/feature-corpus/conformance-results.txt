@@ -1,7 +1,7 @@
 ===== -x =====
 PASS -x cat                    
 PASS -x -i CAT                 
-PASS -x -F a.b                 
+PASS -x -F a.b (sin -n)        
 PASS -x -e dog -e cat          
 PASS -x -c                     
 PASS -x -l (2f)                

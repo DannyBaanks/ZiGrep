@@ -2,6 +2,13 @@
 # Differential conformance: zgrep (build) vs GNU grep 3.11 (and rg where the
 # semantics coincide). Every case was chosen so the expected output is known.
 cd "$(dirname "$0")" || exit 1
+#
+# NOTA (numeracion por defecto): zgrep imprime el numero de linea SIEMPRE
+# (decision del corpus, fila "-n / --line-number": decision = mantener; -n queda
+# como no-op valido). Ni GNU grep ni rg numeran por defecto cuando la salida es
+# un pipe (rg solo numera en tty). Los casos sin -n comparan por tanto contra
+# grep con --no-line-number del lado de zgrep; comparar la salida por defecto de
+# zgrep contra la de grep mediria esa decision de diseno, no una regresion.
 pass=0; fail=0
 z() { "/home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep" "$@"; }
 chk() {
@@ -15,7 +22,7 @@ hex() { od -An -c | tr -s ' '; }
 echo "===== -x ====="
 chk "-x cat"           "$(run grep -nx cat x.txt)"              "$(run z -x cat x.txt)"
 chk "-x -i CAT"        "$(run grep -nx -i CAT x.txt)"           "$(run z -x -i CAT x.txt)"
-chk "-x -F a.b"        "$(run grep -x -F a.b x.txt)"           "$(run z -x -F a.b x.txt)"
+chk "-x -F a.b (sin -n)"        "$(run grep -x -F a.b x.txt)"           "$(run z -x --no-line-number -F a.b x.txt)"
 chk "-x -e dog -e cat" "$(run grep -nx -e dog -e cat x.txt)"    "$(run z -x -e dog -e cat x.txt)"
 chk "-x -c"            "$(run grep -x -c cat x.txt)"           "$(run z -x -c cat x.txt)"
 chk "-x -l (2f)"       "$(run grep -x -l cat x.txt b.txt)"     "$(run z -x -l cat x.txt b.txt)"

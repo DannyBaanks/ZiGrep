@@ -3,12 +3,33 @@
 Guía operativa para una persona o agente que usa `zigrep` a mano. El detalle técnico y
 la evidencia están en `README.md` y `evidence/REPORT.md`.
 
+## Release 0.3.2 (Linux verificado; Windows hereda la 0.3.1)
+
+La 0.3.2 es la **0.3.1 + `--cache`**: mergea la re-auditoría de Windows
+(ocho bugs corregidos, §4h/§4i) y añade el limpiador de caches de Zig (§4j).
+El binario de Windows no cambia: nada de lo que toca la 0.3.2 es específico
+de Windows (`clean.zig` está guardado por `builtin.os.tag`, y el cross-build
+`x86_64-windows` compila).
+
+Evidencia de esta release, ejecutada en Linux sobre el commit tageado:
+
+| qué | resultado |
+|---|---|
+| `zig build test` | 99 pass / 1 skip |
+| oráculo diferencial (grep + rg) | 30/30 |
+| conformance grep (40 casos) | 40/40 |
+| paridad rg (25 casos) | 25/25 |
+| BRE (15) · `\b` (12) | 15/15 · 12/12 |
+| fuzzer entrópico | 100.001 permutaciones, 0 anomalías |
+| cell-fuzz | 1.000 coordenadas, 0 anomalías |
+| cross-build Windows | compila (`x86_64-windows`, ReleaseFast) |
+
 ## El comando de Windows
 
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex
 ```
 
 > La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
@@ -21,7 +42,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -46,8 +67,9 @@ src\search.zig
 ### Salida real del instalador publicado (v0.2.2, histórica)
 
 Ejecutado de verdad contra la release publicada (no un simulacro), desde cero.
-La transcripción de la **v0.3.1** (la actual) está más abajo, con los hashes
-de sus assets.
+La transcripción de la **v0.3.1** está más abajo, con los hashes de sus
+assets; el instalador no cambió en la 0.3.2, así que sigue siendo la
+verificación vigente.
 
 ```text
 === 0. estado inicial ===
@@ -705,7 +727,7 @@ Comprobarlo (Windows PowerShell 5.1):
 # Escenario que fallaba: variable con el mismo nombre en un ámbito padre
 $InstallDir = "C:\predefinido"
 & {
-    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
+    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex
 }
 # 0.3.0: "No puede sobrescribirse la variable InstallDir porque se optimiza"
 # 0.3.1: instala, y tu $InstallDir sigue siendo "C:\predefinido"
@@ -1193,7 +1215,7 @@ Si tienes una versión anterior instalada y el binario te da error al
 arrancar, reinstala:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex
 ```
 
 ### Segundo arreglo del instalador: el fallback compilaba la versión equivocada

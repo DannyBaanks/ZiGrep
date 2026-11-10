@@ -23,6 +23,30 @@ los `--help` capturados, asi que un ripgrep nuevo se nota solo. La columna de
 estado y decision es curada a mano: "existe la bandera" no se puede deducir del
 texto de ayuda.
 
+## Correccion medida (2026-11-10): la numeracion por defecto
+
+La fila `-n / --line-number` de la matriz decencia "zgrep imprime numero
+siempre" apoyandose en que **rg numera por defecto**. Medido hoy, esa premisa
+es falsa **cuando la salida es un pipe**, que es el caso de todo test
+diferencial y de cualquier script:
+
+```
+$ rg 'cat' x.txt | cat        ->  cat          (sin numero)
+$ rg -n 'cat' x.txt | cat     ->  1:cat
+$ grep 'cat' x.txt            ->  cat          (sin numero)
+$ zgrep 'cat' x.txt           ->  1:cat        (numero siempre)
+```
+
+rg solo numero en tty (como `--heading` y `--color`); de ahi que su propio
+`--pretty` sea el alias `--color=always --heading --line-number`, que fuerza lo
+que en pipe viene apagado. zgrep tiene ese mismo alias, asi que su `--pretty`
+presupone numeracion apagada por defecto mientras el motor la tiene encendida:
+incoherencia interna documentada, decision de diseno **pendiente de revision**
+(no tocad en 0.3.2). `conformance.sh` lleva desde hoy la NOTA en su cabecera y
+el caso `-x -F a.b (sin -n)` compara con `--no-line-number`, porque el fixture
+recreado (nunca estuvieron en git) si tiene una linea exacta `a.b` y destapaba
+la diferencia.
+
 ## Politica de colisiones de banderas cortas
 
 Cuando grep y rg se contradicen, **manda GNU grep**; lo propio de rg entra solo
