@@ -8,7 +8,7 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
 ```
 
 > La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
@@ -21,7 +21,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -43,9 +43,11 @@ src\search.zig
 
 `-l` lista los archivos con coincidencias; quítalo para mostrar las líneas.
 
-### Salida real del instalador publicado (v0.2.2)
+### Salida real del instalador publicado (v0.2.2, histórica)
 
-Ejecutado de verdad contra la release publicada (no un simulacro), desde cero:
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero.
+La transcripción de la **v0.3.1** (la actual) está más abajo, con los hashes
+de sus assets.
 
 ```text
 === 0. estado inicial ===
@@ -547,6 +549,50 @@ Con `ids=IDS` explícitos: **42/42 en Windows**.
 
 ---
 
+## 4i. El instalador y el ámbito de PowerShell (corregido en 0.3.1)
+
+Este bug salió al **verificar la release de verdad**, no leyendo el código:
+el `irm ... | iex` de la 0.3.0 abortaba **sin instalar nada** en una sesión que
+ya tuviera una variable `$InstallDir` (o `$Version`, ...) en un ámbito
+superior:
+
+```text
+iex : No puede sobrescribirse la variable InstallDir porque se optimiza. ...
+    FullyQualifiedErrorId : VariableNotWritableRare,Microsoft.PowerShell.Commands.InvokeExpressionCommand
+```
+
+**Por qué.** `irm ... | iex` evalúa el script en el ámbito de **quien llama**.
+Al ejecutar un script con bloque `param()` así, PowerShell crea las variables
+de los parámetros en ese ámbito **como constantes**. El instalador luego
+asignaba a `$InstallDir` (para calcular la ruta por defecto) y esa asignación
+sobre una constante está prohibida: de ahí el "because it is optimized".
+
+**El arreglo (0.3.1).** Los parámetros ya no se asignan nunca (todo el trabajo
+happens sobre `$targetDir`, `$versionToUse`, `$baseUrlToUse`,
+`$skipPathUpdate`), y las variables de los parámetros llevan prefijo
+(`$RequestedVersion`, `$RequestedInstallDir`, ...) con alias para conservar la
+API pública: `-Version`, `-InstallDir`, `-BaseUrlOverride` y `-NoPathUpdate`
+siguen funcionando igual. Efecto secundario que también se arregla: el
+instalador ya **no pisa** las variables `$Version` / `$InstallDir` de tu
+sesión.
+
+Comprobarlo (Windows PowerShell 5.1):
+
+```powershell
+# Escenario que fallaba: variable con el mismo nombre en un ámbito padre
+$InstallDir = "C:\predefinido"
+& {
+    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
+}
+# 0.3.0: "No puede sobrescribirse la variable InstallDir porque se optimiza"
+# 0.3.1: instala, y tu $InstallDir sigue siendo "C:\predefinido"
+```
+
+**Trampa:** si ves ese error, no es tu máquina: es una versión del
+instalador anterior a la 0.3.1. Reinstala con la línea de arriba.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**
@@ -1001,11 +1047,15 @@ disco, no por el SIMD.
 
 ### Qué release usar
 
-* **`v0.3.0`**: la actual. Añade `--count-matches`, `--exclude-from`,
-  `--replace`, `--column` y `--heading` funcionando de verdad (ver §4b–§4g),
-  arregla siete bugs de la 0.2.2 y endurece el binding de Python en Windows.
-  Binario baseline, instalador que no aborta y `--version` en `stdout`. Es la
-  que instala el `irm ... | iex` por defecto (usa `releases/latest`).
+* **`v0.3.1`**: la actual. Corrige el instalador: `irm ... | iex` ya no
+  aborta (ni pisa tus variables) cuando la sesión ya tiene un `$InstallDir` o
+  un `$Version` (ver §4i). Los binarios son los de la 0.3.0 más el número de
+  versión.
+* **`v0.3.0`**: publicada y **supersedida** por la 0.3.1. Trae las flags
+  nuevas (`--count-matches`, `--exclude-from`, `--replace`, `--column`,
+  `--heading`) y los siete bugs corregidos, pero su `install.ps1` abortaba en
+  el escenario descrito arriba. Si ya la tienes instalada, **reinstala** con la
+  0.3.1.
 * **`v0.2.2`**: publicada y **supersedida** por la 0.3.0. Sigue siendo válida
   para lo que hacía; no tiene las flags nuevas.
 * **`v0.2.1`**: publicada y **supersedida** por la 0.2.2. Su `.exe` ya es
@@ -1018,7 +1068,7 @@ Si tienes una versión anterior instalada y el binario te da error al
 arrancar, reinstala:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.1/install.ps1 | iex
 ```
 
 ### Segundo arreglo del instalador: el fallback compilaba la versión equivocada

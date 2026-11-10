@@ -29,7 +29,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.3.0";
+const version = "0.3.1";
 
 /// Size budget for the zero-thread micro-tree fast path: a tree whose regular
 /// files add up to less than this is scanned on the calling thread, with no
