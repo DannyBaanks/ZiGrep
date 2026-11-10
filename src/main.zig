@@ -105,6 +105,18 @@ const usage =
     \\  -b, --byte-offset print the byte offset of each match in the file
     \\      --crlf        treat CRLF as the line terminator, not just \\n
     \\  -z, --null-data  NUL separates records instead of \\n (grep -z)
+    \\  -U, --multiline   a match may span newlines (rg)
+    \\      --multiline-dotall
+    \\                    with -U, `.` also crosses a newline
+    \\      --stop-on-nonmatch
+    \\                    stop once a non-matching line follows a matching one
+    \\      --pre=CMD    search the stdout of CMD instead of the file (rg);
+    \\                    {} in CMD is the file path
+    \\      --encoding=ENC
+    \\                    auto | none | utf-8 | utf-16 | utf-16le | utf-16be |
+    \\                    latin1  (default auto: BOM sniff only)
+    \\      --pre-glob=GLOB
+    \\                    only apply --pre to files matching GLOB
     \\      --heading     print the file path above each file's matches (rg)
     \\      --no-heading  print it as a per-line prefix instead (default)
     \\  -p, --pretty       alias for --color=always --heading --line-number
@@ -268,6 +280,19 @@ pub const Options = struct {
     /// `--null-data` / `-z`: NUL is the record separator (grep -z). NOT rg's
     /// `-z`, which is --search-zip; grep semantics win.
     null_data: bool = false,
+    /// `-U`: a match may span newlines (rg's --multiline).
+    multiline: bool = false,
+    /// `--multiline-dotall`: with -U, `.` also crosses a newline.
+    multiline_dotall: bool = false,
+    /// `--stop-on-nonmatch`: stop once a non-matching line follows a match.
+    stop_on_nonmatch: bool = false,
+    /// `--pre=CMD` (rg): search the stdout of CMD instead of the file. `{}`
+    /// or no placeholder at all means the file path (rg requires `{}`).
+    pre_cmd: ?[]const u8 = null,
+    /// `--pre-glob=GLOB`: only apply --pre to the files that match GLOB.
+    pre_glob: ?[]const u8 = null,
+    /// `--encoding`: auto | none | utf-8 | utf-16 | utf-16le | utf-16be | latin1.
+    encoding: []const u8 = "auto",
     patterns: [16][]const u8 = undefined,
     patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
@@ -313,6 +338,12 @@ const Ctx = struct {
     next: std.atomic.Value(usize) = .init(0),
     emit_cursor: std.atomic.Value(usize) = .init(0),
     found: std.atomic.Value(bool) = .init(false),
+    /// `--pre=CMD` (rg): search the command's stdout instead of the file.
+    pre_cmd: []const u8 = "",
+    /// `--pre-glob=GLOB`: only --pre the files matching GLOB.
+    pre_glob: []const u8 = "",
+    /// arena for the argv of --pre/--exec.
+    arena: Allocator = undefined,
     /// `--exec` runs with the quiet mode (no output) but must NOT stop the
     /// scan at the first match: every matching file has to be collected.
     exec_mode: bool = false,
@@ -322,6 +353,41 @@ const default_scratch_bytes = 256 * 1024; // 256 KB covers ~99.5% of files
 
 fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
     const slot = &ctx.slots[idx];
+
+    // `--pre`: rg searches the stdout of a command instead of the file (the
+    // way you search inside archives). It is done here, on the ordered path,
+    // because that is the one that knows which file it is about to scan.
+    if (ctx.pre_cmd.len > 0 and preApplies(ctx.pre_glob, ctx.files[idx])) {
+        if (runPre(ctx.gpa, ctx.io, ctx.arena, ctx.pre_cmd, ctx.files[idx])) |text| {
+            defer ctx.gpa.free(text);
+            const br = scan.scanBuffer(
+                ctx.gpa,
+                text,
+                ctx.searcher,
+                ctx.files[idx],
+                ctx.show_path,
+                ctx.mode,
+                ctx.scan_config,
+                &slot.buf,
+            ) catch {
+                slot.done = true;
+                slot.err = .NOMEM;
+                slot.ready.store(true, .release);
+                return;
+            };
+            slot.done = true;
+            slot.matched = br.matched;
+            slot.lines = br.lines;
+            slot.bytes = text.len;
+            slot.ready.store(true, .release);
+            return;
+        }
+        // the command failed: skip the file, like rg
+        slot.done = true;
+        slot.ready.store(true, .release);
+        return;
+    }
+
     const res = scan.scanFile(
         ctx.io,
         ctx.gpa,
@@ -584,6 +650,50 @@ fn loadExcludeFrom(io: std.Io, arena: Allocator, filter_engine: *filter.FilterEn
             start = end + 1;
         }
     }
+}
+
+/// Runs the `--pre` command for `path` and returns its stdout, or null when
+/// the command failed (the file is then skipped, like rg).
+fn runPre(gpa: Allocator, io: std.Io, allocator: Allocator, template: []const u8, path: []const u8) ?[]const u8 {
+    const argv = expandExecArgv(allocator, template, path);
+    var child = std.process.spawn(io, .{
+        .argv = argv.slice(),
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    }) catch return null;
+    // Read the pipe to EOF: `std.process` needs us to drain it before wait.
+    var out: std.ArrayList(u8) = .empty;
+    var chunk: [64 * 1024]u8 = undefined;
+    const so = child.stdout.?;
+    while (true) {
+        const n = so.readStreaming(io, &.{chunk[0..]}) catch break;
+        if (n == 0) break;
+        out.appendSlice(gpa, chunk[0..n]) catch break;
+    }
+    _ = child.wait(io) catch {
+        out.deinit(gpa);
+        return null;
+    };
+    return out.items;
+}
+
+/// `--pre-glob` decides whether a file goes through --pre. rg uses its glob
+/// syntax; zgrep reuses the filter engine's.
+fn preApplies(glob: ?[]const u8, path: []const u8) bool {
+    const g = glob orelse return true;
+    const name = std.fs.path.basename(path);
+    return filter.matchPattern(name, g) or filter.matchPattern(path, g);
+}
+
+/// The encodings zgrep can actually honour. Anything else is a usage error
+/// instead of a silent raw-bytes fallback.
+fn validEncoding(v: []const u8) ?[]const u8 {
+    const names = [_][]const u8{ "auto", "none", "utf-8", "utf-16", "utf-16le", "utf-16be", "latin1" };
+    for (names) |n| {
+        if (std.mem.eql(u8, v, n)) return n;
+    }
+    return null;
 }
 
 fn parseCount(value: []const u8) ?usize {
@@ -910,6 +1020,57 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.eql(u8, body, "multiline") or std.mem.eql(u8, body, "multiline-dotall")) {
+                opts.multiline = true;
+                if (std.mem.eql(u8, body, "multiline-dotall")) opts.multiline_dotall = true;
+            } else if (std.mem.eql(u8, body, "no-multiline")) {
+                opts.multiline = false;
+            } else if (std.mem.startsWith(u8, body, "pre=")) {
+                opts.pre_cmd = body["pre=".len..];
+            } else if (std.mem.eql(u8, body, "pre")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.pre_cmd = args[i];
+            } else if (std.mem.startsWith(u8, body, "encoding=")) {
+                const v = body["encoding=".len..];
+                opts.encoding = if (std.mem.eql(u8, v, "auto") or
+                    std.mem.eql(u8, v, "none") or
+                    std.mem.eql(u8, v, "utf-8") or
+                    std.mem.eql(u8, v, "utf-16") or
+                    std.mem.eql(u8, v, "utf-16le") or
+                    std.mem.eql(u8, v, "utf-16be") or
+                    std.mem.eql(u8, v, "latin1"))
+                    v
+                else {
+                    opts.fail = .{ .what = "unknown encoding (zgrep supports auto|none|utf-8|utf-16|utf-16le|utf-16be|latin1)", .arg = v };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "encoding")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.encoding = validEncoding(args[i]) orelse {
+                    opts.fail = .{ .what = "unknown encoding (zgrep supports auto|none|utf-8|utf-16|utf-16le|utf-16be|latin1)", .arg = args[i] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "no-encoding")) {
+                opts.encoding = "auto";
+            } else if (std.mem.startsWith(u8, body, "pre-glob=")) {
+                opts.pre_glob = body["pre-glob=".len..];
+            } else if (std.mem.eql(u8, body, "pre-glob")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.pre_glob = args[i];
+            } else if (std.mem.eql(u8, body, "stop-on-nonmatch")) {
+                opts.stop_on_nonmatch = true;
             } else if (std.mem.eql(u8, body, "null-data")) {
                 opts.null_data = true;
             } else if (std.mem.eql(u8, body, "heading") or std.mem.eql(u8, body, "group-by-file")) {
@@ -1146,6 +1307,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 'o' => opts.only_matching = true,
                 'S' => opts.smart_case = true,
                 'z' => opts.null_data = true,
+                'U' => opts.multiline = true,
                 'p' => {
                     opts.color = .always;
                     opts.heading = true;
@@ -1469,6 +1631,8 @@ pub fn main(init: std.process.Init) !void {
     // the wrong cluster. rg keeps the argument order, which is what --sort
     // reproduces.
     if (opts.heading and !opts.sort) opts.sort = true;
+    // --pre also runs per file, so it needs the ordered path.
+    if (opts.pre_cmd != null and !opts.sort) opts.sort = true;
     // find -exec has no normal output. The quiet early-exits below are what
     // make `-q` fast, but they would stop the scan at the FIRST match and the
     // command would never reach the other files, so they stay off with --exec.
@@ -1500,6 +1664,8 @@ pub fn main(init: std.process.Init) !void {
         .line = opts.line_regexp,
         .crlf = opts.crlf,
         .basic = opts.basic_regexp,
+        .multiline = opts.multiline,
+        .dotall = opts.multiline_dotall,
         .null_data = opts.null_data,
     }) catch |e| switch (e) {
         error.BadRegex => {
@@ -1552,6 +1718,9 @@ pub fn main(init: std.process.Init) !void {
             .heading = false, // stdin is a single stream: no header ever
             .vimgrep = opts.vimgrep,
             .null_data = opts.null_data,
+            .multiline = opts.multiline,
+            .stop_on_nonmatch = opts.stop_on_nonmatch,
+            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -1684,6 +1853,9 @@ pub fn main(init: std.process.Init) !void {
             .heading = heading_on,
             .vimgrep = opts.vimgrep,
             .null_data = opts.null_data,
+            .multiline = opts.multiline,
+            .stop_on_nonmatch = opts.stop_on_nonmatch,
+            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -1842,10 +2014,16 @@ pub fn main(init: std.process.Init) !void {
             .heading = heading_on,
             .vimgrep = opts.vimgrep,
             .null_data = opts.null_data,
+            .multiline = opts.multiline,
+            .stop_on_nonmatch = opts.stop_on_nonmatch,
+            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
         },
         .gpa = gpa,
         .window = window,
         .exec_mode = opts.exec_cmd != null,
+        .pre_cmd = opts.pre_cmd orelse "",
+        .pre_glob = opts.pre_glob orelse "",
+        .arena = arena,
     };
 
     var out: Out = .{ .io = init.io };
@@ -2417,6 +2595,44 @@ test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-de
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expectEqual(@as(usize, 1), o.exclude_from_count);
         try std.testing.expectEqualStrings("globs.txt", o.exclude_from[0]);
+    }
+}
+
+test "parseArgs: -U, --multiline, --multiline-dotall, --stop-on-nonmatch" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-U", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.multiline);
+        try std.testing.expect(!o.multiline_dotall);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--multiline", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.multiline);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--multiline-dotall", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.multiline);
+        try std.testing.expect(o.multiline_dotall);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--no-multiline", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(!o.multiline);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--stop-on-nonmatch", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.stop_on_nonmatch);
     }
 }
 

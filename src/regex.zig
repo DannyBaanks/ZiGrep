@@ -43,6 +43,8 @@ pub const Node = union(enum) {
     set: Set,
     bol,
     eol,
+    wb,
+    nwb,
     cat: []*Node,
     alt: []*Node,
     rep: struct { child: *Node, min: u32, max: u32 },
@@ -205,7 +207,7 @@ const Parser = struct {
             'r' => '\r',
             '0' => 0,
             else => if (std.ascii.isAlphanumeric(c))
-                fail("unsupported escape (\\b, \\B, back-references and lookaround are not supported)")
+                fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
             else
                 c,
         };
@@ -214,6 +216,7 @@ const Parser = struct {
     fn parseClass(self: *Parser) CompileError!*Node {
         // self.i is just past '['
         var negate = false;
+        var wants_newline = false;
         if (self.peek() == '^') {
             negate = true;
             self.i += 1;
@@ -232,6 +235,7 @@ const Parser = struct {
                 const rest = self.src[self.i + 2 ..];
                 const end = std.mem.find(u8, rest, ":]") orelse return fail("unterminated [:class:]");
                 const cs = classSet(rest[0..end]) orelse return fail("unknown [:class:] name");
+                if (std.mem.eql(u8, rest[0..end], "space")) wants_newline = true;
                 for (0..256) |k| if (cs[k]) {
                     set[k] = true;
                 };
@@ -242,11 +246,13 @@ const Parser = struct {
                 const e = self.peek() orelse return fail("trailing backslash");
                 self.i += 1;
                 if (shorthand(e)) |sh| {
+                    if (e == 's' or e == 'S' or e == 'W') wants_newline = true;
                     for (0..256) |k| if (sh[k]) {
                         set[k] = true;
                     };
                     continue;
                 }
+                if (e == 'n') wants_newline = true;
                 lo = try self.escapeByte(e);
             } else {
                 lo = c;
@@ -280,7 +286,10 @@ const Parser = struct {
         if (negate) {
             for (0..256) |k| set[k] = !set[k];
         }
-        if (!self.dot_newline) set['\n'] = false; // a line never contains '\n'
+        // A line never contains '\n'... unless the class asked for it: `[\s\S]`
+        // is THE way to cross a newline with `-U`, so the pruning must not eat
+        // the newline the pattern explicitly included.
+        if (!self.dot_newline and !wants_newline) set['\n'] = false;
         return self.newNode(.{ .set = set });
     }
 
@@ -312,6 +321,8 @@ const Parser = struct {
             '\\' => {
                 const e = self.peek() orelse return fail("trailing backslash");
                 self.i += 1;
+                if (e == 'b') return self.newNode(.wb); // word boundary
+                if (e == 'B') return self.newNode(.nwb); // NOT a word boundary
                 if (shorthand(e)) |sh| return self.newNode(.{ .set = sh });
                 const b = try self.escapeByte(e);
                 return self.newNode(.{ .set = self.byteSet(b) });
@@ -506,7 +517,7 @@ fn litByte(s: Set, icase: bool) ?u8 {
 // NFA program
 // ---------------------------------------------------------------------------
 
-const Kind = enum(u8) { set, split, bol, eol, match };
+const Kind = enum(u8) { set, split, bol, eol, wb, nwb, match };
 
 const NNode = struct {
     kind: Kind,
@@ -523,6 +534,11 @@ pub const Program = struct {
     match_node: u32,
     /// True when some pattern needs bol/eol handling (informational).
     anchored: bool,
+    /// True when the pattern contains `\b` or `\B`. Those are zero-width
+    /// assertions that depend on the byte BEFORE the position, so the DFA
+    /// transition cache (keyed by state+byte only) cannot be used: it would
+    /// mix the two contexts. Patterns without them keep the fast path.
+    has_wb: bool = false,
 };
 
 const max_nfa_nodes = 60_000;
@@ -547,6 +563,8 @@ const Builder = struct {
             },
             .bol => return self.add(.{ .kind = .bol, .out = next }),
             .eol => return self.add(.{ .kind = .eol, .out = next }),
+            .wb => return self.add(.{ .kind = .wb, .out = next }),
+            .nwb => return self.add(.{ .kind = .nwb, .out = next }),
             .cat => |kids| {
                 var cur = next;
                 var k = kids.len;
@@ -599,6 +617,10 @@ pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
     const m = try b.add(.{ .kind = .match });
     const start = try b.emit(root, m);
 
+    var has_wb = false;
+    for (b.nodes.items) |n| {
+        if (n.kind == .wb or n.kind == .nwb) has_wb = true;
+    }
     const prog = try gpa.create(Program);
     prog.* = .{
         .id = next_prog_id.fetchAdd(1, .monotonic),
@@ -607,6 +629,7 @@ pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
         .start = start,
         .match_node = m,
         .anchored = false,
+        .has_wb = has_wb,
     };
     return prog;
 }
@@ -627,6 +650,12 @@ pub const Span = struct {
 };
 
 const match_state: u32 = 0;
+
+/// Word byte for `\b`: ASCII alphanumerics and `_` (the same class the engine
+/// uses for -w).
+fn isWordByte(b: u8) bool {
+    return std.ascii.isAlphanumeric(b) or b == '_';
+}
 const max_states = 3000;
 
 const State = struct {
@@ -712,6 +741,9 @@ pub const Dfa = struct {
     /// nodes into a sorted list. The match node stays IN the list (instead of
     /// aborting the closure): that is what lets a state mean "a match just
     /// completed here" and keeps scanning for a longer one.
+    /// `prev_word`/`next_word` carry the word-boundary context: whether the
+    /// byte before this position and the byte being consumed are word bytes.
+    /// That pair is exactly what `\b` and `\B` need.
     fn closure(self: *Dfa, at_bol: bool, at_eol: bool) Allocator.Error![]const u32 {
         self.gen +%= 1;
         if (self.gen == 0) {
@@ -738,6 +770,12 @@ pub const Dfa = struct {
                 } else {
                     try self.work.append(self.gpa, id);
                 },
+                // A word-boundary node is KEPT in the state, exactly like `eol`: it
+                // cannot be resolved while building the state (the byte that
+                // settles it has not been consumed yet), so `step` resolves it
+                // on the next byte.
+                .wb => try self.work.append(self.gpa, id),
+                .nwb => try self.work.append(self.gpa, id),
                 .match => try self.work.append(self.gpa, id),
             }
         }
@@ -794,22 +832,56 @@ pub const Dfa = struct {
         return id;
     }
 
-    fn acceptEnd(self: *Dfa, s: u32) Allocator.Error!bool {
+    /// `prev_word` says whether the last byte consumed was a word byte, which
+    /// is what a trailing `\b` needs (the "next" byte is the end of line, so
+    /// it is never a word byte).
+    fn acceptEnd(self: *Dfa, s: u32, prev_word: bool) Allocator.Error!bool {
         const st = &self.states.items[s];
-        if (st.accept_end >= 0) return st.accept_end == 1;
+        // -1 unknown, 1 yes (no  involved), 0 no. With  the answer depends
+        // on prev_word, so the cache is only used when the pattern has none.
+        if (!self.prog.has_wb and st.accept_end >= 0) return st.accept_end == 1;
         self.seeds.clearRetainingCapacity();
         const prog = self.prog;
         for (st.nodes) |id| {
             const n = prog.nodes[id];
             if (n.kind == .eol) try self.seeds.append(self.gpa, n.out);
+            if (n.kind == .wb and prev_word) try self.seeds.append(self.gpa, n.out);
+            if (n.kind == .nwb and !prev_word) try self.seeds.append(self.gpa, n.out);
         }
         var ok = false;
         if (self.seeds.items.len > 0) {
             ok = has_match(try self.closure(false, true), prog.match_node);
         }
         // `st` may dangle only if states grew; closure() never interns.
-        self.states.items[s].accept_end = if (ok) 1 else 0;
+        if (!prog.has_wb) self.states.items[s].accept_end = if (ok) 1 else 0;
         return ok;
+    }
+
+    /// Does the state accept because a `\b`/`\B` holds right here? `prev_word`
+    /// says whether the byte already consumed was a word byte; the byte that
+    /// follows is NOT consumed, so the match ends exactly at this position.
+    fn acceptWord(self: *Dfa, s: u32, prev_word: bool, next_word: bool) bool {
+        if (!self.prog.has_wb) return false;
+        const st = &self.states.items[s];
+        const prog = self.prog;
+        var seeded = false;
+        self.seeds.clearRetainingCapacity();
+        for (st.nodes) |id| {
+            const n = prog.nodes[id];
+            if (n.kind == .wb) {
+                if (prev_word != next_word) {
+                    self.seeds.append(self.gpa, n.out) catch return false;
+                    seeded = true;
+                }
+            } else if (n.kind == .nwb) {
+                if (prev_word == next_word) {
+                    self.seeds.append(self.gpa, n.out) catch return false;
+                    seeded = true;
+                }
+            }
+        }
+        if (!seeded) return false;
+        return has_match(self.closure(false, false) catch return false, prog.match_node);
     }
 
     /// Scans data[from..to) as whole lines. Returns the start offset of the
@@ -829,27 +901,33 @@ pub const Dfa = struct {
         crlf: bool,
     ) Allocator.Error!?usize {
         var s = self.init_bol;
+        var prev_word = false; // a line start is a non-word byte
         var ls = from;
         var i = from;
         while (i < to) {
             const b = data[i];
             if (b == '\n') {
-                if (try self.acceptEnd(s)) return ls;
+                if (try self.acceptEnd(s, prev_word)) return ls;
                 s = self.init_bol;
+                prev_word = false;
                 i += 1;
                 ls = i;
                 continue;
             }
             if (crlf and b == '\r' and i + 1 < to and data[i + 1] == '\n') {
-                if (try self.acceptEnd(s)) return ls;
+                if (try self.acceptEnd(s, prev_word)) return ls;
             }
+            // A `\b`/`\B` holding here ends the match at this byte position,
+            // without consuming b.
+            if (self.acceptWord(s, prev_word, isWordByte(b))) return ls;
             var t = self.trans.items[@as(usize, s) * 256 + b];
-            if (t == unknown) t = try self.step(s, b, true);
+            if (t == unknown or self.prog.has_wb) t = try self.step(s, b, true, false, prev_word);
+            prev_word = isWordByte(b);
             if (self.isAccepting(t)) return ls;
             s = t;
             i += 1;
         }
-        if (ls < to and try self.acceptEnd(s)) return ls;
+        if (ls < to and try self.acceptEnd(s, prev_word)) return ls;
         return null;
     }
 
@@ -859,19 +937,54 @@ pub const Dfa = struct {
     /// matches somewhere after here" needs. The span runner passes `false`:
     /// it must know where a match STARTED, so no new threads may appear
     /// mid-run.
-    fn step(self: *Dfa, s: u32, b: u8, inject: bool) Allocator.Error!u32 {
+    /// `at_bol` says the position we are ENTERING is a line start. In normal
+    /// mode that is always false (the start state already carries BOL); in
+    /// multiline mode it is true whenever the byte we just consumed was `\n`,
+    /// which is what keeps `^`/`$` per-line while the match spans lines.
+    fn step(
+        self: *Dfa,
+        s: u32,
+        b: u8,
+        inject: bool,
+        at_bol: bool,
+        prev_word: bool,
+    ) Allocator.Error!u32 {
         const gen_before = self.flushes;
         self.seeds.clearRetainingCapacity();
         const prog = self.prog;
+        // A ``/`\B` node sitting in the state resolves NOW: we know the byte
+        // being consumed (`next_word`) and the caller says whether the previous
+        // one was a word byte (`prev_word`).
+        const next_word = isWordByte(b);
         for (self.states.items[s].nodes) |id| {
             const n = prog.nodes[id];
-            if (n.kind == .set and prog.sets[n.set][b]) try self.seeds.append(self.gpa, n.out);
+            if (n.kind == .wb or n.kind == .nwb) {
+                const ok = if (n.kind == .wb) prev_word != next_word else prev_word == next_word;
+                if (!ok) continue;
+                // `n.out` may be a `set`, and that set has to consume THIS byte:
+                // seeding it unchecked would push the match one position later.
+                const out = prog.nodes[n.out];
+                if (out.kind == .set) {
+                    // The set consumes THIS byte, so what moves forward is ITS
+                    // out, not the set itself.
+                    if (prog.sets[out.set][b]) try self.seeds.append(self.gpa, out.out);
+                } else if (out.kind == .match) {
+                    // The boundary just held, so the match ends at THIS
+                    // position. acceptWord already reported it; seeding match
+                    // here would move the end one byte too far.
+                } else {
+                    try self.seeds.append(self.gpa, n.out);
+                }
+            } else if (n.kind == .set and prog.sets[n.set][b]) {
+                try self.seeds.append(self.gpa, n.out);
+            }
         }
         if (inject) try self.seeds.append(self.gpa, prog.start);
-        const r = try self.closure(false, false);
+        const r = try self.closure(at_bol, false);
         const target = try self.intern(r);
-        // Never cache across a flush: `s` no longer names the same state.
-        if (self.flushes == gen_before) {
+        // The cache keys on (state, byte) alone; with `\b` the previous byte
+        // changes the answer, so only cache when the pattern has none.
+        if (self.flushes == gen_before and !prog.has_wb) {
             const table = if (inject) &self.trans else &self.trans_span;
             table.items[@as(usize, s) * 256 + b] = target;
         }
@@ -888,6 +1001,39 @@ pub const Dfa = struct {
         return self.nextMatchImpl(data, from, to) catch null;
     }
 
+    /// Multiline twin of `nextMatch`: the record is the whole buffer, but
+    /// `^` and `$` still match per line (rg's rule), so every `\n` both ends
+    /// a candidate match and opens the next line.
+    pub fn nextMatchMulti(self: *Dfa, data: []const u8, from: usize, to: usize) ?Span {
+        return self.nextMatchMultiImpl(data, from, to) catch null;
+    }
+
+    fn nextMatchMultiImpl(self: *Dfa, data: []const u8, from: usize, to: usize) Allocator.Error!?Span {
+        var p = from;
+        while (p <= to) : (p += 1) {
+            var s = self.init_bol;
+            var best_end: ?usize = null;
+            if (self.isAccepting(s)) best_end = p;
+            var i = p;
+            var prev_word = i > 0 and isWordByte(data[i - 1]);
+            while (i < to) : (i += 1) {
+                const b = data[i];
+                const nl = b == '\n';
+                if (self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
+                var t = self.trans_span.items[@as(usize, s) * 256 + b];
+                if (t == unknown or self.prog.has_wb) t = try self.step(s, b, false, nl, prev_word);
+                prev_word = isWordByte(b);
+                if (nl and try self.acceptEnd(s, prev_word)) best_end = i;
+                if (self.isAccepting(t)) best_end = i + 1;
+                if (self.is_dead(t)) break;
+                s = t;
+            }
+            if (best_end) |e| return .{ .start = p, .end = e };
+            if (p == to) break;
+        }
+        return null;
+    }
+
     fn nextMatchImpl(self: *Dfa, data: []const u8, from: usize, to: usize) Allocator.Error!?Span {
         var p = from;
         while (p <= to) : (p += 1) {
@@ -898,14 +1044,20 @@ pub const Dfa = struct {
             // immediately on an empty line). Asking acceptEnd at every step
             // would let `a$` match the first 'a' of "aaaa".
             if (self.isAccepting(s)) best_end = p;
-            if (best_end == null and to == p and try self.acceptEnd(s)) best_end = p;
+            if (best_end == null and to == p and try self.acceptEnd(s, false)) best_end = p;
             var i = p;
+            var prev_word = i > 0 and isWordByte(data[i - 1]);
             while (i < to) : (i += 1) {
                 const b = data[i];
+                // A `\b`/`\B` holding at i ends the match HERE, without
+                // consuming b: that is what a zero-width assertion means.
+                if (self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
                 var t = self.trans_span.items[@as(usize, s) * 256 + b];
-                if (t == unknown) t = try self.step(s, b, false);
+                if (t == unknown or self.prog.has_wb) t = try self.step(s, b, false, false, prev_word);
+                prev_word = isWordByte(b);
                 if (self.isAccepting(t)) best_end = i + 1;
-                if (best_end == null and i + 1 == to and try self.acceptEnd(t)) best_end = i + 1;
+
+                if (best_end == null and i + 1 == to and try self.acceptEnd(t, prev_word)) best_end = i + 1;
                 if (self.is_dead(t)) break;
                 s = t;
             }
@@ -1014,8 +1166,36 @@ test "regex: errors" {
     try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "a(b", plain));
     try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "*a", plain));
     try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "[abc", plain));
-    try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "a\\bz", plain));
+    // \b / \B ARE supported now (word boundaries), so this is a valid pattern.
+    _ = try parse(arena.allocator(), "a\\bz", plain);
+    try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "(?<=x)a", plain));
     try std.testing.expectError(error.BadRegex, parse(arena.allocator(), "a)", plain));
+}
+
+test "regex: word boundaries" {
+    try std.testing.expect(try testMatch("\\bcat\\b", "a cat sat", plain));
+    try std.testing.expect(!try testMatch("\\bcat\\b", "concatenate", plain));
+    try std.testing.expect(!try testMatch("\\bcat\\b", "category", plain));
+    try std.testing.expect(try testMatch("\\bcat", "concatenate cat", plain));
+    try std.testing.expect(try testMatch("cat\\b", "concat cat", plain));
+    // "concat" ENDS in "cat", and the end of the word IS a boundary.
+    try std.testing.expect(try testMatch("cat\\b", "concat", plain));
+    // \B is the complement
+    try std.testing.expect(try testMatch("\\Bcat\\B", "aconcatb", plain));
+    try std.testing.expect(!try testMatch("\\Bcat\\B", "a cat b", plain));
+    // boundaries at the ends of the line
+    try std.testing.expect(try testMatch("^\\bcat\\b$", "cat", plain));
+    try std.testing.expect(!try testMatch("\\bcat\\b", "cats and dogs", plain));
+    // with a class, not just a literal
+    try std.testing.expect(try testMatch("\\b[0-9]+\\b", "abc 123 def", plain));
+    try std.testing.expect(!try testMatch("\\b[0-9]+\\b", "abc123def", plain));
+    // non-word bytes on both sides
+    try std.testing.expect(try testMatch("\\bcat\\b", "(cat)", plain));
+    try std.testing.expect(try testMatch("\\bcat\\b", "cat-dog", plain));
+    // underscore is a word byte
+    try std.testing.expect(!try testMatch("\\bcat\\b", "a_cat_b", plain));
+    // `_` is a word byte: "cat_b" has no boundary on that side.
+    try std.testing.expect(!try testMatch("\\bcat\\b", "a cat_b", plain));
 }
 
 test "regex: cache flush keeps results correct" {

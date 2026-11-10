@@ -451,6 +451,41 @@ internamente.
 
 ---
 
+## 4g. Las cinco que el corpus tenía por "no vale" y ya no lo son
+
+```sh
+zgrep -U 'alpha[\s\S]*gamma' *.txt   # multilínea (un match puede cruzar \n)
+zgrep -U --multiline-dotall 'a.*b' .   # y además '.' cruza el \n
+zgrep --pre 'cat {}' .                 # busca la salida del comando, no el fichero
+zgrep --encoding utf-16 fichero.txt     # o none, para ver los bytes crudos
+zgrep '\bcat\b' fichero.txt            # frontera de palabra (\b y \B)
+zgrep --heading -e pat a.txt b.txt     # ruta como cabecera
+zgrep --stop-on-nonmatch pat sorted.txt
+```
+
+**`` era la razón principal de echar de menos PCRE2**, y se resolvió en el
+motor propio: es una aserción de ancho cero como `^` y `$`, resuelta en el cierre
+del NFA con el contexto del byte anterior y del siguiente. Verificado contra
+`grep -E` en 12 casos (línea y `-o`). Ojo con un detalle que solo se ve midiendo:
+la frontera debe resolverse **antes** de consumir el byte que viene; hacerlo
+después alargaba el match una posición y `-o` devolvía `cat ` en vez de `cat`.
+
+**`-U` necesitó tres cambios coordinados** (como `-z`): el fichero deja de
+partirse en líneas, el DFA resuelve `^`/`$` por línea dentro del registro, y la
+impresora emite cada línea que el match **abarca** — que es lo que hace rg, no
+el registro entero.
+
+**`--pre`** reutiliza la maquinaria de procesos de `--exec`, pero capturando la
+salida en vez de heredarla. Verificado contra rg, incluido `--pre-glob`.
+
+**`--encoding`** tal cual lo define rg: `auto` (solo BOM), `none` (bytes crudos)
+y los utf-16 que ya sabíamos decodificar.
+
+**`--heading`** fuerza el camino ordenado: en streaming los grupos de ficheros
+se entremezclarían y una cabecera apuntaría al clúster equivocado.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

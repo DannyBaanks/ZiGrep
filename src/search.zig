@@ -123,6 +123,8 @@ pub const Searcher = struct {
     word: bool = false,
     /// `--crlf`: `$` also accepts before the CR of a CRLF pair.
     crlf: bool = false,
+    /// `-U`: matches may span newlines.
+    multiline: bool = false,
     /// `--null-data`: NUL separates records, so a record may contain `\n`.
     null_data: bool = false,
     prog: ?*const regex.Program = null,
@@ -192,6 +194,11 @@ pub const Searcher = struct {
     /// started); this one keeps both ends because it drives the DFA through
     /// the no-injection table (`Dfa.nextMatch`). Zero-width matches are
     /// returned too (start == end); callers that model `grep -o` drop them.
+    /// `-U`: the first match over the whole buffer (may span newlines).
+    pub fn findSpan(self: *const Searcher, hay: []const u8, from: usize) ?Match {
+        return self.matchSpan(hay, from);
+    }
+
     pub fn matchSpan(self: *const Searcher, hay: []const u8, from: usize) ?Match {
         if (self.kind == .never) return null;
         if (self.kind == .literal) {
@@ -199,8 +206,12 @@ pub const Searcher = struct {
             return .{ .start = m, .end = m + self.needle.len };
         }
         const dfa = regex.threadDfa(self.prog.?) catch return null;
-        const span = dfa.nextMatch(hay, from, hay.len) orelse return null;
-        return .{ .start = span.start, .end = span.end };
+        const span = if (self.multiline)
+            dfa.nextMatchMulti(hay, from, hay.len)
+        else
+            dfa.nextMatch(hay, from, hay.len);
+        const sp = span orelse return null;
+        return .{ .start = sp.start, .end = sp.end };
     }
 
     fn findRaw(self: *const Searcher, hay: []const u8, start: usize) ?usize {
@@ -292,7 +303,11 @@ pub const Searcher = struct {
             const m = dfa.nextMatch(hay, start, hay.len) orelse return null;
             return m.start;
         }
-        return dfa.firstMatchingLine(hay, start, hay.len, self.crlf);
+        if (self.multiline) {
+            const m = dfa.nextMatchMulti(hay, start, hay.len) orelse return null;
+            return m.start;
+        }
+                return dfa.firstMatchingLine(hay, start, hay.len, self.crlf);
     }
 
     fn findBmh(self: *const Searcher, hay: []const u8, start: usize) ?usize {
@@ -344,6 +359,10 @@ pub const BuildOptions = struct {
     null_data: bool = false,
     /// `-G`: BRE patterns, translated to ERE before compiling.
     basic: bool = false,
+    /// `-U`: a match may span newlines (rg's --multiline).
+    multiline: bool = false,
+    /// `--multiline-dotall`: `.` crosses a newline even in multiline mode.
+    dotall: bool = false,
 };
 
 pub const BuildError = error{ BadRegex, OutOfMemory };
@@ -394,7 +413,7 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
         var n = if (o.fixed)
             try regex.literalNode(arena, src, o.icase)
         else
-            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data });
+            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
         if (o.line) n = try regex.lineWrap(arena, n);
         if (o.word) n = try regex.wordWrap(arena, n);
         nodes[idx] = n;
@@ -407,6 +426,7 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     s.prog = prog;
     s.icase = o.icase;
     s.crlf = o.crlf;
+    s.multiline = o.multiline;
     s.null_data = o.null_data;
     if (patterns.len == 1) {
         if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {

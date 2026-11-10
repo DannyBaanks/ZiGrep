@@ -63,6 +63,12 @@ pub const ScanConfig = struct {
     vimgrep: bool = false,
     /// `--null-data` (grep -z): NUL is the record separator.
     null_data: bool = false,
+    /// `-U`: the whole file is one record, so a match may span newlines.
+    multiline: bool = false,
+    /// `--stop-on-nonmatch`: stop once a non-matching line follows a match.
+    stop_on_nonmatch: bool = false,
+    /// `--encoding`: how bytes become the haystack.
+    encoding: Encoding = .auto,
 
     /// True when the emission needs the match spans, so the fast
     /// "jump to the next match" path cannot be used.
@@ -77,7 +83,39 @@ pub const binary_probe_bytes = 8192;
 
 /// Checks for UTF-16 Byte Order Marks (BOM):
 /// 0xFF 0xFE = Little-Endian, 0xFE 0xFF = Big-Endian.
-pub fn isUtf16Bom(bytes: []const u8) ?enum { le, be } {
+/// `--encoding` decides how a file's bytes become the haystack:
+///   * `none`  -> raw bytes, no BOM sniffing at all (rg's `none`)
+///   * `auto`  -> BOM sniff only, the default and what this scanner already did
+///   * `utf-16le` / `utf-16be` -> decode, ignoring any BOM
+///   * `utf-16` -> BOM decides, else LE (rg does the same)
+///   * `utf-8` / `latin1` -> bytes as-is
+pub const Encoding = enum { auto, none, utf8, utf16, utf16le, utf16be, latin1 };
+
+/// Byte-order mark flavour, named so both the sniffer and the forced value
+/// return the SAME type.
+pub const BomKind = enum { le, be };
+
+pub fn parseEncoding(name: []const u8) ?Encoding {
+    if (std.mem.eql(u8, name, "auto")) return .auto;
+    if (std.mem.eql(u8, name, "none")) return .none;
+    if (std.mem.eql(u8, name, "utf-8")) return .utf8;
+    if (std.mem.eql(u8, name, "utf-16")) return .utf16;
+    if (std.mem.eql(u8, name, "utf-16le")) return .utf16le;
+    if (std.mem.eql(u8, name, "utf-16be")) return .utf16be;
+    if (std.mem.eql(u8, name, "latin1")) return .latin1;
+    return null;
+}
+
+/// The BOM this encoding forces, if any. `auto`/`none` return null.
+pub fn forcedBom(enc: Encoding) ?BomKind {
+    return switch (enc) {
+        .utf16le => .le,
+        .utf16be => .be,
+        else => null,
+    };
+}
+
+pub fn isUtf16Bom(bytes: []const u8) ?BomKind {
     if (bytes.len < 2) return null;
     if (bytes[0] == 0xFF and bytes[1] == 0xFE) return .le;
     if (bytes[0] == 0xFE and bytes[1] == 0xFF) return .be;
@@ -256,6 +294,51 @@ fn emitMatches(
     }
 }
 
+/// `-U`: rg prints each LINE the match spans, separately.
+fn emitSpannedLines(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    cfg: ScanConfig,
+    path: []const u8,
+    show_path: bool,
+    data: []const u8,
+    span: Match,
+) Allocator.Error!void {
+    var ls = span.start;
+    while (ls > 0 and data[ls - 1] != '\n') ls -= 1;
+    var no: usize = 1;
+    var k: usize = 0;
+    while (k < ls) : (k += 1) {
+        if (data[k] == '\n') no += 1;
+    }
+    var i = ls;
+    while (i < data.len) {
+        const raw = std.mem.findScalarPos(u8, data, i, '\n') orelse data.len;
+        const end = if (cfg.crlf and raw > i and data[raw - 1] == '\r') raw - 1 else raw;
+        try emitLine(out, gpa, path, show_path, cfg.show_line_no, ':', no, data[i..end], cfg.null_filename, if (cfg.byte_offset) i else null);
+        if (raw >= span.end) break;
+        i = raw + 1;
+        no += 1;
+    }
+}
+
+/// `-U -o`: the match itself, newlines included, as one output record.
+fn emitSpanOnce(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    cfg: ScanConfig,
+    path: []const u8,
+    show_path: bool,
+    line_no: usize,
+    line_start: usize,
+    text: []const u8,
+) Allocator.Error!void {
+    const off: ?usize = if (cfg.byte_offset) line_start else null;
+    try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
+    try out.appendSlice(gpa, text);
+    try out.append(gpa, out_sep);
+}
+
 /// The whole line, optionally with `--column` after the line number and the
 /// match spans highlighted (`--color`).
 fn emitLineSpanned(
@@ -356,6 +439,10 @@ fn scanBufferLines(
     const context_enabled = config.before_context > 0 or config.after_context > 0;
     const spans = config.needs_spans();
 
+    // `-U`: the whole file is ONE record, so a match may span newlines; the
+    // printer then emits every line the span covers.
+    var multi_span: ?Match = null;
+
     var line_start: usize = 0;
     var line_no: usize = 1;
     var last_printed: usize = 0;
@@ -364,13 +451,22 @@ fn scanBufferLines(
     var maxed = false;
 
     while (line_start < data.len) {
-        const raw_end = std.mem.findScalarPos(u8, data, line_start, recordSep(config)) orelse data.len;
+        const raw_end = if (config.multiline)
+            data.len
+        else
+            std.mem.findScalarPos(u8, data, line_start, recordSep(config)) orelse data.len;
         const line_end = if (config.crlf and raw_end > line_start and data[raw_end - 1] == '\r')
             raw_end - 1
         else
             raw_end;
         const line_slice = data[line_start..line_end];
-        const has_match = searcher.find(line_slice, 0) != null;
+        const has_match = blk: {
+            if (config.multiline) {
+                multi_span = searcher.findSpan(data, 0);
+                break :blk multi_span != null;
+            }
+            break :blk searcher.find(line_slice, 0) != null;
+        };
         const selected = if (config.invert) !has_match else has_match;
 
         if (selected and !maxed) {
@@ -392,7 +488,15 @@ fn scanBufferLines(
                     try emitHeading(out, gpa, path);
                     printed_any = true;
                 }
-                if (config.vimgrep) {
+                if (config.multiline) {
+                    if (multi_span) |sp| {
+                        if (config.only_matching) {
+                            try emitSpanOnce(out, gpa, config, path, show_path, line_no, line_start, data[sp.start..sp.end]);
+                        } else {
+                            try emitSpannedLines(out, gpa, config, path, show_path, data, sp);
+                        }
+                    }
+                } else if (config.vimgrep) {
                     // rg: every match on its own line, each one printing the
                     // WHOLE line with its column. That can repeat a line once
                     // per match; rg warns about exactly that.
@@ -499,7 +603,7 @@ pub fn scanBuffer(
     // the jump-to-next-match fast path below cannot provide context.
     // The fast path splits on '\n' internally (the DFA's own line handling),
     // so with `--null-data` a record that contains \n could never match.
-    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data) {
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline) {
         return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
@@ -681,7 +785,14 @@ fn processBuffer(
     res: *FileScan,
 ) void {
     const probe = @min(data.len, binary_probe_bytes);
-    const utf16_bom = isUtf16Bom(data);
+    const utf16_bom = if (config.encoding == .none)
+        null
+    else if (forcedBom(config.encoding)) |f|
+        f
+    else if (config.encoding == .utf16)
+        isUtf16Bom(data) orelse .le
+    else
+        isUtf16Bom(data);
     // `--null-data` makes NUL the separator, so it can no longer mean
     // "binary": that probe is off (rg does the same).
     const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
@@ -798,7 +909,14 @@ fn scanFileLinux(
             }
             const data = sbuf[0..got];
             const probe = @min(data.len, binary_probe_bytes);
-            const utf16_bom = isUtf16Bom(data);
+            const utf16_bom = if (config.encoding == .none)
+        null
+    else if (forcedBom(config.encoding)) |f|
+        f
+    else if (config.encoding == .utf16)
+        isUtf16Bom(data) orelse .le
+    else
+        isUtf16Bom(data);
             // `--null-data` makes NUL the separator, so it can no longer mean
     // "binary": that probe is off (rg does the same).
     const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
@@ -896,7 +1014,14 @@ fn scanFileLinux(
     // `-a` disables it; otherwise a NUL in the first block means the file is
     // skipped entirely (grep `-I`, ripgrep default).
     const probe = @min(data.len, binary_probe_bytes);
-    const utf16_bom = isUtf16Bom(data);
+    const utf16_bom = if (config.encoding == .none)
+        null
+    else if (forcedBom(config.encoding)) |f|
+        f
+    else if (config.encoding == .utf16)
+        isUtf16Bom(data) orelse .le
+    else
+        isUtf16Bom(data);
     // `--null-data` makes NUL the separator, so it can no longer mean
     // "binary": that probe is off (rg does the same).
     const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;

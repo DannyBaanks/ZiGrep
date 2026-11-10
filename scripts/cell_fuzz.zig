@@ -37,7 +37,7 @@ const Allocator = std.mem.Allocator;
 pub const RADIX_MODES: usize = 9;
 pub const RADIX_MODS: usize = 16;
 pub const RADIX_ENGINES: usize = 9;
-pub const RADIX_PATTERNS: usize = 24;
+pub const RADIX_PATTERNS: usize = 25;
 pub const RADIX_HAYSTACKS: usize = 12;
 
 pub const TOTAL_CELLS: usize = RADIX_MODES * RADIX_MODS * RADIX_ENGINES * RADIX_PATTERNS * RADIX_HAYSTACKS; // 373,248
@@ -60,7 +60,8 @@ pub const PATTERN_TABLE = [RADIX_PATTERNS]PatternSpec{
     .{ .text = "(kamikaze)+", .is_syntax_error = false, .desc = "quantified group" },
     .{ .text = "((searcher|scan))+", .is_syntax_error = false, .desc = "nested quantified group" },
     .{ .text = "a{2,5}", .is_syntax_error = false, .desc = "bounded repetition" },
-    .{ .text = "\\bpub\\b", .is_syntax_error = true, .desc = "unsupported word boundary (clean exit 2)" },
+    .{ .text = "\\bpub\\b", .is_syntax_error = false, .desc = "word boundary assertion" },
+    .{ .text = "\\Bscan\\B", .is_syntax_error = false, .desc = "non-boundary assertion" },
     .{ .text = "s..r.h.r", .is_syntax_error = false, .desc = "dot wildcard" },
     .{ .text = "searcher|", .is_syntax_error = false, .desc = "trailing empty alternation" },
     .{ .text = "|filter", .is_syntax_error = false, .desc = "leading empty alternation" },

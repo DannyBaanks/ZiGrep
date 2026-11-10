@@ -124,3 +124,25 @@ de la conformance.
 
 Verificacion completa: 90 tests, oraculo 26/26, 1419/1419 spans, 40/40 + 25/25
 + 15/15 + 5/5 de conformance, fuzzers a cero.
+
+## Las cinco que dejaron de ser "no vale"
+
+Revisadas una a una con lo que ya teníamos (procesos, spans, registros NUL):
+
+- **`` / `\B`**: la razón principal de querer PCRE2, resuelta en el motor.
+  12/12 contra `grep -E` (línea y `-o`).
+- **`-U` / `--multiline`**: el match puede cruzar `
+`; `^`/`$` siguen siendo por
+  línea (rg) y se imprimen las líneas que el match abarca.
+- **`--pre` / `--pre-glob`**: busca la salida de un comando. Verificado contra rg.
+- **`--encoding`**: auto/none/utf-16*/latin1, contra rg.
+- **`--heading` / `--pretty` / `--vimgrep`** + `--stop-on-nonmatch`.
+
+Dos defectos reales salieron de aquí:
+
+1. **`` en `-o` devolvía un byte de más**: la frontera se resolvía al consumir
+   el byte siguiente. La regla correcta es resolverla antes, y eso vale para los
+   tres runners (línea, spans y multilínea).
+2. **El cell-fuzz se puso rojo**: su tabla de expectativas tenía `pub` como
+   "error de sintaxis conocido". Ya no lo es, así que la tabla se actualizó
+   (junto con `\Bscan\B`) y el RADIX subió de 24 a 25 patrones.
