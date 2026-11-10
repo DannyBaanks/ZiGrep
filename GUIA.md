@@ -106,6 +106,96 @@ OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
 Lo que se ve en `busqueda: 2:needle` es el binario **instalado** buscando
 `needle` en un fichero de prueba: la linea 2 es la que contenia la palabra.
 
+### Salida real del instalador publicado (v0.3.1)
+
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero,
+con la one-liner tal cual la escribe el usuario:
+
+```text
+=== 0. estado inicial ===
+  install dir existe : False
+  ya esta en el PATH  : False
+  install dir existe ahora : False
+=== 1. descargar el instalador (irm) ===
+  descargado: 12753 caracteres
+  primera linea: <#
+=== 2. ejecutar el instalador real (irm | iex) ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.1
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  exit=0
+  errores en la consola: 0
+=== 3. verificacion ===
+  zigrep.exe instalado : True
+  zgrep.exe  instalado : True
+  install.ps1 copiado  : True
+  version reportada    : zgrep 0.3.1
+  install dir en PATH   : True
+=== 4. uso real del binario instalado ===
+  busqueda: 2:needle
+=== 5. hash publicado vs asset real ===
+  SHA256SUMS.txt publicado:
+    708c6379136be5ccc1586398b9b65343c3100e5afd6cc06f4693217d818a9ba3  zigrep-linux-x86_64.tar.gz
+    bae614ed33e7c943cf86f7435b9da6a29ac180616a009abb0947413cad076174  zigrep-linux-aarch64.tar.gz
+    0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a  zigrep-windows-x86_64.zip
+=== 5b. el binario responde por stdout (no stderr) ===
+  stdout : 'zgrep 0.3.1'
+  stderr : ''
+  exit   : 0
+=== 6. el escenario que abortaba en la 0.3.0 ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (0dae279f63db4bfe7984acbf0ad4dc01afe0dcdf963f3efd486d9daf29a4e58a)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.1
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  errores en la consola: 0
+  instalado : True
+  version   : zgrep 0.3.1
+  el $InstallDir del usuario sigue siendo: 'C:\predefinido'
+=== 7. estado de la maquina restaurado ===
+  install dir sigue en el PATH: False
+  install dir existe          : False
+=== fin ===
+```
+
+Lo importante de esa transcripción:
+
+* `errores en la consola: 0` — **ni un `RemoteException`**, que era el
+  requisito: el instalador no aborta.
+* `exit=0` y `ZiGrep is ready.`.
+* El `checksum matches` es el hash **publicado** de la release (0dae279f…),
+  no uno inventado.
+* El bloque 6 es el escenario que **abortaba** en la 0.3.0 (§4i): ahora
+  instala sin errores y **no toca** el `$InstallDir` del usuario.
+* Al final la máquina queda como estaba (sin el directorio de ZiGrep y sin su
+  entrada en el `PATH`): la prueba no deja rastro.
+
 ### Qué hace el instalador (y cómo leer su salida)
 
 | Salida | Significado | Qué hacer |
