@@ -914,7 +914,12 @@ pub const Dfa = struct {
                 ls = i;
                 continue;
             }
-            if (crlf and b == '\r' and i + 1 < to and data[i + 1] == '\n') {
+            // The byte after the CR may sit exactly at `to`: the prefiltered
+            // path passes `to` = index of the '\n', so the CRLF pair straddles
+            // the boundary and `i + 1 < to` would never fire. Looking one past
+            // `to` is safe: `data` is the whole buffer, the slice only bounds
+            // the scan.
+            if (crlf and b == '\r' and i + 1 < data.len and data[i + 1] == '\n') {
                 if (try self.acceptEnd(s, prev_word)) return ls;
             }
             // A `\b`/`\B` holding here ends the match at this byte position,

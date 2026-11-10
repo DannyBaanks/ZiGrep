@@ -8,7 +8,7 @@ la evidencia están en `README.md` y `evidence/REPORT.md`.
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 | iex
 ```
 
 > La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
@@ -21,7 +21,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -149,8 +149,8 @@ Ficheros de la release (todos los assets, con sus hashes en `SHA256SUMS.txt`):
 ```sh
 cd ~/Development/"ISyCo Git"/ZigGrep
 zig build -Doptimize=ReleaseFast      # sale en zig-out/bin/zgrep (o zigrep)
-zig build test --summary all          # 56/56 tests passed (Linux y native Windows)
-zig build oracle                      # oráculo diferencial puro Zig (26/26 Linux, 25/25 native Windows)
+zig build test --summary all          # 97/98 tests passed, 1 skip (Linux-only io_uring)
+zig build oracle                      # oráculo diferencial puro Zig (29/29 native Windows)
 ```
 
 Requisitos: Zig 0.16.0. No necesita libc ni dependencias externas.
@@ -486,6 +486,67 @@ se entremezclarían y una cabecera apuntaría al clúster equivocado.
 
 ---
 
+## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
+
+Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y
+`grep`** en esta máquina, y todos tienen ya su test o su caso de oráculo.
+
+| # | Bug | Síntoma medido | Arreglo |
+|---|---|---|---|
+| 1 | `--count-matches` | imprimía **`0`** siempre | el contador se incrementaba en una rama que el informe no leía |
+| 2 | `-z` / `--null-data` | `1\0texto` en vez de `1:texto` | el NUL es separador de **registro**, no de campo |
+| 3 | `--crlf` | numeraba **1, 3, 5…** y borraba el CR | cada CRLF contaba como dos terminadores |
+| 4 | `--exclude-from` | **ignorado** en la ruta streaming | solo se aplicaba en el camino ordenado |
+| 5 | `--heading` | **sin cabecera** al pasar un directorio | la regla era `len(operandos) > 1`, no "¿se imprime la ruta?" |
+| 6 | `--replace` | se comía **el resto de la línea** | sustituía el match y descartaba la cola |
+| 7 | `--help` | decía que `\b` **no** está soportado (y mostraba `\\d`, `\\b`) | el texto estaba viejo y los backslashes iban dobles |
+
+Comprobar que siguen arreglados (salidas reales, `rg` 15.0.0 en el `PATH`):
+
+```powershell
+$z = ".\zig-out\bin\zigrep.exe"
+
+# 1. count-matches: 35 lineas, 35 matches; rg dice lo mismo
+& $z --count-matches Searcher src\search.zig   # 35
+rg --count-matches -F Searcher src/search.zig  # 35
+
+# 3. crlf: numeros consecutivos, y el CR sigue ahi
+#    (fichero con "needle one\r\nneedle two\r\nplain\r\n")
+& $z --crlf needle f.txt
+# 1:needle one
+# 2:needle two
+# bytes reales: b'1:needle one\r\n2:needle two\r\n'  (el CR NO se pierde)
+
+# 4. exclude-from: src\search.zig ya no aparece; 28 lineas, las mismas que rg
+& $z --exclude-from=scripts/fixtures/exclude.txt -F Searcher src
+rg -n -F --ignore-file=scripts/fixtures/exclude.txt Searcher src
+
+# 5. heading: la ruta va en su propia linea, y solo cuando toca
+& $z --heading -F "pub const Searcher" src\search.zig src\scan.zig
+# src\search.zig
+# 114:pub const Searcher = struct {
+& $z --heading -F "pub const Searcher" src\search.zig   # un solo fichero: sin cabecera
+
+# 7. help: los backslashes salen simples y \b ya no se declara ausente
+& $z --help | Select-String "word boundaries"
+# word boundaries \b and \B are supported (zero-width assertions).
+```
+
+**Trampa que costó 20 minutos:** el test de `--crlf` pasaba por la ruta del
+**prefiltro**, que entrega a `firstMatchingLine` un `to` = índice del `\n`. Con
+la guarda `i + 1 < to` el par CRLF justo en el borde no se veía nunca, así que
+el bug solo aparecía con patrones que activan el prefiltro. Ahora la guarda es
+`i + 1 < data.len`.
+
+**Segundo bug, este en el binding de Python y no en `zigrep`:** 8 tests de
+paridad morían con `ValueError: the environment variable is longer than 32767
+characters`. pytest deriva el id del test del propio parámetro, y los parámetros
+son buffers de 200 KB; `PYTEST_CURRENT_TEST` choca con el límite de
+`SetEnvironmentVariable`. El test era correcto: el **id** no era portable.
+Con `ids=IDS` explícitos: **42/42 en Windows**.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**
@@ -522,8 +583,8 @@ se entremezclarían y una cabecera apuntaría al clúster equivocado.
 Para ver el estado del build y los tests:
 
 ```sh
-zig build test --summary all     # 56/56 tests passed (Linux y native Windows)
-zig build oracle                 # 26/26 differential oracle tests passed (Linux), 25/25 (native Windows)
+zig build test --summary all     # 97/98 tests passed, 1 skip (Linux-only io_uring)
+zig build oracle                 # 29/29 differential oracle tests passed (native Windows)
 ```
 
 ---
@@ -591,7 +652,7 @@ $z = (Get-Command zig).Source
 Salida:
 
 ```text
-Build Summary: 7/7 steps succeeded
+Build Summary: 11/11 steps succeeded
 ```
 
 ```powershell
@@ -601,15 +662,20 @@ Build Summary: 7/7 steps succeeded
 Salida:
 
 ```text
-Build Summary: 3/3 steps succeeded; 54/54 tests passed
+Build Summary: 3/3 steps succeeded; 97/98 tests passed (1 skipped)
 test success
++- run test 97 pass, 1 skip (98 total) 478ms MaxRSS:18M
 ```
 
-> Ese 54/54 es la medición de la rama del port (2026-11-08), antes de
-> unificarla con el micro-tree fast path. En el árbol unificado la suite son
-> **56/56 también en Windows**, medido por el job nativo del CI
-> (run `42609558486`); el oráculo sigue siendo 25/25 en Windows porque el caso
-> de stdin POSIX se omite allí.
+> El único skip es el test de `io_uring`, que es Linux-only: en Windows el
+> motor `--uring` se acepta y cae a los workers síncronos. Los **mismos 97**
+> pasan también compilando para el target baseline `x86_64-windows`, que es el
+> que va en la release:
+>
+> ```powershell
+> & $z build test -Dtarget=x86_64-windows --summary all
+> # Build Summary: 3/3 steps succeeded; 97/98 tests passed (1 skipped)
+> ```
 
 ```powershell
 # Requiere GNU grep y ripgrep en el PATH (en Windows: Git for Windows + ripgrep)
@@ -619,14 +685,19 @@ test success
 Salida:
 
 ```text
-Results: 25 PASSED, 0 FAILED (total 25)
-Build Summary: 10/10 steps succeeded
+Results: 29 PASSED, 0 FAILED (total 29)
+Build Summary: 14/14 steps succeeded
 oracle success
 ```
 
 El caso `stdin pipeline (pipe -> zigrep)` del oráculo se salta en Windows: usa
 `sh -c` y `printf`, que no están garantizados en el PATH nativo; en Linux son
-26 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+30 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+
+Tres de los 29 casos nuevos no se pueden comparar contra GNU grep 3.0 porque
+grep no tiene esas opciones (`--count-matches`, `--replace`, `--column`): se
+comparan contra ripgrep y el campo `grep_args` queda en `null` de forma
+explícita, en vez de saltarse el caso en silencio.
 
 El smoke test usó un directorio con espacios y Unicode y un `.gitignore` que
 excluía `skip.txt`:
@@ -930,9 +1001,13 @@ disco, no por el SIMD.
 
 ### Qué release usar
 
-* **`v0.2.2`**: la actual. Binario baseline, instalador que no aborta y
-  `--version` en `stdout`. Es la que instala el `irm ... | iex` por defecto
-  (usa `releases/latest`).
+* **`v0.3.0`**: la actual. Añade `--count-matches`, `--exclude-from`,
+  `--replace`, `--column` y `--heading` funcionando de verdad (ver §4b–§4g),
+  arregla siete bugs de la 0.2.2 y endurece el binding de Python en Windows.
+  Binario baseline, instalador que no aborta y `--version` en `stdout`. Es la
+  que instala el `irm ... | iex` por defecto (usa `releases/latest`).
+* **`v0.2.2`**: publicada y **supersedida** por la 0.3.0. Sigue siendo válida
+  para lo que hacía; no tiene las flags nuevas.
 * **`v0.2.1`**: publicada y **supersedida** por la 0.2.2. Su `.exe` ya es
   baseline y arranca en todas partes, pero su `install.ps1` (el que va dentro
   del `.zip`) abortaba en el "Version check".
@@ -943,7 +1018,7 @@ Si tienes una versión anterior instalada y el binario te da error al
 arrancar, reinstala:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 | iex
 ```
 
 ### Segundo arreglo del instalador: el fallback compilaba la versión equivocada

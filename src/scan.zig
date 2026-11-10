@@ -15,6 +15,7 @@ const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
 const Match = @import("search.zig").Match;
+const search = @import("search.zig");
 const io_engine = @import("io_engine.zig");
 
 pub const Mode = enum {
@@ -48,7 +49,9 @@ pub const ScanConfig = struct {
     column: bool = false,
     /// `--color=always`: highlight the match spans.
     color: bool = false,
-    /// `-r REPLACEMENT` (rg): emit the matches with the replacement text.
+    /// `--replace REPLACEMENT` (rg): substitute every match with the
+    /// replacement text. Without `-o` the whole line is printed with the
+    /// matches substituted; with `-o` the record is just the replacement.
     replace: ?[]const u8 = null,
     /// `--passthru` with `-r`: also print the lines that do not match.
     passthru: bool = false,
@@ -193,19 +196,21 @@ fn emitLine(
 
     if (with_path) {
         out.appendSliceAssumeCapacity(path);
-        out.appendAssumeCapacity(if (null_filename or out_sep == 0) 0 else sep);
+        // The NUL after the path belongs to `-Z` (--null). `--null-data` (-z)
+        // only changes the RECORD separator: the field separators stay ':'.
+        out.appendAssumeCapacity(if (null_filename) 0 else sep);
     }
     if (show_line_no) {
         var buf: [24]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
         out.appendSliceAssumeCapacity(s);
-        out.appendAssumeCapacity(if (out_sep == 0) 0 else sep);
+        out.appendAssumeCapacity(sep);
     }
     if (byte_offset) |bo| {
         var buf: [24]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "{d}", .{bo}) catch unreachable;
         out.appendSliceAssumeCapacity(s);
-        out.appendAssumeCapacity(if (out_sep == 0) 0 else sep);
+        out.appendAssumeCapacity(sep);
     }
     out.appendSliceAssumeCapacity(text);
     out.appendAssumeCapacity(out_sep);
@@ -292,6 +297,42 @@ fn emitMatches(
         }
         from = if (m.end == m.start) m.start + 1 else m.end;
     }
+}
+
+/// `--replace` WITHOUT `-o`: the WHOLE line, with every match substituted by
+/// the replacement text. rg keeps the rest of the line (`needle here` becomes
+/// `X here`), and `--passthru --replace` only makes sense with that behaviour:
+/// the non-matching lines are printed whole, so the matching ones have to be
+/// printed whole too.
+///
+/// With `-o` the record is just the replacement (see `emitMatches`).
+fn emitReplacedLine(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    searcher: *const Searcher,
+    cfg: ScanConfig,
+    path: []const u8,
+    show_path: bool,
+    line_no: usize,
+    line_start: usize,
+    line: []const u8,
+) Allocator.Error!void {
+    const rep = cfg.replace.?;
+    const off: ?usize = if (cfg.byte_offset) line_start else null;
+    try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
+    var from: usize = 0;
+    while (from <= line.len) {
+        const m = searcher.matchSpan(line, from) orelse break;
+        if (m.end == m.start) {
+            from = m.start + 1;
+            continue;
+        }
+        try out.appendSlice(gpa, line[from..m.start]);
+        try out.appendSlice(gpa, rep);
+        from = m.end;
+    }
+    if (from <= line.len) try out.appendSlice(gpa, line[from..]);
+    try out.append(gpa, out_sep);
 }
 
 /// `-U`: rg prints each LINE the match spans, separately.
@@ -460,6 +501,10 @@ fn scanBufferLines(
         else
             raw_end;
         const line_slice = data[line_start..line_end];
+        // What gets PRINTED. With `--crlf` the CR is not part of the line for
+        // matching purposes, but it is part of the bytes of the file, so it
+        // goes back out (that is what rg and grep do).
+        const print_slice = data[line_start..raw_end];
         const has_match = blk: {
             if (config.multiline) {
                 multi_span = searcher.findSpan(data, 0);
@@ -503,7 +548,7 @@ fn scanBufferLines(
                     var vfrom: usize = 0;
                     while (vfrom <= line_slice.len) {
                         const m = searcher.matchSpan(line_slice, vfrom) orelse break;
-                        try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, m.start);
+                        try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, m.start);
                         if (m.end == m.start) {
                             vfrom = m.start + 1;
                         } else {
@@ -515,10 +560,16 @@ fn scanBufferLines(
                     // `grep -o -v` prints nothing: -o describes the matches of
                     // a selected line, and with -v there are none.
                     if (!config.invert) {
-                        try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_start, line_slice);
+                        if (config.replace != null and !config.only_matching) {
+                            // rg: --replace substitutes the match INSIDE the
+                            // line and the rest of the line survives.
+                            try emitReplacedLine(out, gpa, searcher, config, path, show_path, line_no, line_start, line_slice);
+                        } else {
+                            try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_start, line_slice);
+                        }
                     }
                 } else if (spans) {
-                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, null);
+                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null);
                 } else {
                     if (ring.len > 0 and ring_len > 0) {
                         const first = if (line_no > config.before_context) line_no - config.before_context else 1;
@@ -534,7 +585,7 @@ fn scanBufferLines(
                         }
                     }
                     if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
+                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
                     last_printed = line_no;
                     printed_any = true;
                 }
@@ -548,13 +599,13 @@ fn scanBufferLines(
             // --passthru prints the non-matching lines untouched; with -r the
             // matches of the matching lines were already substituted above.
             if (!spans) {
-                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
+                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
             } else {
-                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, null);
+                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null);
             }
         } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
             if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
+            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
             last_printed = line_no;
             printed_any = true;
             after_left -= 1;
@@ -563,7 +614,7 @@ fn scanBufferLines(
         }
 
         if (ring.len > 0) {
-            ring[ring_pos] = .{ .start = line_start, .end = line_end, .no = line_no };
+            ring[ring_pos] = .{ .start = line_start, .end = raw_end, .no = line_no };
             ring_pos = (ring_pos + 1) % ring.len;
             if (ring_len < ring.len) ring_len += 1;
         }
@@ -633,25 +684,47 @@ pub fn scanBuffer(
             line_start = nl + 1;
             line_no += 1;
         }
-        const line_end = visibleLineEnd(data, m, config.crlf);
+        // The RAW end is the byte of the '\n' itself; the VISIBLE end is one
+        // byte earlier when `--crlf` is on (the CR is not part of the line).
+        // The cursor must advance with the RAW end: advancing with the visible
+        // one lands ON the '\n', so every CRLF line after the first was
+        // counted twice (lines 1, 3, 5... instead of 1, 2, 3...).
+        const raw_end = std.mem.findScalarPos(u8, data, m, recordSep(config)) orelse data.len;
+        const line_end = if (config.crlf and raw_end > m and data[raw_end - 1] == '\r')
+            raw_end - 1
+        else
+            raw_end;
 
         res.matched = true;
         res.lines += 1;
+        if (mode == .count_matches) {
+            // The fast path reports one line per match, but `--count-matches`
+            // counts MATCHES: every match of the line has to be counted.
+            const line_slice = data[line_start..line_end];
+            var from: usize = 0;
+            while (from <= line_slice.len) {
+                const mm = searcher.matchSpan(line_slice, from) orelse break;
+                if (mm.end > mm.start) res.matches += 1;
+                from = if (mm.end == mm.start) mm.start + 1 else mm.end;
+            }
+        }
         if (mode == .lines) {
             if (heading_mode and !config.null_filename and !heading_out) {
                 try emitHeading(out, gpa, path);
                 heading_out = true;
             }
-            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..line_end], config.null_filename, if (config.byte_offset) line_start else null);
+            // The printed text keeps the CR: `--crlf` changes how a line is
+            // MATCHED (the CR is not part of it), not which bytes come out.
+            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..raw_end], config.null_filename, if (config.byte_offset) line_start else null);
         }
         if (config.max_count) |mc| {
             if (res.lines >= mc) break;
         }
 
-        if (line_end >= data.len) break;
+        if (raw_end >= data.len) break;
         // Skip the remainder of this line: grep reports a line once.
-        pos = line_end + 1;
-        line_start = line_end + 1;
+        pos = raw_end + 1;
+        line_start = raw_end + 1;
         line_no += 1;
     }
     return res;
@@ -821,6 +894,9 @@ fn processBuffer(
     };
     res.matched = match.matched;
     res.lines = match.lines;
+    // `--count-matches` counts MATCHES, not lines: without this the count
+    // was always 0 on this path (the UTF-16 branch above already had it).
+    res.matches = match.matches;
     res.bytes = data.len;
 }
 
@@ -1505,5 +1581,100 @@ test "scanBuffer: -Z prints a NUL after the file name" {
         const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .files, .{ .null_filename = true }, &out);
         _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .files, .{ .matched = br.matched, .lines = br.lines }, true);
         try std.testing.expectEqualStrings("a.txt\x00", out.items);
+    }
+}
+
+test "scanBuffer: --count-matches counts MATCHES, not lines" {
+    // The fast path (no context, no spans) reports one line per match, so
+    // the count of matches has to be counted inside the line: it used to
+    // print 0 for every file.
+    const data = "aa aa\naa\n";
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = Searcher.init("aa", .auto);
+        const br = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", true, .count_matches, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 3), br.matches);
+        try std.testing.expectEqual(@as(usize, 2), br.lines);
+        _ = emitOncePerFile(&out, std.testing.allocator, "f.txt", true, .count_matches, .{ .matched = br.matched, .lines = br.lines, .matches = br.matches }, false);
+        try std.testing.expectEqualStrings("f.txt:3\n", out.items);
+    }
+    // With `-o` the path is the line-by-line one; the count must agree.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = Searcher.init("aa", .auto);
+        const br = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", true, .count_matches, .{ .only_matching = true }, &out);
+        try std.testing.expectEqual(@as(usize, 3), br.matches);
+    }
+}
+
+test "scanBuffer: -z makes NUL the RECORD separator, not the field separator" {
+    // GNU grep -z prints `1:record<NUL>`, the ':' stays a colon.
+    out_sep = 0;
+    defer out_sep = '\n';
+    const got = try runWithConfig("needle\x00other needle\x00", "needle", .lines, .{ .null_data = true }, "f.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings("1:needle\x002:other needle\x00", got);
+}
+
+test "scanBuffer: --crlf counts CRLF lines once and keeps the CR in the output" {
+    // The CR is not part of the line for MATCHING, but it is part of the
+    // bytes of the file, so it goes back out (rg and grep do the same).
+    // The line numbers used to be 1, 3, 5... because every CRLF was counted
+    // twice.
+    const data = "needle one\r\nneedle two\r\nplain\r\n";
+    {
+        const got = try runWithConfig(data, "needle", .lines, .{ .crlf = true }, "f.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("1:needle one\r\n2:needle two\r\n", got);
+    }
+    // Without --crlf the CR is part of the line, so `$` does not match
+    // before it. With --crlf it does: the CR is the terminator, not content.
+    // The `crlf` flag of the searcher is what makes `$` accept before the CR
+    // (the CLI wires it in `search.build`).
+    // `search.build` hands the compiled `Program` to the caller that passed the
+    // allocator and no owner frees it (the CLI keeps it alive for the whole
+    // run). An arena per case keeps `std.testing.allocator` leak-free without
+    // pretending the engine has a deinit it does not have.
+    {
+        var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_inst.deinit();
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = try search.build(arena_inst.allocator(), &.{"needle one$"}, .{ .crlf = false });
+        _ = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", false, .lines, .{}, &out);
+        try std.testing.expectEqualStrings("", out.items);
+    }
+    {
+        var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_inst.deinit();
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(std.testing.allocator);
+        const searcher = try search.build(arena_inst.allocator(), &.{"needle one$"}, .{ .crlf = true });
+        _ = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", false, .lines, .{ .crlf = true }, &out);
+        try std.testing.expectEqualStrings("1:needle one\r\n", out.items);
+    }
+}
+
+test "scanBuffer: --replace substitutes inside the line, the rest of it survives" {
+    // rg: `needle here` becomes `X here`. It used to print only `X`, which
+    // also made `--passthru --replace` incoherent.
+    {
+        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X" }, "f.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("1:X here\n2:second X\n", got);
+    }
+    // With `-o` the record is just the replacement.
+    {
+        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X", .only_matching = true }, "f.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("1:X\n2:X\n", got);
+    }
+    // Every match of the line is substituted, not only the first.
+    {
+        const got = try runWithConfig("aa aa\n", "aa", .lines, .{ .replace = "X" }, "f.txt", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings("1:X X\n", got);
     }
 }

@@ -153,9 +153,9 @@ irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
 * **Native `.exe`, no WSL and no C runtime**: a real Windows build that uses the Win32 API directly.
 * **SHA-256 verified**: the installer downloads the release `SHA256SUMS.txt` and refuses to install if the checksum does not match.
 * **No admin rights required**: installs to `%LOCALAPPDATA%\Programs\ZiGrep` and appends it to the **user** `PATH` (the current session is updated too, so `zigrep` works immediately).
-* **Pinned version**: `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.2.2/install.ps1 | iex` installs the current release; `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex` installs the latest one (it starts working once this PR is merged). Use `install.ps1 -Version 0.2.2` for a specific one.
+* **Pinned version**: `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.0/install.ps1 | iex` installs the current release; `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex` installs the latest one (it starts working once this PR is merged). Use `install.ps1 -Version 0.3.0` for a specific one.
 * **Manual download**: the prebuilt archive is also attached to every GitHub Release as `zigrep-windows-x86_64.zip` (it contains `zigrep.exe`, `zgrep.exe` and `install.ps1`).
-* **Runs on every x86_64 Windows machine**: the Windows release is built for the baseline `x86_64-windows` target (SSE2), not for the build machine's CPU. `v0.2.0` was built for `native` on an AVX-512 runner and could not start on older CPUs; `v0.2.1` is the first release with the baseline binary and `v0.2.2` is the first one whose installer completes cleanly (`--version` on stdout, no abort on the child's stderr). The current release, **`v0.2.2`**, was verified end to end against the published release: the assets match the published `SHA256SUMS.txt` (3/3), and the one-line installer (`irm ... | iex`) installs, updates the user `PATH`, answers `zgrep 0.2.2` on stdout and reaches "ZiGrep is ready." with exit code 0.
+* **Runs on every x86_64 Windows machine**: the Windows release is built for the baseline `x86_64-windows` target (SSE2), not for the build machine's CPU. `v0.2.0` was built for `native` on an AVX-512 runner and could not start on older CPUs; `v0.2.1` is the first release with the baseline binary and `v0.2.2` is the first one whose installer completes cleanly (`--version` on stdout, no abort on the child's stderr). The current release is **`v0.3.0`**: its `.exe` disassembles to **0 AVX-512 instructions out of 158,681** (`zmm` registers: 0, mask registers: 0), it runs on this AVX2-only host (Xeon E5-2678 v3), and it passes the 97/98 unit tests and the 29-case differential oracle both natively and for the baseline target. The end-to-end check against the published assets (checksums 3/3 and the real `irm ... | iex` run) is recorded in [`GUIA.md`](GUIA.md#salida-real-del-instalador-publicado-v030).
 
 > Restart your terminal after the installer finishes so the new `PATH` entry is picked up by the shell.
 
@@ -185,10 +185,10 @@ cd ZiGrep
 # Build optimized binary
 zig build -Doptimize=ReleaseFast
 
-# Run all unit tests (56/56 on Linux and on native Windows, Zig 0.16.0)
+# Run all unit tests (97/98 pass, 1 skipped, on native Windows with Zig 0.16.0)
 zig build test --summary all
 
-# Run pure Zig differential oracle against GNU grep & ripgrep (26/26 on Linux; 25/25 on native Windows)
+# Run pure Zig differential oracle against GNU grep & ripgrep (29/29 on native Windows)
 zig build oracle
 
 # Run the Adversarial Entropic Fuzzer Swarm (100k+ permutations across CPU cores)
@@ -249,13 +249,20 @@ usage: zgrep [OPTIONS] PATTERN [PATH...]
 options:
   -F                fixed-string pattern(s); without it PATTERN is a regex
   -E                extended regex (the default; kept for grep compat)
+  -G, --basic-regexp
+                    basic regex (grep's default). zgrep speaks ERE, so
+                    the pattern is TRANSLATED, not ignored
   -e PATTERN        search for PATTERN; repeat for several (any may match)
+  -f, --file=FILE   read patterns from FILE (one per line, repeatable)
+  -x, --line-regexp match whole lines only
   -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
   -v, --invert-match
                     select non-matching lines
   -w, --word-regexp match whole words only
   -r                recurse into directories (always on; kept for grep compat)
   -n                print line numbers (always on; kept for grep compat)
+      --no-line-number
+                    do not print line numbers
   -c, --count       print only a count of matching lines per file
   -l, --files-with-matches
                     print only the names of files with matches
@@ -265,10 +272,60 @@ options:
                     quiet: no output, exit status only
   -m, --max-count=NUM
                     stop after NUM matching lines per file
+  -A, --after-context=NUM
+                    print NUM lines of context after a match
+  -B, --before-context=NUM
+                    print NUM lines of context before a match
+  -C, --context=NUM print NUM lines of context around a match
   -H                print the file name with each result
   -h                do not print the file name with each result
   -a                treat binary files as text
+  -Z, -0, --null    print a NUL after each file name
+  -o, --only-matching
+                    print only the matched part of each line
+      --count-matches
+                    like --count, but counting matches instead of lines
+      --column     print the 1-based byte column of the first match (rg)
+      --color[=WHEN]
+                    highlight matches (always|never|auto; auto = never)
+      --replace=TEXT
+                    with -o semantics, print TEXT instead of each match (rg)
+      --passthru   also print the lines that do not match (with -r)
+      --exec, --execute, -X CMD
+                    run CMD for every file with a match; {} is the path.
+                    Without {} the path is appended (find -exec style)
+  -s, --no-messages suppress error messages about unreadable files
   -j, --threads N   worker threads (default: number of CPUs)
+  -S, --smart-case  case-insensitive unless PATTERN has an uppercase
+  -t, --type NAME   restrict to a file type (py, zig, md, ...)
+      --type-not NAME
+                    skip a file type instead
+      --type-list    list every known type and exit
+      --max-depth=N  do not descend below N levels (rg; long only)
+      --max-filesize=N[KMGT]
+                    skip files larger than N (rg)
+  -b, --byte-offset print the byte offset of each match in the file
+      --crlf        treat CRLF as the line terminator, not just \n
+  -z, --null-data  NUL separates records instead of \n (grep -z)
+  -U, --multiline   a match may span newlines (rg)
+      --multiline-dotall
+                    with -U, `.` also crosses a newline
+      --stop-on-nonmatch
+                    stop once a non-matching line follows a matching one
+      --pre=CMD    search the stdout of CMD instead of the file (rg);
+                    {} in CMD is the file path
+      --encoding=ENC
+                    auto | none | utf-8 | utf-16 | utf-16le | utf-16be |
+                    latin1  (default auto: BOM sniff only)
+      --pre-glob=GLOB
+                    only apply --pre to files matching GLOB
+      --heading     print the file path above each file's matches (rg)
+      --no-heading  print it as a per-line prefix instead (default)
+  -p, --pretty       alias for --color=always --heading --line-number
+      --vimgrep     one line per match, with line and column (rg)
+      --binary-files=TYPE
+                    text | without-match (zgrep never prints binary
+                    content, so 'binary' is rejected, not faked)
   -k, --kamikaze, --dataflow
                     streaming dataflow with concurrent kamikaze swarm (default)
       --sort, --deterministic
@@ -284,6 +341,8 @@ options:
                     only search file extensions (e.g. zig,rs,py)
       --exclude=GLOB
                     skip files matching GLOB (e.g. *.min.js)
+      --exclude-from=FILE
+                    read more --exclude globs from FILE, one per line
       --include=GLOB
                     only search files matching GLOB
       --no-ignore   do not read .dataignore / .gitignore or apply defaults
@@ -293,11 +352,26 @@ options:
       --force-swarm
                     always use the concurrent kamikaze swarm (never the
                     zero-thread micro-tree fast path)
-      --algo MODE   auto | bmh | memchr (default: auto)
+      --algo MODE   auto | bmh | memchr   (default: auto)
       --stats       print timing and throughput to stderr
       --uring       use Linux io_uring asynchronous batched I/O engine
-  -V, --version     print version
-      --help        print help
+                     (exact alias of --io-engine=uring)
+      --io-engine=  sync | uring | auto   (default: auto). auto makes the
+                     first read of each probed file a preadv2(RWF_NOWAIT)
+                     probe: if the page is in RAM its bytes are scanned
+                     directly; if the tree is cold it promotes to
+                     io_uring. sync is the old behaviour, byte for byte
+      --help        print this help
+  -V, --version     print the version
+
+regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+word boundaries \b and \B are supported (zero-width assertions).
+not supported (reported as an error): back-references, lookaround.
+a plain string with no metacharacters takes the fast literal path.
+patterns containing a newline are rejected.
+when no PATH is given or when PATH is '-', standard input is read.
+
+exit status: 0 match found, 1 no match, 2 error
 ```
 
 ---
@@ -305,8 +379,8 @@ options:
 ## 🧪 Ground Truth & CI Verification
 
 Every commit is tested via GitHub Actions CI in pure Zig:
-* **Unit Tests**: 56/56 tests on Linux and on native Windows (Zig 0.16.0; measured in CI run `42609558486` on the unified tree). They cover memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O. The native Linux `io_uring` engine is Linux-only; on Windows `--uring` is accepted and falls back to the regular synchronous workers.
-* **Differential Oracle (`zig build oracle`)**: 26 automated multi-way verification checks on Linux against GNU grep (`-rIF` / `-rIE`) and ripgrep (including navigation ceiling, trampoline modes, io_uring asynchronous batched engine `--uring`, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, and piped standard input). Native Windows runs 25 of them: the POSIX-only piped-stdin case is skipped there.
+* **Unit Tests**: **97/98 pass, 1 skipped** on native Windows with Zig 0.16.0; the same suite passes when cross-compiled for the baseline `x86_64-windows` target, which is the one the release ships. The single skip is the Linux-only `io_uring` test. They cover memory allocators, VFS streams, AST parsing, regex compilation (with both ERE `|` and GNU BRE `\|` alternation), Latin-1 Unicode folding, UTF-16 BOM decoding, Befunge 2D vector navigation plans, inverted matching (`-v`), file omission listings (`-L`), match caps (`--max-count`), multi-pattern globs (`--include`), `--crlf` line counting, NUL-separated records (`--null-data`), SIMD shifts, and native Linux `io_uring` batched asynchronous I/O.
+* **Differential Oracle (`zig build oracle`)**: **29 checks pass with 0 failures** on native Windows, and the same 29 pass for the baseline target. Each case is compared against GNU grep where grep 3.0 can express it and against ripgrep otherwise (three cases — `--count-matches`, `--replace`, `--column` — exist only in ripgrep and are marked `grep_args = null` instead of being silently skipped). Coverage includes navigation ceiling, trampoline modes, `io_uring` asynchronous batched engine `--uring`, invert match `-v`, non-matching file listings `-L`, match caps `-m NUM`, `--exclude-from`, and piped standard input (POSIX-only; the runner skips that one case on Windows, so Linux counts one more).
 * **Native Windows job**: builds ReleaseFast, runs the same unit tests and differential oracle, then smoke-tests Unicode/space-containing paths, the zero-thread micro-tree path, and `.gitignore` filtering under `--force-swarm`.
 * **Adversarial Entropic Fuzzer Swarm (`zig build fuzz`)**: A parallel multi-core stress testing swarm featuring 4 specialized adversaries:
   1. **The Grammar Shatterer**: Mutates regex grammars, unbalanced groups, quantifier overflows, nested alternations, control bytes, and catastrophic backtracking patterns.
@@ -326,8 +400,18 @@ Every commit is tested via GitHub Actions CI in pure Zig:
 * **Windows-specific adversarial probe (`scripts/adversarial_windows.py`)**: a targeted probe builds a hostile tree (Unicode + spaces in directory and file names, deep nesting, > 260-character paths, CRLF files, UTF-16 BOM files, NUL-containing binaries, `.gitignore`, symlinks, empty directories) and compares ZiGrep against GNU grep case by case across the `ScanConfig` surface (`-v`, `-m`, `-L`, `-c`, `-q`) and the Windows path surfaces.
 * **Bug found by the Windows fuzzing and fixed in this branch**: an absurd worker count (`-j 18446744073709551615`, `--threads=...`, or the `ZIGREP_THREADS` environment variable) reached the thread-spawn loop and turned it into an endless create-and-exit cycle that pinned the machine at 100% CPU. The CLI now rejects any count above **1024** with exit code 2 and a clear message (`thread count out of range (max 1024)`), and `kamikaze.zig` clamps the pool defensively as a second line of defence. Two regression tests cover the boundary.
 * **Fifth bug found while verifying the installer end to end (in `install.ps1`, not in `zigrep`)**: the installer **aborted on a successful install**. Its last step runs `zigrep.exe --version`, and `zigrep` printed the version on **stderr**. With `$ErrorActionPreference = "Stop"` (which the installer sets to fail closed on a checksum mismatch) a native command writing to stderr raises a terminating `NativeCommandError` in Windows PowerShell, so the installer died right after installing, before printing "ZiGrep is ready.". The installer now runs native commands through a helper that cannot be aborted by their stderr, and `zigrep --version` / `--help` now print on **stdout** (like `grep` and `ripgrep`), which is the conventional place for an answer rather than a diagnostic.
-* **Third bug found while verifying the release (in the release workflow, not in `zigrep`)**: the published Windows `.exe` did not start on CPUs without AVX-512. The release workflow built with the default target, which means `native` — "whatever CPU this runner happens to have". The `windows-latest` runner reports AVX-512, so the published binary contained **3,499 EVEX (AVX-512) instruction prefixes** and died at load time with `STATUS_ILLEGAL_INSTRUCTION` (`0xC000001D`) on every x86_64 CPU without AVX-512 (Haswell, Broadwell, Zen 1, ...). The release workflow now builds for the explicit baseline target `x86_64-windows` (SSE2), which runs everywhere. Measured cost on this host (Xeon E5-2678 v3, 2,639 files / 522 MB, 10 timed runs): **143.4 ms baseline vs 141.2 ms native** — 1.6%, inside the noise, because the workload is I/O bound. `v0.2.1` is the first release with the corrected binary; `v0.2.0` is superseded.
+* **Third bug found while verifying the release (in the release workflow, not in `zigrep`)**: the published Windows `.exe` did not start on CPUs without AVX-512. The release workflow built with the default target, which means `native` — "whatever CPU this runner happens to have". The `windows-latest` runner reports AVX-512, so the published binary contained **3,499 EVEX (AVX-512) instruction prefixes** and died at load time with `STATUS_ILLEGAL_INSTRUCTION` (`0xC000001D`) on every x86_64 CPU without AVX-512 (Haswell, Broadwell, Zen 1, ...). The release workflow now builds for the explicit baseline target `x86_64-windows` (SSE2), which runs everywhere. Measured cost on this host (Xeon E5-2678 v3, 2,639 files / 522 MB, 10 timed runs): **143.4 ms baseline vs 141.2 ms native** — 1.6%, inside the noise, because the workload is I/O bound. `v0.2.1` is the first release with the corrected binary; `v0.2.0` is superseded. *(Measurement note, 0.3.0: counting raw `0x62` bytes is **not** a valid EVEX check — it also counts ordinary data bytes. The `v0.3.0` baseline binary contains 530 such bytes but **zero** AVX-512 instructions once disassembled: 0 `zmm` operands and 0 mask registers in 158,681 instructions. Use `objdump -d` and look for `zmm`/`%k1`, or just run the binary on an AVX2-only CPU.)*
 * **Second bug found by the Windows fuzzing (in the fuzzer itself, not in `zigrep`)**: the swarm could deadlock on Windows. It captured the child's output with a 4 KB limit, but `std.process.run` stops reading once the limit is exceeded while the child keeps writing; with an 8 KB Windows pipe the child blocks forever and the swarm never returns. Measured: **4 hangs in 12 campaigns** before the fix, **0 in 18** after it. The swarm now drains the child's streams to EOF (`--cli-timeout-ms=N` remains as a watchdog) and the fuzzer gained a `--trace-cli` diagnostic that prints every spawned argv with paired `START`/`END` markers, so a child that never finishes is identifiable instead of guessed at.
+* **Seven bugs found by the 0.3.0 Windows re-audit (differential probe against ripgrep 15.0.0 and GNU grep 3.0), all fixed and pinned by tests**:
+  1. `--count-matches` always printed **0**: the counter was incremented on a code path the reporting layer never read.
+  2. `-z` / `--null-data` wrote **NUL as the field separator** between the line number and the text, so `1\0text` came out where `1:text` belongs (the NUL is the *record* separator, not the field one).
+  3. `--crlf` numbered the matches **1, 3, 5, ...** and stripped the CR from the output, because each CRLF was counted as two line terminators.
+  4. `--exclude-from` was **ignored on the streaming path** (it only filtered the sorted/`--sort` walk), so the same command excluded different files depending on `-j`.
+  5. `--heading` was a **no-op when the operand was a directory**: the rule was `valid_operands.len > 1`, which asks how many arguments were typed instead of whether a path is going to be printed, so `zigrep --heading foo src/` produced no headers at all.
+  6. `--replace` replaced the match and **discarded the rest of the line** instead of substituting in place.
+  7. `--help` stated that `\b` / `\B` were **not supported**, which was false since the word-boundary nodes landed; a wrong help string sends the reader looking for a bug in their own pattern.
+  The `--crlf` fix also corrected a latent guard in `firstMatchingLine` (`i + 1 < to` never sees the CRLF pair when the prefiltered path passes `to` = index of the `\n`), which is why the bug only showed up through the regex path.
+* **One bug found in the Python bindings (not in `zigrep`)**: on Windows, 8 parity tests errored with `ValueError: the environment variable is longer than 32767 characters`. pytest derives the test id from the parameter, and the parameters are 200 KB buffers; `PYTEST_CURRENT_TEST` then hits `SetEnvironmentVariable`'s limit. The tests are correct — the *id* was not portable. Explicit short ids (`ids=IDS`) fixed it: **42/42 pass** on native Windows.
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
 
