@@ -806,7 +806,7 @@ test success
 > El único skip es el test de `io_uring`, que es Linux-only: en Windows el
 > motor `--uring` se acepta y cae a los workers síncronos. Los **mismos 97**
 > pasan también compilando para el target baseline `x86_64-windows`, que es el
-> que va en la release:
+> que va en la release, y en Linux (CI, run `42908701408`):
 >
 > ```powershell
 > & $z build test -Dtarget=x86_64-windows --summary all
@@ -828,7 +828,9 @@ oracle success
 
 El caso `stdin pipeline (pipe -> zigrep)` del oráculo se salta en Windows: usa
 `sh -c` y `printf`, que no están garantizados en el PATH nativo; en Linux son
-30 checks. La lectura por stdin sí funciona en Windows (ver abajo).
+30 checks (medido en el CI, run `42908701408`: `Results: 30 PASSED, 0 FAILED`
+en `ubuntu-latest` y `Results: 29 PASSED, 0 FAILED` en Windows). La lectura
+por stdin sí funciona en Windows (ver abajo).
 
 Tres de los 29 casos nuevos no se pueden comparar contra GNU grep 3.0 porque
 grep no tiene esas opciones (`--count-matches`, `--replace`, `--column`): se
