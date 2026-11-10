@@ -13,3 +13,7 @@ evidence/rea/
 # python bytecode (the fuzzers are python scripts)
 __pycache__/
 *.pyc
+
+# binding de Python: residuos de pip install
+bindings/python/build/
+**/*.egg-info/
