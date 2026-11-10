@@ -34,8 +34,10 @@ copia el buffer entero antes de buscar:
 
 ## El coste del cruce
 
-200.000 llamadas con 16 bytes: Python 193 ns/iteración, Zig por ctypes 689
-ns/iteración → **el cruce cuesta ~500 ns por llamada**.
+200.000 llamadas con 16 bytes, mediana de 7 repeticiones: Python 211
+ns/iteración, Zig por ctypes ~1374 ns/iteración (rango 234-425 ms, varianza
+alta) → **el cruce cuesta ~1,2 us por llamada**, no ~0,5 us: la primera
+medición, corta, subestimaba.
 
 Eso fija la regla: el cruce paga en cuanto el trabajo por llamada supera
 ~1 µs. Para un buffer de 1 KB contar líneas son ~10 µs, así que ya paga; el
