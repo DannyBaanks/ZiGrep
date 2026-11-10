@@ -108,3 +108,19 @@ filtro nuevo que se anada solo a dos de los tres produce la peor
 discontinuidad posible: **el mismo comando devuelve listas distintas** segun
 el tamano del arbol. Corregido en los tres; `micro == swarm` es ahora un caso
 de la conformance.
+
+## Ultima rebANADA: -G, -z, --crlf, --heading
+
+- **`-G`**: era una mentira. La bandera se aceptaba y el patron se leia como
+  ERE, asi que significaba otra cosa. `src/bre.zig` traduce BRE->ERE; 15/15
+  casos contra `grep -G`.
+- **`-z` / `--null-data`**: semantica de grep (en rg `-z` es `--search-zip`).
+  Tres cambios coordinados + el camino rapido desactivado. Verificado contra
+  `grep -z`.
+- **`--crlf`**: `$` acepta antes del `\r`; medido contra `rg --crlf`.
+- **`--heading` / `--pretty` / `--vimgrep`**: `--vimgrep` sale byte a byte
+  igual que rg; `--heading` fuerza el camino ordenado porque en streaming los
+  grupos de ficheros se entremezclan.
+
+Verificacion completa: 90 tests, oraculo 26/26, 1419/1419 spans, 40/40 + 25/25
++ 15/15 + 5/5 de conformance, fuzzers a cero.

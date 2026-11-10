@@ -47,6 +47,9 @@ const usage =
     \\options:
     \\  -F                fixed-string pattern(s); without it PATTERN is a regex
     \\  -E                extended regex (the default; kept for grep compat)
+    \\  -G, --basic-regexp
+    \\                    basic regex (grep's default). zgrep speaks ERE, so
+    \\                    the pattern is TRANSLATED, not ignored
     \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
     \\  -f, --file=FILE   read patterns from FILE (one per line, repeatable)
     \\  -x, --line-regexp match whole lines only
@@ -100,6 +103,12 @@ const usage =
     \\      --max-filesize=N[KMGT]
     \\                    skip files larger than N (rg)
     \\  -b, --byte-offset print the byte offset of each match in the file
+    \\      --crlf        treat CRLF as the line terminator, not just \\n
+    \\  -z, --null-data  NUL separates records instead of \\n (grep -z)
+    \\      --heading     print the file path above each file's matches (rg)
+    \\      --no-heading  print it as a per-line prefix instead (default)
+    \\  -p, --pretty       alias for --color=always --heading --line-number
+    \\      --vimgrep     one line per match, with line and column (rg)
     \\      --binary-files=TYPE
     \\                    text | without-match (zgrep never prints binary
     \\                    content, so 'binary' is rejected, not faked)
@@ -228,6 +237,10 @@ pub const Options = struct {
     /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
     /// Turns off the normal output; the command's streams are inherited.
     exec_cmd: ?[]const u8 = null,
+    /// `--vimgrep`: one output line per match, with column (rg).
+    vimgrep: bool = false,
+    /// `-G`: the patterns are BRE, translated to ERE before compiling.
+    basic_regexp: bool = false,
     /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
     smart_case: bool = false,
     /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
@@ -248,6 +261,13 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// `-b`: byte offset of the match within the file (grep semantics).
     byte_offset: bool = false,
+    /// `--crlf`: CRLF is the line terminator (rg); `--no-crlf` turns it off.
+    crlf: bool = false,
+    /// `--heading`: print the path as a header line above each file's matches.
+    heading: bool = false,
+    /// `--null-data` / `-z`: NUL is the record separator (grep -z). NOT rg's
+    /// `-z`, which is --search-zip; grep semantics win.
+    null_data: bool = false,
     patterns: [16][]const u8 = undefined,
     patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
@@ -773,6 +793,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 };
             } else if (std.mem.eql(u8, body, "word-regexp")) {
                 opts.word = true;
+            } else if (std.mem.eql(u8, body, "basic-regexp")) {
+                opts.basic_regexp = true;
             } else if (std.mem.eql(u8, body, "line-regexp")) {
                 opts.line_regexp = true;
             } else if (std.mem.eql(u8, body, "no-messages")) {
@@ -888,6 +910,28 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.eql(u8, body, "null-data")) {
+                opts.null_data = true;
+            } else if (std.mem.eql(u8, body, "heading") or std.mem.eql(u8, body, "group-by-file")) {
+                opts.heading = true;
+            } else if (std.mem.eql(u8, body, "no-heading")) {
+                opts.heading = false;
+            } else if (std.mem.eql(u8, body, "pretty")) {
+                // rg's convenience alias: --color=always --heading --line-number.
+                opts.color = .always;
+                opts.heading = true;
+                opts.show_line_no = true;
+            } else if (std.mem.eql(u8, body, "vimgrep")) {
+                // rg: every match on its own line, with line and column.
+                opts.column = true;
+                opts.show_line_no = true;
+                opts.show_path = true;
+                opts.only_matching = true;
+                opts.vimgrep = true;
+            } else if (std.mem.eql(u8, body, "crlf")) {
+                opts.crlf = true;
+            } else if (std.mem.eql(u8, body, "no-crlf")) {
+                opts.crlf = false;
             } else if (std.mem.eql(u8, body, "byte-offset")) {
                 opts.byte_offset = true;
             } else if (std.mem.eql(u8, body, "only-matching")) {
@@ -1088,12 +1132,25 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 // for. `-n` keeps its real meaning (line numbers are on by
                 // default) and `-s` is `--no-messages`, which used to be a
                 // silent no-op.
-                'r', 'I', 'E', 'G' => {},
+                // Accepted no-ops: zgrep is always recursive, never follows
+                // symlinks, and already skips binary files the way `-I` asks
+                // for. `-E` is the default dialect. `-G` is NOT a no-op
+                // anymore: a silent ERE read of a BRE pattern changed its
+                // meaning, which is worse than not supporting it.
+                'r', 'I' => {},
+                'E' => {},
+                'G' => opts.basic_regexp = true,
                 'n' => opts.show_line_no = true,
                 's' => opts.no_messages = true,
                 'x' => opts.line_regexp = true,
                 'o' => opts.only_matching = true,
                 'S' => opts.smart_case = true,
+                'z' => opts.null_data = true,
+                'p' => {
+                    opts.color = .always;
+                    opts.heading = true;
+                    opts.show_line_no = true;
+                },
                 'b' => opts.byte_offset = true,
                 't' => {
                     const rest = chars[ci + 1 ..];
@@ -1407,6 +1464,11 @@ pub fn main(init: std.process.Init) !void {
     // exec therefore runs on the sorted path, after the scan. This changes
     // nothing about the bytes read, only the order the commands run in.
     if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+    // `--heading` groups by file, and the streaming path emits in completion
+    // order: two files' groups would interleave and a header would point at
+    // the wrong cluster. rg keeps the argument order, which is what --sort
+    // reproduces.
+    if (opts.heading and !opts.sort) opts.sort = true;
     // find -exec has no normal output. The quiet early-exits below are what
     // make `-q` fast, but they would stop the scan at the FIRST match and the
     // command would never reach the other files, so they stay off with --exec.
@@ -1436,6 +1498,9 @@ pub fn main(init: std.process.Init) !void {
         .icase = opts.ignore_case,
         .word = opts.word,
         .line = opts.line_regexp,
+        .crlf = opts.crlf,
+        .basic = opts.basic_regexp,
+        .null_data = opts.null_data,
     }) catch |e| switch (e) {
         error.BadRegex => {
             std.debug.print("zgrep: invalid regex: {s}\n", .{@import("regex.zig").last_error});
@@ -1483,6 +1548,10 @@ pub fn main(init: std.process.Init) !void {
             .replace = opts.replace,
             .passthru = opts.passthru,
             .byte_offset = opts.byte_offset,
+            .crlf = opts.crlf,
+            .heading = false, // stdin is a single stream: no header ever
+            .vimgrep = opts.vimgrep,
+            .null_data = opts.null_data,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -1558,6 +1627,14 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(2);
     }
 
+    // rg prints the header only with more than one input: with a single
+    // file it would waste a line. The roots are what every path can see
+    // without walking the tree, so the rule is identical everywhere.
+    const heading_on = opts.heading and valid_operands.items.len > 1;
+    // Output separator and heading are per-run, not per-line.
+    scan.out_sep = if (opts.null_data) 0 else '\n';
+    scan.heading_mode = heading_on;
+
     // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
     if (!opts.sort) {
         var k_stats: kamikaze.KamikazeStats = .{};
@@ -1603,6 +1680,10 @@ pub fn main(init: std.process.Init) !void {
             .replace = opts.replace,
             .passthru = opts.passthru,
             .byte_offset = opts.byte_offset,
+            .crlf = opts.crlf,
+            .heading = heading_on,
+            .vimgrep = opts.vimgrep,
+            .null_data = opts.null_data,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -1757,6 +1838,10 @@ pub fn main(init: std.process.Init) !void {
             .replace = opts.replace,
             .passthru = opts.passthru,
             .byte_offset = opts.byte_offset,
+            .crlf = opts.crlf,
+            .heading = heading_on,
+            .vimgrep = opts.vimgrep,
+            .null_data = opts.null_data,
         },
         .gpa = gpa,
         .window = window,
@@ -1781,6 +1866,7 @@ pub fn main(init: std.process.Init) !void {
             if (opts.mode != .quiet) {
                 if (slots[idx].buf.items.len > 0) {
                     if (context_mode and prev_emitted) out.writeAll("--\n");
+                    if (heading_on and prev_emitted) out.writeAll("\n");
                     out.writeAll(slots[idx].buf.items);
                     prev_emitted = true;
                 }
@@ -1819,6 +1905,7 @@ pub fn main(init: std.process.Init) !void {
                     if (w < exec_matched.len) exec_matched[w] = slots[w].matched;
                     if (slots[w].buf.items.len > 0) {
                         if (context_mode and prev_emitted) out.writeAll("--\n");
+                        if (heading_on and prev_emitted) out.writeAll("\n");
                         out.writeAll(slots[w].buf.items);
                         prev_emitted = true;
                     }
@@ -2073,11 +2160,12 @@ test "parseArgs: unknown option is a usage error with a reason" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var o: Options = .{};
-    const a = [_][:0]const u8{ "zgrep", "-z", "p", "d" };
+    // -z is --null-data now, so use an option that really does not exist.
+    const a = [_][:0]const u8{ "zgrep", "-Q", "p", "d" };
     try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
     const f = o.fail orelse return error.TestExpectedEqual;
     try std.testing.expectEqualStrings("unrecognized option", f.what);
-    try std.testing.expectEqualStrings("-z", f.arg);
+    try std.testing.expectEqualStrings("-Q", f.arg);
 }
 
 test "parseArgs: missing pattern is a usage error" {

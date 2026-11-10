@@ -53,6 +53,7 @@ const Parser = struct {
     src: []const u8,
     i: usize = 0,
     icase: bool,
+    dot_newline: bool = false,
     depth: u32 = 0,
 
     fn peek(self: *Parser) ?u8 {
@@ -279,7 +280,7 @@ const Parser = struct {
         if (negate) {
             for (0..256) |k| set[k] = !set[k];
         }
-        set['\n'] = false; // a line never contains '\n'
+        if (!self.dot_newline) set['\n'] = false; // a line never contains '\n'
         return self.newNode(.{ .set = set });
     }
 
@@ -302,7 +303,7 @@ const Parser = struct {
             '*', '+', '?' => return fail("nothing to repeat"),
             '.' => {
                 var s: Set = @splat(true);
-                s['\n'] = false;
+                if (!self.dot_newline) s['\n'] = false;
                 return self.newNode(.{ .set = s });
             },
             '[' => return self.parseClass(),
@@ -323,11 +324,14 @@ const Parser = struct {
 pub const ParseOptions = struct {
     icase: bool = false,
     word: bool = false,
+    /// `--null-data`: a record may contain \n, so `.` and the character
+    /// classes must not exclude it (grep -z semantics).
+    dot_newline: bool = false,
 };
 
 /// Parses `pattern` into an AST allocated in `arena`.
 pub fn parse(arena: Allocator, pattern: []const u8, o: ParseOptions) CompileError!*Node {
-    var p: Parser = .{ .a = arena, .src = pattern, .icase = o.icase };
+    var p: Parser = .{ .a = arena, .src = pattern, .icase = o.icase, .dot_newline = o.dot_newline };
     const n = try p.parseAlt();
     if (p.i != pattern.len) return fail("unmatched )");
     return n;
@@ -810,11 +814,20 @@ pub const Dfa = struct {
 
     /// Scans data[from..to) as whole lines. Returns the start offset of the
     /// first line that matches, or null.
-    pub fn firstMatchingLine(self: *Dfa, data: []const u8, from: usize, to: usize) ?usize {
-        return self.firstMatchingLineImpl(data, from, to) catch null;
+    ///
+    /// `crlf` makes `$` also accept just before the `\r` of a CRLF pair: with
+    /// the flag, the CR is part of the terminator, not an ordinary byte.
+    pub fn firstMatchingLine(self: *Dfa, data: []const u8, from: usize, to: usize, crlf: bool) ?usize {
+        return self.firstMatchingLineImpl(data, from, to, crlf) catch null;
     }
 
-    fn firstMatchingLineImpl(self: *Dfa, data: []const u8, from: usize, to: usize) Allocator.Error!?usize {
+    fn firstMatchingLineImpl(
+        self: *Dfa,
+        data: []const u8,
+        from: usize,
+        to: usize,
+        crlf: bool,
+    ) Allocator.Error!?usize {
         var s = self.init_bol;
         var ls = from;
         var i = from;
@@ -826,6 +839,9 @@ pub const Dfa = struct {
                 i += 1;
                 ls = i;
                 continue;
+            }
+            if (crlf and b == '\r' and i + 1 < to and data[i + 1] == '\n') {
+                if (try self.acceptEnd(s)) return ls;
             }
             var t = self.trans.items[@as(usize, s) * 256 + b];
             if (t == unknown) t = try self.step(s, b, true);
@@ -925,7 +941,7 @@ fn testMatch(pattern: []const u8, line: []const u8, o: ParseOptions) !bool {
     if (o.word) root = try wordWrap(arena.allocator(), root);
     const prog = try compile(std.heap.page_allocator, root);
     const d = try Dfa.create(std.heap.page_allocator, prog);
-    return d.firstMatchingLine(line, 0, line.len) != null;
+    return d.firstMatchingLine(line, 0, line.len, false) != null;
 }
 
 const plain: ParseOptions = .{};
@@ -988,8 +1004,8 @@ test "regex: multiline buffer returns the first matching line start" {
     const prog = try compile(std.heap.page_allocator, root);
     const d = try Dfa.create(std.heap.page_allocator, prog);
     const data = "aaa\nxbbc\nzzz\nbc";
-    try std.testing.expectEqual(@as(?usize, 4), d.firstMatchingLine(data, 0, data.len));
-    try std.testing.expectEqual(@as(?usize, 13), d.firstMatchingLine(data, 9, data.len));
+    try std.testing.expectEqual(@as(?usize, 4), d.firstMatchingLine(data, 0, data.len, false));
+    try std.testing.expectEqual(@as(?usize, 13), d.firstMatchingLine(data, 9, data.len, false));
 }
 
 test "regex: errors" {
@@ -1014,8 +1030,8 @@ test "regex: cache flush keeps results correct" {
     var buf: [20000]u8 = undefined;
     for (&buf) |*c| c.* = if (rnd.boolean()) 'a' else 'b';
     // no 'c' in the haystack -> must not match, even across flushes
-    try std.testing.expectEqual(@as(?usize, null), d.firstMatchingLine(&buf, 0, buf.len));
+    try std.testing.expectEqual(@as(?usize, null), d.firstMatchingLine(&buf, 0, buf.len, false));
     buf[19000] = 'c';
     buf[18988] = 'a';
-    try std.testing.expectEqual(@as(?usize, 0), d.firstMatchingLine(&buf, 0, buf.len));
+    try std.testing.expectEqual(@as(?usize, 0), d.firstMatchingLine(&buf, 0, buf.len, false));
 }

@@ -15,6 +15,7 @@
 //! passed by pointer into the hot loop.
 const std = @import("std");
 const regex = @import("regex.zig");
+const bre = @import("bre.zig");
 const Allocator = std.mem.Allocator;
 
 pub const Algo = enum { auto, bmh, memchr };
@@ -120,6 +121,10 @@ pub const Searcher = struct {
     icase: bool = false,
     /// Literal kinds only: a match must be delimited by non-word bytes (-w).
     word: bool = false,
+    /// `--crlf`: `$` also accepts before the CR of a CRLF pair.
+    crlf: bool = false,
+    /// `--null-data`: NUL separates records, so a record may contain `\n`.
+    null_data: bool = false,
     prog: ?*const regex.Program = null,
     /// Regex only: a required literal; lines are only handed to the DFA when
     /// the literal occurs in them (the common case for code searches).
@@ -277,13 +282,17 @@ pub const Searcher = struct {
                 const m = pf.find(hay, pos) orelse return null;
                 const ls = if (std.mem.findScalarLast(u8, hay[pos..m], '\n')) |k| pos + k + 1 else pos;
                 const le = std.mem.findScalarPos(u8, hay, m, '\n') orelse hay.len;
-                if (dfa.firstMatchingLine(hay, ls, le) != null) return ls;
+                if (dfa.firstMatchingLine(hay, ls, le, self.crlf) != null) return ls;
                 if (le >= hay.len) return null;
                 pos = le + 1;
             }
             return null;
         }
-        return dfa.firstMatchingLine(hay, start, hay.len);
+        if (self.null_data) {
+            const m = dfa.nextMatch(hay, start, hay.len) orelse return null;
+            return m.start;
+        }
+        return dfa.firstMatchingLine(hay, start, hay.len, self.crlf);
     }
 
     fn findBmh(self: *const Searcher, hay: []const u8, start: usize) ?usize {
@@ -329,6 +338,12 @@ pub const BuildOptions = struct {
     word: bool = false,
     /// The pattern must match a whole line (-x).
     line: bool = false,
+    /// `--crlf`: `$` also accepts before the CR of a CRLF pair.
+    crlf: bool = false,
+    /// `--null-data`: NUL separates records, so a record may contain `\n`.
+    null_data: bool = false,
+    /// `-G`: BRE patterns, translated to ERE before compiling.
+    basic: bool = false,
 };
 
 pub const BuildError = error{ BadRegex, OutOfMemory };
@@ -356,7 +371,8 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
         const pure: ?[]const u8 = if (o.fixed)
             patterns[0]
         else blk: {
-            const n = try regex.parse(arena, patterns[0], .{});
+            const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+            const n = try regex.parse(arena, src, .{});
             break :blk try regex.asPureLiteral(arena, n);
         };
         if (pure) |lit| {
@@ -374,10 +390,11 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
 
     const nodes = try arena.alloc(*regex.Node, patterns.len);
     for (patterns, 0..) |p, idx| {
+        const src = if (o.basic) bre.breToEre(arena, p) else p;
         var n = if (o.fixed)
-            try regex.literalNode(arena, p, o.icase)
+            try regex.literalNode(arena, src, o.icase)
         else
-            try regex.parse(arena, p, .{ .icase = o.icase });
+            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data });
         if (o.line) n = try regex.lineWrap(arena, n);
         if (o.word) n = try regex.wordWrap(arena, n);
         nodes[idx] = n;
@@ -389,6 +406,8 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     s.kind = .regex;
     s.prog = prog;
     s.icase = o.icase;
+    s.crlf = o.crlf;
+    s.null_data = o.null_data;
     if (patterns.len == 1) {
         if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
             if (lit.len >= 3) {

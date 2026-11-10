@@ -423,6 +423,34 @@ Verificado contra `rg` y `grep` en 25 casos (`evidence/feature-corpus/`):
 
 ---
 
+## 4f. Lo que quedaba pendiente: `-G`, `-z`, `--crlf`, `--heading`
+
+```sh
+zgrep -G 'cat\|dog' fichero.txt     # BRE real: \| ES alternacion aqui
+zgrep -G 'a\{2\}' fichero.txt      # y \{ \} el intervalo
+zgrep -G 'a(b)c' fichero.txt         # parentesis LITERALES en BRE
+zgrep -z 'patron' fichero.bin        # NUL separa registros (grep -z)
+zgrep --crlf 'x$' fichero.txt        # CRLF es el terminador
+zgrep --heading -e pat a.txt b.txt   # ruta como cabecera, no como prefijo
+zgrep -p pat fichero.txt             # alias de --color=always --heading -n
+zgrep --vimgrep pat fichero.txt      # una linea por match, con columna
+```
+
+El que mas importa de los cuatro es **`-G`**: antes se aceptaba la bandera y
+el patron se leia como ERE, o sea que **significaba otra cosa** — peor que no
+soportarla. Ahora se traduce BRE a ERE (`src/bre.zig`): los escapes invertidos
+(`\(`, `\)`, `\{`, `\}`, `\|`, `\+`, `\?`) y los caracteres que en ERE son
+operadores y en BRE literales (`( ) { } | + ?`). Verificado contra `grep -G`
+en 15 casos.
+
+`-z` hizo falta tocar **tres** sitios a la vez: el separador de registro, la
+sonda de binario (un NUL ya no puede significar "binario" si es el separador)
+y el DFA (un registro puede contener `\n`, asi que `.` y las clases dejan de
+excluirlo). El camino rapido queda desactivado con `-z` porque divide por `\n`
+internamente.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

@@ -54,6 +54,15 @@ pub const ScanConfig = struct {
     passthru: bool = false,
     /// `-b`: prefix each line with its byte offset in the file (grep).
     byte_offset: bool = false,
+    /// `--crlf`: treat CRLF as the line terminator, dropping the CR (rg).
+    crlf: bool = false,
+    /// `--heading`: print the path as a header line before the first output
+    /// of the file, instead of prefixing every line (rg).
+    heading: bool = false,
+    /// `--vimgrep`: one output line per match, each with the whole line (rg).
+    vimgrep: bool = false,
+    /// `--null-data` (grep -z): NUL is the record separator.
+    null_data: bool = false,
 
     /// True when the emission needs the match spans, so the fast
     /// "jump to the next match" path cannot be used.
@@ -135,30 +144,48 @@ fn emitLine(
     null_filename: bool,
     byte_offset: ?usize,
 ) Allocator.Error!void {
-    const path_extra: usize = if (show_path) path.len + 1 else 0;
+    // With `--heading` the path went on its own header line, so the per-line
+    // prefix is off.
+    const with_path = show_path and !heading_mode;
+    const path_extra: usize = if (with_path) path.len + 1 else 0;
     const line_extra: usize = if (show_line_no) 24 else 0;
     const off_extra: usize = if (byte_offset) |_| 24 else 0;
     const needed = path_extra + line_extra + off_extra + 1 + text.len + 1;
     try out.ensureUnusedCapacity(gpa, needed);
 
-    if (show_path) {
+    if (with_path) {
         out.appendSliceAssumeCapacity(path);
-        out.appendAssumeCapacity(if (null_filename) 0 else sep);
+        out.appendAssumeCapacity(if (null_filename or out_sep == 0) 0 else sep);
     }
     if (show_line_no) {
         var buf: [24]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
         out.appendSliceAssumeCapacity(s);
-        out.appendAssumeCapacity(sep);
+        out.appendAssumeCapacity(if (out_sep == 0) 0 else sep);
     }
     if (byte_offset) |bo| {
         var buf: [24]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "{d}", .{bo}) catch unreachable;
         out.appendSliceAssumeCapacity(s);
-        out.appendAssumeCapacity(sep);
+        out.appendAssumeCapacity(if (out_sep == 0) 0 else sep);
     }
     out.appendSliceAssumeCapacity(text);
-    out.appendAssumeCapacity('\n');
+    out.appendAssumeCapacity(out_sep);
+}
+
+/// The visible end of the line that starts at `from`: the position of the
+/// `\n`, or the end of the buffer, minus the `\r` when `--crlf` is on.
+/// Callers must still advance with the RAW end (the byte after `\n`).
+fn visibleLineEnd(data: []const u8, from: usize, crlf: bool) usize {
+    const e = std.mem.findScalarPos(u8, data, from, '\n') orelse data.len;
+    if (crlf and e > from and data[e - 1] == '\r') return e - 1;
+    return e;
+}
+
+/// `--heading`: the header line that replaces the per-line path prefix.
+fn emitHeading(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8) Allocator.Error!void {
+    try out.appendSlice(gpa, path);
+    try out.append(gpa, '\n');
 }
 
 const color_off = "\x1b[0m";
@@ -179,7 +206,7 @@ fn emitPrefix(
     colored: bool,
     byte_offset: ?usize,
 ) Allocator.Error!void {
-    if (show_path) {
+    if (show_path and !heading_mode) {
         try out.appendSlice(gpa, path);
         try out.append(gpa, if (null_filename) 0 else sep);
     }
@@ -223,7 +250,7 @@ fn emitMatches(
             const off: ?usize = if (cfg.byte_offset) line_start + m.start else null;
             try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
             try out.appendSlice(gpa, if (cfg.replace) |rep| rep else line[m.start..m.end]);
-            try out.append(gpa, '\n');
+            try out.append(gpa, out_sep);
         }
         from = if (m.end == m.start) m.start + 1 else m.end;
     }
@@ -240,10 +267,12 @@ fn emitLineSpanned(
     show_path: bool,
     line_no: usize,
     line: []const u8,
+    column_override: ?usize,
 ) Allocator.Error!void {
     var first: ?Match = null;
     if (cfg.column) first = searcher.matchSpan(line, 0);
-    if (show_path) {
+    // With `--heading` the path is on its own line, so no per-line prefix.
+    if (show_path and !heading_mode) {
         try out.appendSlice(gpa, path);
         try out.append(gpa, if (cfg.null_filename) 0 else ':');
     }
@@ -255,14 +284,18 @@ fn emitLineSpanned(
         if (cfg.color) try out.appendSlice(gpa, color_off);
         try out.append(gpa, ':');
     }
-    if (first) |m| {
+    if (column_override) |col| {
+        var cbuf: [24]u8 = undefined;
+        const c = std.fmt.bufPrint(&cbuf, "{d}:", .{col + 1}) catch unreachable;
+        try out.appendSlice(gpa, c);
+    } else if (first) |m| {
         var cbuf: [24]u8 = undefined;
         const c = std.fmt.bufPrint(&cbuf, "{d}:", .{m.start + 1}) catch unreachable;
         try out.appendSlice(gpa, c);
     }
     if (!cfg.color) {
         try out.appendSlice(gpa, line);
-        try out.append(gpa, '\n');
+        try out.append(gpa, out_sep);
         return;
     }
     var from: usize = 0;
@@ -279,8 +312,21 @@ fn emitLineSpanned(
         from = m.end;
     }
     try out.appendSlice(gpa, line[from..]);
-    try out.append(gpa, '\n');
+    try out.append(gpa, out_sep);
 }
+
+/// The record separator: `\n` normally, NUL with `--null-data`.
+inline fn recordSep(config: ScanConfig) u8 {
+    return if (config.null_data) 0 else '\n';
+}
+
+/// Output record separator: '\n', or NUL with `--null-data` (grep -z prints
+/// NUL-separated records). Set once by main before the scan starts.
+pub var out_sep: u8 = '\n';
+
+/// `--heading` is on for this run (rg prints the file path as a header line
+/// instead of a per-line prefix, but only with more than one input).
+pub var heading_mode: bool = false;
 
 const LineRef = struct { start: usize, end: usize, no: usize };
 
@@ -307,8 +353,6 @@ fn scanBufferLines(
     var ring_len: usize = 0;
     var ring_pos: usize = 0;
 
-    // Group separators only exist with context enabled: without `-A/-B/-C`
-    // the old ordered path printed nothing but matching lines.
     const context_enabled = config.before_context > 0 or config.after_context > 0;
     const spans = config.needs_spans();
 
@@ -320,7 +364,11 @@ fn scanBufferLines(
     var maxed = false;
 
     while (line_start < data.len) {
-        const line_end = std.mem.findScalarPos(u8, data, line_start, '\n') orelse data.len;
+        const raw_end = std.mem.findScalarPos(u8, data, line_start, recordSep(config)) orelse data.len;
+        const line_end = if (config.crlf and raw_end > line_start and data[raw_end - 1] == '\r')
+            raw_end - 1
+        else
+            raw_end;
         const line_slice = data[line_start..line_end];
         const has_match = searcher.find(line_slice, 0) != null;
         const selected = if (config.invert) !has_match else has_match;
@@ -340,14 +388,33 @@ fn scanBufferLines(
             }
 
             if (mode == .lines) {
-                if (spans and (config.only_matching or config.replace != null)) {
+                if (heading_mode and !printed_any) {
+                    try emitHeading(out, gpa, path);
+                    printed_any = true;
+                }
+                if (config.vimgrep) {
+                    // rg: every match on its own line, each one printing the
+                    // WHOLE line with its column. That can repeat a line once
+                    // per match; rg warns about exactly that.
+                    var vfrom: usize = 0;
+                    while (vfrom <= line_slice.len) {
+                        const m = searcher.matchSpan(line_slice, vfrom) orelse break;
+                        try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, m.start);
+                        if (m.end == m.start) {
+                            vfrom = m.start + 1;
+                        } else {
+                            vfrom = m.end;
+                        }
+                        if (m.end <= m.start) break;
+                    }
+                } else if (spans and (config.only_matching or config.replace != null)) {
                     // `grep -o -v` prints nothing: -o describes the matches of
                     // a selected line, and with -v there are none.
                     if (!config.invert) {
                         try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_start, line_slice);
                     }
                 } else if (spans) {
-                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
+                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, null);
                 } else {
                     if (ring.len > 0 and ring_len > 0) {
                         const first = if (line_no > config.before_context) line_no - config.before_context else 1;
@@ -379,7 +446,7 @@ fn scanBufferLines(
             if (!spans) {
                 try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
             } else {
-                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
+                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice, null);
             }
         } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
             if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
@@ -397,8 +464,8 @@ fn scanBufferLines(
             if (ring_len < ring.len) ring_len += 1;
         }
 
-        if (line_end >= data.len) break;
-        line_start = line_end + 1;
+        if (raw_end >= data.len) break;
+        line_start = raw_end + 1;
         line_no += 1;
     }
 
@@ -430,7 +497,9 @@ pub fn scanBuffer(
 
     // Inverted matching and/or line context both need every line in order;
     // the jump-to-next-match fast path below cannot provide context.
-    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans()) {
+    // The fast path splits on '\n' internally (the DFA's own line handling),
+    // so with `--null-data` a record that contains \n could never match.
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data) {
         return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
@@ -447,6 +516,7 @@ pub fn scanBuffer(
     var line_start: usize = 0;
     var line_no: usize = 1;
     var pos: usize = 0;
+    var heading_out = false;
 
     // `pos < data.len` (rather than `true`) is what stops an empty pattern
     // from inventing a phantom line after a trailing newline.
@@ -454,16 +524,20 @@ pub fn scanBuffer(
         const m = searcher.find(data, pos) orelse break;
         // Advance the line cursor to the line that contains the match.
         while (true) {
-            const nl = std.mem.findScalarPos(u8, data, line_start, '\n') orelse break;
+            const nl = std.mem.findScalarPos(u8, data, line_start, recordSep(config)) orelse break;
             if (nl >= m) break;
             line_start = nl + 1;
             line_no += 1;
         }
-        const line_end = std.mem.findScalarPos(u8, data, m, '\n') orelse data.len;
+        const line_end = visibleLineEnd(data, m, config.crlf);
 
         res.matched = true;
         res.lines += 1;
         if (mode == .lines) {
+            if (heading_mode and !config.null_filename and !heading_out) {
+                try emitHeading(out, gpa, path);
+                heading_out = true;
+            }
             try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..line_end], config.null_filename, if (config.byte_offset) line_start else null);
         }
         if (config.max_count) |mc| {
@@ -608,7 +682,9 @@ fn processBuffer(
 ) void {
     const probe = @min(data.len, binary_probe_bytes);
     const utf16_bom = isUtf16Bom(data);
-    const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+    // `--null-data` makes NUL the separator, so it can no longer mean
+    // "binary": that probe is off (rg does the same).
+    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
     if (is_binary) return;
 
     if (utf16_bom) |bom| {
@@ -723,7 +799,9 @@ fn scanFileLinux(
             const data = sbuf[0..got];
             const probe = @min(data.len, binary_probe_bytes);
             const utf16_bom = isUtf16Bom(data);
-            const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+            // `--null-data` makes NUL the separator, so it can no longer mean
+    // "binary": that probe is off (rg does the same).
+    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
             if (!is_binary) {
                 if (utf16_bom) |bom| {
                     if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
@@ -819,7 +897,9 @@ fn scanFileLinux(
     // skipped entirely (grep `-I`, ripgrep default).
     const probe = @min(data.len, binary_probe_bytes);
     const utf16_bom = isUtf16Bom(data);
-    const is_binary = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+    // `--null-data` makes NUL the separator, so it can no longer mean
+    // "binary": that probe is off (rg does the same).
+    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
     if (!is_binary) {
         if (utf16_bom) |bom| {
             if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
