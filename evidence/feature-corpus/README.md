@@ -89,3 +89,22 @@ Zig puede *ejecutar Python más rápido* se responde con dos números:
 El coste fijo de Python (~19 ms por arranque) no se quita desde fuera. Lo que
 sí se quita es **ejecutarlo donde no hace falta**: filtrar antes de lanzar el
 proceso. `--exec` es ese filtro, sin tubería intermedia.
+
+## Rebanada de paridad (0.3.0): las 7 que faltaban
+
+`-S` · `-t` / `--type-not` / `--type-list` (48 tipos) · `--max-depth` ·
+`--max-filesize` · `--exclude-from` · `--binary-files` · `-b`.
+
+Verificado contra GNU grep y ripgrep en 25 casos (`parity.sh`), y todo lo
+anterior sigue verde (87 tests, oraculo 26/26, 1419/1419 spans, 40/40 y 5/5
+de conformance, fuzzers a cero).
+
+### El hallazgo: hay TRES walkers, no dos
+
+Al medir `--max-filesize` salio que por debajo de 2 MB (micro path) **no se
+filtraba nada**: el micro-tree fast path tiene su propia recoleccion de
+ficheros, distinta del explorador concurrente y del camino ordenado. Un
+filtro nuevo que se anada solo a dos de los tres produce la peor
+discontinuidad posible: **el mismo comando devuelve listas distintas** segun
+el tamano del arbol. Corregido en los tres; `micro == swarm` es ahora un caso
+de la conformance.

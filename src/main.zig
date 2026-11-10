@@ -21,6 +21,7 @@ const scan = @import("scan.zig");
 const kamikaze = @import("kamikaze.zig");
 const filter = @import("filter.zig");
 const nav = @import("nav.zig");
+const types = @import("types.zig");
 const vfs = @import("vfs.zig");
 const io_engine = @import("io_engine.zig");
 
@@ -90,6 +91,18 @@ const usage =
     \\                    Without {} the path is appended (find -exec style)
     \\  -s, --no-messages suppress error messages about unreadable files
     \\  -j, --threads N   worker threads (default: number of CPUs)
+    \\  -S, --smart-case  case-insensitive unless PATTERN has an uppercase
+    \\  -t, --type NAME   restrict to a file type (py, zig, md, ...)
+    \\      --type-not NAME
+    \\                    skip a file type instead
+    \\      --type-list    list every known type and exit
+    \\      --max-depth=N  do not descend below N levels (rg; long only)
+    \\      --max-filesize=N[KMGT]
+    \\                    skip files larger than N (rg)
+    \\  -b, --byte-offset print the byte offset of each match in the file
+    \\      --binary-files=TYPE
+    \\                    text | without-match (zgrep never prints binary
+    \\                    content, so 'binary' is rejected, not faked)
     \\  -k, --kamikaze, --dataflow
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
     \\      --sort, --deterministic
@@ -105,6 +118,8 @@ const usage =
     \\                    only search file extensions (e.g. zig,rs,py)
     \\      --exclude=GLOB
     \\                    skip files matching GLOB (e.g. *.min.js)
+    \\      --exclude-from=FILE
+    \\                    read more --exclude globs from FILE, one per line
     \\      --include=GLOB
     \\                    only search files matching GLOB
     \\      --no-ignore   do not read .dataignore / .gitignore or apply defaults
@@ -139,6 +154,12 @@ const usage =
 /// `--color` tri-state. `auto` is deliberately folded to `never`: deciding
 /// it properly needs isatty(stdout), which is not worth the flag.
 pub const ColorMode = enum { never, always, auto };
+
+/// `--binary-files=TYPE` (grep). zgrep only has two honest answers: hunt the
+/// file and print the matches, or pretend it does not match. `binary` in grep
+/// means "print matches but suppress binary content", which this engine cannot
+/// do, so it is rejected at parse time instead of silently accepted.
+pub const BinaryFiles = enum { text, without_match };
 
 pub const usage_error = error{Usage};
 
@@ -207,6 +228,26 @@ pub const Options = struct {
     /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
     /// Turns off the normal output; the command's streams are inherited.
     exec_cmd: ?[]const u8 = null,
+    /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
+    smart_case: bool = false,
+    /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+    type_include: [8]types.Type = undefined,
+    type_include_count: usize = 0,
+    type_exclude: [8]types.Type = undefined,
+    type_exclude_count: usize = 0,
+    /// `--type-list`: print the type registry and exit.
+    print_type_list: bool = false,
+    /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+    binary_files: BinaryFiles = .without_match,
+    /// `--exclude-from=FILE` (grep): globs, one per line.
+    exclude_from: [8][]const u8 = undefined,
+    exclude_from_count: usize = 0,
+    /// `--max-depth=N` (rg; long only, `-d` is grep's --directories).
+    max_depth: usize = 0,
+    /// `--max-filesize=N[KMGT]` (rg): 0 = unlimited.
+    max_filesize: usize = 0,
+    /// `-b`: byte offset of the match within the file (grep semantics).
+    byte_offset: bool = false,
     patterns: [16][]const u8 = undefined,
     patterns_count: usize = 0,
     /// Set when `parseArgs` fails so the caller can print one clean message.
@@ -461,6 +502,70 @@ fn runExecAll(
     return ok;
 }
 
+/// `-t py` / `--type-not py`: adds the registry's extensions to the include
+/// or exclude lists. An unknown name is a usage error, like rg.
+fn addType(opts: *Options, name: []const u8, include: bool) usage_error!void {
+    const t = types.lookup(name) orelse {
+        opts.fail = .{ .what = "unknown type name (see --type-list)", .arg = name };
+        return error.Usage;
+    };
+    const list = if (include) &opts.type_include else &opts.type_exclude;
+    const count = if (include) &opts.type_include_count else &opts.type_exclude_count;
+    if (count.* >= list.len) {
+        opts.fail = .{ .what = "too many -t types (max 8)", .arg = name };
+        return error.Usage;
+    }
+    list[count.*] = t;
+    count.* += 1;
+}
+
+/// `--max-filesize` value: plain bytes or with a K/M/G/T suffix (rg accepts
+/// both upper and lower case, and `+N` means "greater than").
+fn parseSize(value: []const u8) ?usize {
+    var v = value;
+    if (v.len > 0 and v[0] == '+') v = v[1..];
+    if (v.len == 0) return null;
+    const mult: usize = switch (v[v.len - 1]) {
+        'k', 'K' => 1024,
+        'm', 'M' => 1024 * 1024,
+        'g', 'G' => 1024 * 1024 * 1024,
+        't', 'T' => 1024 * 1024 * 1024 * 1024,
+        else => 1,
+    };
+    if (mult != 1) v = v[0 .. v.len - 1];
+    return (parseCount(v) orelse return null) *| mult;
+}
+
+/// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+fn applyTypes(filter_engine: *filter.FilterEngine, opts: *const Options) void {
+    for (opts.type_include[0..opts.type_include_count]) |t| {
+        for (t.exts) |ext| filter_engine.addIncludedExts(ext) catch {};
+    }
+    for (opts.type_exclude[0..opts.type_exclude_count]) |t| {
+        for (t.exts) |ext| filter_engine.addExcludedExts(ext) catch {};
+    }
+}
+
+/// `--exclude-from=FILE`: one glob per line, appended to --exclude.
+fn loadExcludeFrom(io: std.Io, arena: Allocator, filter_engine: *filter.FilterEngine, opts: *const Options) void {
+    for (opts.exclude_from[0..opts.exclude_from_count]) |path| {
+        const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch continue;
+        defer file.close(io);
+        const size = std.math.cast(usize, (file.stat(io) catch continue).size) orelse continue;
+        const bytes = arena.alloc(u8, size) catch continue;
+        const got = file.readPositionalAll(io, bytes, 0) catch continue;
+        var start: usize = 0;
+        while (start < got) {
+            const end = std.mem.findScalarPos(u8, bytes[0..got], start, '\n') orelse got;
+            var line = bytes[start..end];
+            if (line.len > 0 and line[line.len - 1] == '\r') line = line[0 .. line.len - 1];
+            if (line.len > 0) filter_engine.addExcludedPattern(line) catch {};
+            if (end >= got) break;
+            start = end + 1;
+        }
+    }
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -700,6 +805,91 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     return error.Usage;
                 }
                 opts.exec_cmd = args[i];
+            } else if (std.mem.eql(u8, body, "smart-case")) {
+                opts.smart_case = true;
+            } else if (std.mem.startsWith(u8, body, "type=")) {
+                const v = body["type=".len..];
+                addType(opts, v, true) catch return error.Usage;
+            } else if (std.mem.eql(u8, body, "type")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                addType(opts, args[i], true) catch return error.Usage;
+            } else if (std.mem.startsWith(u8, body, "type-not=")) {
+                addType(opts, body["type-not=".len..], false) catch return error.Usage;
+            } else if (std.mem.eql(u8, body, "type-not")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                addType(opts, args[i], false) catch return error.Usage;
+            } else if (std.mem.eql(u8, body, "type-list")) {
+                opts.print_type_list = true;
+                return .{ .pattern = "", .operands = &[_][:0]const u8{} };
+            } else if (std.mem.startsWith(u8, body, "binary-files=")) {
+                const v = body["binary-files=".len..];
+                opts.binary_files = if (std.mem.eql(u8, v, "text"))
+                    .text
+                else if (std.mem.eql(u8, v, "without-match"))
+                    .without_match
+                else {
+                    opts.fail = .{ .what = "bad value for --binary-files (expected text|without-match; zgrep never prints binary content)", .arg = v };
+                    return error.Usage;
+                };
+            } else if (std.mem.startsWith(u8, body, "exclude-from=")) {
+                if (opts.exclude_from_count >= opts.exclude_from.len) {
+                    opts.fail = .{ .what = "too many --exclude-from files (max 8)", .arg = a };
+                    return error.Usage;
+                }
+                opts.exclude_from[opts.exclude_from_count] = body["exclude-from=".len..];
+                opts.exclude_from_count += 1;
+            } else if (std.mem.eql(u8, body, "exclude-from")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                if (opts.exclude_from_count >= opts.exclude_from.len) {
+                    opts.fail = .{ .what = "too many --exclude-from files (max 8)", .arg = a };
+                    return error.Usage;
+                }
+                opts.exclude_from[opts.exclude_from_count] = args[i];
+                opts.exclude_from_count += 1;
+            } else if (std.mem.startsWith(u8, body, "max-depth=")) {
+                opts.max_depth = parseCount(body["max-depth=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-depth", .arg = body["max-depth=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-depth")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_depth = parseCount(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
+                    return error.Usage;
+                };
+            } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+                opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-filesize")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_filesize = parseSize(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = args[i] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "byte-offset")) {
+                opts.byte_offset = true;
             } else if (std.mem.eql(u8, body, "only-matching")) {
                 opts.only_matching = true;
             } else if (std.mem.eql(u8, body, "count-matches")) {
@@ -903,6 +1093,21 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 's' => opts.no_messages = true,
                 'x' => opts.line_regexp = true,
                 'o' => opts.only_matching = true,
+                'S' => opts.smart_case = true,
+                'b' => opts.byte_offset = true,
+                't' => {
+                    const rest = chars[ci + 1 ..];
+                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+                        i += 1;
+                        if (i >= args.len) {
+                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+                            return error.Usage;
+                        }
+                        break :blk args[i];
+                    };
+                    addType(opts, value, true) catch return error.Usage;
+                    ci = chars.len;
+                },
                 'X' => {
                     const rest = chars[ci + 1 ..];
                     const value: []const u8 = if (rest.len > 0) rest else blk: {
@@ -1127,6 +1332,18 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(0);
     }
 
+    // `--type-list` is an answer too: the registry, on stdout, exit 0.
+    if (opts.print_type_list) {
+        var buf: std.ArrayList(u8) = .empty;
+        defer buf.deinit(gpa);
+        types.writeList(&buf, gpa) catch {
+            std.debug.print("zgrep: out of memory\n", .{});
+            std.process.exit(2);
+        };
+        _ = platform.writeStdout(init.io, buf.items);
+        std.process.exit(0);
+    }
+
     if (opts.threads == 0) {
         if (init.environ_map.get("ZIGREP_THREADS") orelse
             init.environ_map.get("ZGREP_THREADS") orelse
@@ -1197,6 +1414,22 @@ pub fn main(init: std.process.Init) !void {
 
     const t0 = nowMonotonicNs(init.io);
 
+    // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+    if (opts.smart_case and !opts.ignore_case) {
+        var has_upper = false;
+        for (patterns) |pat| {
+            for (pat) |c| {
+                if (c >= 'A' and c <= 'Z') has_upper = true;
+                if (c >= 0xC0 and c <= 0xDE and c != 0xD7) has_upper = true; // Latin-1
+                if (has_upper) break;
+            }
+            if (has_upper) break;
+        }
+        if (!has_upper) opts.ignore_case = true;
+    }
+    // `--binary-files=text` is exactly `-a`; `without-match` is the default.
+    if (opts.binary_files == .text) opts.binary = true;
+
     const searcher = search.build(gpa, patterns, .{
         .algo = opts.algo,
         .fixed = opts.fixed,
@@ -1249,6 +1482,7 @@ pub fn main(init: std.process.Init) !void {
             .color = opts.color == .always,
             .replace = opts.replace,
             .passthru = opts.passthru,
+            .byte_offset = opts.byte_offset,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -1350,6 +1584,7 @@ pub fn main(init: std.process.Init) !void {
         for (opts.include_patterns[0..opts.include_patterns_count]) |p| {
             try filter_engine.addIncludedPattern(p);
         }
+        applyTypes(&filter_engine, &opts);
 
         // The upward `.dataignore` / `.gitignore` walk is *not* done here: the
         // pipeline defers it until it knows the tree is too big for the
@@ -1367,6 +1602,7 @@ pub fn main(init: std.process.Init) !void {
             .color = opts.color == .always,
             .replace = opts.replace,
             .passthru = opts.passthru,
+            .byte_offset = opts.byte_offset,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -1387,6 +1623,8 @@ pub fn main(init: std.process.Init) !void {
             micro_tree_max_bytes,
             opts.io_engine_mode,
             &engine_state,
+            opts.max_depth,
+            opts.max_filesize,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
             std.process.exit(2);
@@ -1447,8 +1685,10 @@ pub fn main(init: std.process.Init) !void {
     for (opts.include_patterns[0..opts.include_patterns_count]) |p| {
         try filter_engine.addIncludedPattern(p);
     }
+        applyTypes(&filter_engine, &opts);
 
     filter_engine.loadIgnoreFiles(init.io, valid_operands.items);
+    loadExcludeFrom(init.io, arena, &filter_engine, &opts);
 
     var files: std.ArrayList([:0]const u8) = .empty;
     for (valid_operands.items) |op| {
@@ -1458,7 +1698,7 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
         if (info.kind == .directory) {
-            walk.walk(init.io, arena, &.{op}, &files, &filter_engine, opts.nav_plan) catch |err| {
+            walk.walk(init.io, arena, &.{op}, &files, &filter_engine, opts.nav_plan, opts.max_depth, opts.max_filesize) catch |err| {
                 if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, walkErrName(err) });
                 had_error = true;
             };
@@ -1516,6 +1756,7 @@ pub fn main(init: std.process.Init) !void {
             .color = opts.color == .always,
             .replace = opts.replace,
             .passthru = opts.passthru,
+            .byte_offset = opts.byte_offset,
         },
         .gpa = gpa,
         .window = window,
@@ -1959,6 +2200,135 @@ test "parseArgs: --exec, --execute, -X" {
         var o: Options = .{};
         const a = [_][:0]const u8{ "zgrep", "--exec" };
         try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+}
+
+test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-S", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.smart_case);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--smart-case", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.smart_case);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-t", "py", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.type_include_count);
+        try std.testing.expectEqualStrings("py", o.type_include[0].name);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-tpy", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.type_include_count);
+        try std.testing.expectEqualStrings("py", o.type_include[0].name);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--type=md", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.type_include_count);
+        try std.testing.expectEqualStrings("md", o.type_include[0].name);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--type-not=py", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.type_exclude_count);
+        try std.testing.expectEqualStrings("py", o.type_exclude[0].name);
+    }
+    // un tipo desconocido es error de uso, no un silencio
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-t", "cobol", "pat" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+        const f = o.fail orelse return error.TestExpectedEqual;
+        try std.testing.expectEqualStrings("unknown type name (see --type-list)", f.what);
+    }
+    // --type-list es una respuesta: corta el parseo como --help
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--type-list" };
+        const r = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.print_type_list);
+        try std.testing.expectEqual(@as(usize, 0), r.operands.len);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-filesize", "2M", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2 * 1024 * 1024), o.max_filesize);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-filesize=512k", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 512 * 1024), o.max_filesize);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-filesize=1G", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1024 * 1024 * 1024), o.max_filesize);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-filesize=+10K", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 10 * 1024), o.max_filesize);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-filesize=nope", "pat" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-depth=3", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 3), o.max_depth);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-depth", "2", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 2), o.max_depth);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "-b", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.byte_offset);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--binary-files=text", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(BinaryFiles.text, o.binary_files);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--binary-files=binary", "pat" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+        const f = o.fail orelse return error.TestExpectedEqual;
+        try std.testing.expect(std.mem.indexOf(u8, f.what, "never prints binary content") != null);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--exclude-from=globs.txt", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(usize, 1), o.exclude_from_count);
+        try std.testing.expectEqualStrings("globs.txt", o.exclude_from[0]);
     }
 }
 

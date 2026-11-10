@@ -282,6 +282,9 @@ pub const KamikazeContext = struct {
     /// Whether any worker already flushed a group; guards the cross-file
     /// separator and is always touched under `out_mutex`.
     context_emitted: bool = false,
+    /// `--max-depth` (rg) and `--max-filesize` (rg), enforced while scouting.
+    max_depth: usize = 0,
+    max_filesize: usize = 0,
 };
 
 fn flushToStdout(io: std.Io, bytes: []const u8) void {
@@ -335,10 +338,21 @@ fn scoutDirConcurrent(
         if (kind == .directory) {
             if (!recurse_subdirs) continue;
             if (ctx.filter.isDirExcluded(entry.name)) continue;
+            // rg's --max-depth counts from the root, so depth 0 IS the root:
+            // `--max-depth 1` never descends.
+            if (ctx.max_depth != 0 and depth + 1 >= ctx.max_depth) continue;
             try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, entry.name));
         } else if (kind == .file) {
             if (!scan_files) continue;
             if (ctx.filter.isFileExcluded(entry.name)) continue;
+            if (ctx.max_filesize > 0) {
+                const full = try joinPathSentinel(ctx.gpa, dir, entry.name);
+                defer ctx.gpa.free(full);
+                const meta = vfs.statFile(ctx.io, full, .{ .follow_symlinks = false }) catch null;
+                if (meta) |m| {
+                    if (m.size > ctx.max_filesize) continue;
+                }
+            }
             try files.append(ctx.gpa, try ctx.gpa.dupeZ(u8, entry.name));
         }
     }
@@ -595,6 +609,8 @@ fn tryQuickTreeScan(
     scan_config: scan.ScanConfig,
     max_bytes: usize,
     stats: *KamikazeStats,
+    max_depth: usize,
+    max_filesize: usize,
 ) ?bool {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
     defer arena_inst.deinit();
@@ -606,7 +622,7 @@ fn tryQuickTreeScan(
     // that the tree is too big.
     const max_files: usize = 2048;
     const max_dirs: usize = 512;
-    const max_depth: usize = 32;
+    const micro_max_depth: usize = 32;
 
     var dir_queue: std.ArrayList(DirTask) = .empty;
     dir_queue.append(arena, .{ .path = root, .depth = 0 }) catch return null;
@@ -647,12 +663,16 @@ fn tryQuickTreeScan(
             switch (kind) {
                 .directory => {
                     if (filter_engine.isDirExcluded(entry.name)) continue;
-                    if (task.depth >= max_depth) return null;
+                    if (task.depth >= micro_max_depth) return null;
+                    // rg's --max-depth counts from the root, so depth 0 IS the
+                    // root: `--max-depth 1` never descends.
+                    if (max_depth != 0 and task.depth + 1 >= max_depth) continue;
                     const child_dir = joinPathSentinel(arena, task.path, entry.name) catch return null;
                     dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1 }) catch return null;
                 },
                 .file => {
                     if (filter_engine.isFileExcluded(entry.name)) continue;
+                    if (max_filesize > 0 and size > max_filesize) continue;
                     if (files.items.len >= max_files) return null;
                     total_bytes += size;
                     if (total_bytes > @as(u64, max_bytes)) return null;
@@ -819,6 +839,8 @@ pub fn runKamikazePipeline(
     micro_max_bytes: usize,
     io_engine_mode: io_engine.Mode,
     engine_state: ?*io_engine.State,
+    max_depth: usize,
+    max_filesize: usize,
 ) !bool {
     const probe_early = mode == .quiet and !scan_config.invert and nav_plan.len == 0;
 
@@ -837,7 +859,7 @@ pub fn runKamikazePipeline(
             const root = roots[0];
             if (vfs.stat(io, root, true)) |info| {
                 if (info.kind == .directory) {
-                    if (tryQuickTreeScan(io, gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats)) |matched| {
+                    if (tryQuickTreeScan(io, gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats, max_depth, max_filesize)) |matched| {
                         stats.micro_path = true;
                         return matched;
                     }
@@ -877,6 +899,8 @@ pub fn runKamikazePipeline(
         .io_engine_mode = io_engine_mode,
         .engine = engine_state,
         .context_mode = mode == .lines and (scan_config.before_context > 0 or scan_config.after_context > 0),
+        .max_depth = max_depth,
+        .max_filesize = max_filesize,
     };
 
     // Seed root directories / files into the pool

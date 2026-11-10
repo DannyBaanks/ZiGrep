@@ -1,0 +1,35 @@
+===== -t / --type-not =====
+PASS -t py
+PASS -t py == rg -tpy
+PASS --type-not py
+PASS -t py --type-not txt
+PASS -tpy pegado
+PASS -t md profundidad
+===== --exclude-from =====
+PASS --exclude-from
+===== --max-depth (rg -d como referencia) =====
+PASS --max-depth 1
+PASS --max-depth 2
+PASS --max-depth 3
+PASS --max-depth 1 == nav v^
+===== --max-filesize =====
+PASS --max-filesize 1M (salta el grande)
+PASS --max-filesize 10M (todo)
+PASS --max-filesize 5 (micro == swarm)
+===== -b / --byte-offset =====
+PASS -b -n -H
+PASS -b -o
+PASS -b -n
+PASS -b
+PASS -b multioccurrencias
+===== -S / --smart-case =====
+PASS -S minuscula
+PASS -S con mayuscula
+PASS -S == rg -S
+===== --binary-files =====
+PASS --binary-files=text == -a
+PASS --binary-files=without-match == -I
+===== error de tipo desconocido =====
+PASS tipo desconocido
+
+TOTAL pass=25 fail=0

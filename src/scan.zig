@@ -52,6 +52,8 @@ pub const ScanConfig = struct {
     replace: ?[]const u8 = null,
     /// `--passthru` with `-r`: also print the lines that do not match.
     passthru: bool = false,
+    /// `-b`: prefix each line with its byte offset in the file (grep).
+    byte_offset: bool = false,
 
     /// True when the emission needs the match spans, so the fast
     /// "jump to the next match" path cannot be used.
@@ -131,10 +133,12 @@ fn emitLine(
     line_no: usize,
     text: []const u8,
     null_filename: bool,
+    byte_offset: ?usize,
 ) Allocator.Error!void {
     const path_extra: usize = if (show_path) path.len + 1 else 0;
     const line_extra: usize = if (show_line_no) 24 else 0;
-    const needed = path_extra + line_extra + 1 + text.len + 1;
+    const off_extra: usize = if (byte_offset) |_| 24 else 0;
+    const needed = path_extra + line_extra + off_extra + 1 + text.len + 1;
     try out.ensureUnusedCapacity(gpa, needed);
 
     if (show_path) {
@@ -144,6 +148,12 @@ fn emitLine(
     if (show_line_no) {
         var buf: [24]u8 = undefined;
         const s = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+        out.appendSliceAssumeCapacity(s);
+        out.appendAssumeCapacity(sep);
+    }
+    if (byte_offset) |bo| {
+        var buf: [24]u8 = undefined;
+        const s = std.fmt.bufPrint(&buf, "{d}", .{bo}) catch unreachable;
         out.appendSliceAssumeCapacity(s);
         out.appendAssumeCapacity(sep);
     }
@@ -167,18 +177,28 @@ fn emitPrefix(
     line_no: usize,
     null_filename: bool,
     colored: bool,
+    byte_offset: ?usize,
 ) Allocator.Error!void {
     if (show_path) {
         try out.appendSlice(gpa, path);
         try out.append(gpa, if (null_filename) 0 else sep);
     }
-    if (!show_line_no) return;
-    if (colored) try out.appendSlice(gpa, color_lineno);
-    var buf: [24]u8 = undefined;
-    const t = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
-    try out.appendSlice(gpa, t);
-    if (colored) try out.appendSlice(gpa, color_off);
-    try out.append(gpa, sep);
+    if (show_line_no) {
+        if (colored) try out.appendSlice(gpa, color_lineno);
+        var buf: [24]u8 = undefined;
+        const t = std.fmt.bufPrint(&buf, "{d}", .{line_no}) catch unreachable;
+        try out.appendSlice(gpa, t);
+        if (colored) try out.appendSlice(gpa, color_off);
+        try out.append(gpa, sep);
+    }
+    // `-b`: the offset goes after the line number and before the text, which
+    // is where grep puts it.
+    if (byte_offset) |bo| {
+        var buf: [24]u8 = undefined;
+        const t = std.fmt.bufPrint(&buf, "{d}", .{bo}) catch unreachable;
+        try out.appendSlice(gpa, t);
+        try out.append(gpa, sep);
+    }
 }
 
 /// One output line per non-empty match (`grep -o`, `rg -r REPLACEMENT`).
@@ -191,13 +211,17 @@ fn emitMatches(
     path: []const u8,
     show_path: bool,
     line_no: usize,
+    line_start: usize,
     line: []const u8,
 ) Allocator.Error!void {
     var from: usize = 0;
     while (from <= line.len) {
         const m = searcher.matchSpan(line, from) orelse break;
         if (m.end > m.start) {
-            try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color);
+            // `-b -o`: grep prints the offset of the MATCH, absolute in the
+            // file, so it is line_start + m.start.
+            const off: ?usize = if (cfg.byte_offset) line_start + m.start else null;
+            try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
             try out.appendSlice(gpa, if (cfg.replace) |rep| rep else line[m.start..m.end]);
             try out.append(gpa, '\n');
         }
@@ -320,7 +344,7 @@ fn scanBufferLines(
                     // `grep -o -v` prints nothing: -o describes the matches of
                     // a selected line, and with -v there are none.
                     if (!config.invert) {
-                        try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_slice);
+                        try emitMatches(out, gpa, searcher, config, path, show_path, line_no, line_start, line_slice);
                     }
                 } else if (spans) {
                     try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
@@ -333,13 +357,13 @@ fn scanBufferLines(
                             const ref = ring[at];
                             if (ref.no < first or ref.no <= last_printed) continue;
                             if (context_enabled and printed_any and ref.no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename);
+                            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename, if (config.byte_offset) ref.start else null);
                             last_printed = ref.no;
                             printed_any = true;
                         }
                     }
                     if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
+                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
                     last_printed = line_no;
                     printed_any = true;
                 }
@@ -353,13 +377,13 @@ fn scanBufferLines(
             // --passthru prints the non-matching lines untouched; with -r the
             // matches of the matching lines were already substituted above.
             if (!spans) {
-                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename);
+                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
             } else {
                 try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, line_slice);
             }
         } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
             if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, line_slice, config.null_filename);
+            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, line_slice, config.null_filename, if (config.byte_offset) line_start else null);
             last_printed = line_no;
             printed_any = true;
             after_left -= 1;
@@ -440,7 +464,7 @@ pub fn scanBuffer(
         res.matched = true;
         res.lines += 1;
         if (mode == .lines) {
-            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..line_end], config.null_filename);
+            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..line_end], config.null_filename, if (config.byte_offset) line_start else null);
         }
         if (config.max_count) |mc| {
             if (res.lines >= mc) break;

@@ -8,7 +8,7 @@ const FilterEngine = filter.FilterEngine;
 const nav = @import("nav.zig");
 const NavPlan = nav.NavPlan;
 
-pub const max_depth = 512;
+pub const walk_max_depth = 512;
 
 pub const Error = error{
     OutOfMemory,
@@ -42,8 +42,10 @@ pub fn walk(
     out: *std.ArrayList([:0]const u8),
     filter_engine: ?*const FilterEngine,
     nav_plan: ?NavPlan,
+    max_depth: usize,
+    max_filesize: usize,
 ) Error!void {
-    for (roots) |root| try walkOne(io, gpa, root, out, 0, filter_engine, nav_plan);
+    for (roots) |root| try walkOne(io, gpa, root, out, 0, filter_engine, nav_plan, max_depth, max_filesize);
 }
 
 fn walkOne(
@@ -54,8 +56,10 @@ fn walkOne(
     depth: usize,
     filter_engine: ?*const FilterEngine,
     nav_plan: ?NavPlan,
+    max_depth: usize,
+    max_filesize: usize,
 ) Error!void {
-    if (depth > max_depth) return error.TooDeep;
+    if (depth > walk_max_depth) return error.TooDeep;
 
     const metadata = vfs.stat(io, dir, true) orelse return error.OpenFailed;
     if (metadata.kind == .file) {
@@ -94,6 +98,14 @@ fn walkOne(
             if (filter_engine) |fe| {
                 if (fe.isFileExcluded(entry.name)) continue;
             }
+            if (max_filesize > 0) {
+                const child = try vfs.joinPathSentinel(gpa, dir, entry.name);
+                defer gpa.free(child);
+                const meta = vfs.statFile(io, child, .{ .follow_symlinks = false }) catch null;
+                if (meta) |m| {
+                    if (m.size > max_filesize) continue;
+                }
+            }
         } else {
             continue;
         }
@@ -111,7 +123,13 @@ fn walkOne(
 
     for (items.items) |item| {
         if (item.kind == .directory) {
-            try walkOne(io, gpa, item.path, out, depth + 1, filter_engine, nav_plan);
+            // rg's --max-depth counts from the root, so depth 0 is the root
+            // itself: `--max-depth 1` never descends into a subdirectory.
+            if (max_depth != 0 and depth + 1 >= max_depth) {
+                gpa.free(item.path);
+                continue;
+            }
+            try walkOne(io, gpa, item.path, out, depth + 1, filter_engine, nav_plan, max_depth, max_filesize);
         } else {
             try out.append(gpa, item.path);
         }

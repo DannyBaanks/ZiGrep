@@ -397,6 +397,32 @@ camino ordenado, que es el que sabe qué ficheros coincidieron.
 
 ---
 
+## 4e. Paridad con rg: tipos, `--max-depth`, `--max-filesize`, `-b`, `-S`
+
+```sh
+zgrep -t py -l 'patron' RUTA          # solo ficheros Python
+zgrep -tpy -l 'patron' RUTA           # junto, como rg
+zgrep -t zig --type-not txt -l .      # combinar include y exclude
+zgrep --type-list                     # los 48 tipos del registro
+zgrep --max-depth 1 -l 'patron' .     # solo la raiz (equivale a nav v^)
+zgrep --max-filesize 2M -l 'patron' . # salta los ficheros grandes
+zgrep --exclude-from=globs.txt .      # globs desde fichero
+zgrep -bn 'patron' fichero.txt        # offset en bytes: linea:offset:text
+zgrep -bo 'patron' fichero.txt        # offset del MATCH (como grep -bo)
+zgrep -S 'patron' RUTA                # insensible salvo que haya mayuscula
+zgrep --binary-files=text -l 'p' bin.dat
+```
+
+Verificado contra `rg` y `grep` en 25 casos (`evidence/feature-corpus/`):
+
+* `-t` es libre (grep no lo tiene); `-T` **no** se asigno a `--type-not`
+  porque en grep es `--initial-tab`. Manda la politica de colisiones.
+* `--binary-files=binary` se **rechaza** con un mensaje claro: zgrep nunca
+  imprime contenido binario, asi que aceptarlo seria mentir.
+* `--max-depth 1` es exactamente `--nav=v^` (mismo caso en la conformance).
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

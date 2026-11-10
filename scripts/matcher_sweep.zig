@@ -214,7 +214,7 @@ pub fn main(init: std.process.Init) !void {
     defer files.deinit(gpa);
     const rootz = std.fmt.allocPrintSentinel(gpa, "{s}", .{dir}, 0) catch
         std.process.exit(2);
-    walk.walk(init.io, gpa, &.{rootz}, &files, null, null) catch |err| {
+    walk.walk(init.io, gpa, &.{rootz}, &files, null, null, 0, 0) catch |err| {
         common.printOut(init.io, "matcher_sweep: walk '{s}' failed: {s}\n", .{ dir, @errorName(err) });
         std.process.exit(1);
     };
