@@ -486,6 +486,42 @@ se entremezclarían y una cabecera apuntaría al clúster equivocado.
 
 ---
 
+## 4h. `--cache`: analizar y limpiar las caches de Zig
+
+Un problema de espacio resuelto por la herramienta. El motor analiza el disco,
+clasifica lo que ve y **pregunta antes de borrar**; la última palabra es del
+usuario, pero con el análisis ya hecho.
+
+```sh
+ziggrep --cache                  # analiza, muestra, pregunta, borra
+ziggrep --cache --dry-run        # solo el análisis
+ziggrep --cache --force --cache-root /ruta   # sin preguntar, sobre una ruta
+```
+
+La tabla clasifica cada cache en cuatro estados:
+
+| estado | qué significa |
+|---|---|
+| `segura` | una `.zig-cache`: se regenera al compilar |
+| `peligrosa` | un `zig-out`: puede contener un binario **instalado** (por eso no entra salvo `--cache-include-out`) |
+| `ACTIVA` | hay una compilación en marcha: **no se toca** |
+| `PROTEGIDA` | algo apunta a ella: un symlink en un directorio de binarios la usa |
+
+Sobre la detección de build activo, medido: Zig **no** deja ficheros de bloqueo
+(verificado con el build en marcha), así que la señal fiable es el proceso: en
+Linux se lee `/proc` y se marca ACTIVA si algún `zig` tiene su `cwd` en el repo
+que contiene la cache, o —para la cache global `~/.cache/zig`, que es
+compartida— si hay cualquier compilador vivo.
+
+La selección es explícita: `1,3-5`, `all` (todo, incluidas activas y
+protegidas), `safe` (solo las seguras) o `nada`. Después se pide confirmación
+S/N con la lista exacta y el total.
+
+Verificado en tres fixtures: cache segura borrada, build en marcha omitido, y
+`zig-out` apuntado desde `~/bin` marcado PROTEGIDA.
+
+---
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

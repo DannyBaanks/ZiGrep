@@ -24,6 +24,7 @@ const nav = @import("nav.zig");
 const types = @import("types.zig");
 const vfs = @import("vfs.zig");
 const io_engine = @import("io_engine.zig");
+const clean = @import("clean.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -121,6 +122,18 @@ const usage =
     \\      --no-heading  print it as a per-line prefix instead (default)
     \\  -p, --pretty       alias for --color=always --heading --line-number
     \\      --vimgrep     one line per match, with line and column (rg)
+    \\      --cache       analyse the Zig caches on disk, show what is safe to
+    \\                    delete and ASK before deleting anything
+    \\      --dry-run     with --cache: only the analysis, delete nothing
+    \\      --force       with --cache: no prompt (for scripts)
+    \\      --cache-root=PATH
+    \\                    root to scan for caches (repeatable; default $HOME/Development)
+    \\      --cache-depth=N
+    \\                    how deep below a root to look (default 2)
+    \\      --cache-include-out
+    \\                    also consider zig-out (DANGER: installs live there)
+    \\      --cache-no-global
+    \\                    do not include ~/.cache/zig
     \\      --binary-files=TYPE
     \\                    text | without-match (zgrep never prints binary
     \\                    content, so 'binary' is rejected, not faked)
@@ -273,6 +286,15 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// `-b`: byte offset of the match within the file (grep semantics).
     byte_offset: bool = false,
+    /// `--cache`: analyse and clean the Zig build caches.
+    cache: bool = false,
+    cache_dry_run: bool = false,
+    cache_force: bool = false,
+    cache_include_out: bool = false,
+    cache_include_global: bool = true,
+    cache_depth: usize = 2,
+    cache_roots: [16][]const u8 = undefined,
+    cache_roots_count: usize = 0,
     /// `--crlf`: CRLF is the line terminator (rg); `--no-crlf` turns it off.
     crlf: bool = false,
     /// `--heading`: print the path as a header line above each file's matches.
@@ -696,6 +718,16 @@ fn validEncoding(v: []const u8) ?[]const u8 {
     return null;
 }
 
+fn add_cache_root(opts: *Options, path: []const u8) usage_error!void {
+    if (opts.cache_roots_count >= opts.cache_roots.len) {
+        opts.fail = .{ .what = "too many --cache-root (max 16)", .arg = path };
+        return error.Usage;
+    }
+    opts.cache = true;
+    opts.cache_roots[opts.cache_roots_count] = path;
+    opts.cache_roots_count += 1;
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -1093,6 +1125,34 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.crlf = true;
             } else if (std.mem.eql(u8, body, "no-crlf")) {
                 opts.crlf = false;
+            } else if (std.mem.eql(u8, body, "cache")) {
+                opts.cache = true;
+            } else if (std.mem.eql(u8, body, "dry-run")) {
+                opts.cache = true;
+                opts.cache_dry_run = true;
+            } else if (std.mem.eql(u8, body, "force")) {
+                opts.cache = true;
+                opts.cache_force = true;
+            } else if (std.mem.startsWith(u8, body, "cache-root=")) {
+                add_cache_root(opts, body["cache-root=".len..]) catch return error.Usage;
+            } else if (std.mem.eql(u8, body, "cache-root")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                add_cache_root(opts, args[i]) catch return error.Usage;
+            } else if (std.mem.startsWith(u8, body, "cache-depth=")) {
+                opts.cache_depth = parseCount(body["cache-depth=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --cache-depth", .arg = body["cache-depth=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "cache-include-out")) {
+                opts.cache = true;
+                opts.cache_include_out = true;
+            } else if (std.mem.eql(u8, body, "cache-no-global")) {
+                opts.cache = true;
+                opts.cache_include_global = false;
             } else if (std.mem.eql(u8, body, "byte-offset")) {
                 opts.byte_offset = true;
             } else if (std.mem.eql(u8, body, "only-matching")) {
@@ -1498,6 +1558,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
         return .{ .pattern = "", .operands = ops };
     }
+    // `--cache` is an action, not a search: it must not demand a PATTERN.
+    if (opts.cache) return .{ .pattern = "", .operands = &[_][:0]const u8{} };
     if (positionals.items.len == 0) {
         opts.fail = .{ .what = "missing PATTERN", .arg = "" };
         return error.Usage;
@@ -1549,6 +1611,36 @@ pub fn main(init: std.process.Init) !void {
             _ = platform.writeStdout(init.io, usage);
         }
         std.process.exit(0);
+    }
+
+    // `--cache` is an action, not a search: it answers with the analysis and
+    // the outcome of the (optional) deletion, then exits.
+    if (opts.cache) {
+        var roots: [16][:0]const u8 = undefined;
+        var nroots: usize = 0;
+        const home_path: []const u8 = init.environ_map.get("HOME") orelse ".";
+        if (opts.cache_roots_count > 0) {
+            for (opts.cache_roots[0..opts.cache_roots_count]) |r| {
+                if (nroots >= roots.len) break;
+                roots[nroots] = if (r.len > 1 and r[0] == '~')
+                    (std.fmt.allocPrintSentinel(arena, "{s}{s}", .{ home_path, r[1..] }, 0) catch @as([:0]const u8, @ptrCast(r)))
+                else
+                    @as([:0]const u8, @ptrCast(r));
+                nroots += 1;
+            }
+        } else {
+            roots[0] = std.fmt.allocPrintSentinel(arena, "{s}/Development", .{home_path}, 0) catch ".";
+            nroots = 1;
+        }
+        const code = clean.run(init.io, gpa, home_path, .{
+            .roots = roots[0..nroots],
+            .include_global = opts.cache_include_global,
+            .include_out = opts.cache_include_out,
+            .depth = opts.cache_depth,
+            .dry_run = opts.cache_dry_run,
+            .force = opts.cache_force,
+        });
+        std.process.exit(code);
     }
 
     // `--type-list` is an answer too: the registry, on stdout, exit 0.
