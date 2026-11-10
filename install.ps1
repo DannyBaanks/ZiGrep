@@ -19,17 +19,32 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "latest",
-    [string]$InstallDir = "",
+    # The parameter NAMES are the public API (-Version, -InstallDir,
+    # -BaseUrlOverride, -NoPathUpdate), but the VARIABLES behind them carry a
+    # prefix on purpose.
+    #
+    # `irm ... | iex` evaluates this script in the CALLER's scope, and
+    # PowerShell creates the parameter variables THERE. With plain names the
+    # installer overwrote whatever the user had called `$Version` or
+    # `$InstallDir` (and, worse, died with "Cannot overwrite the variable
+    # InstallDir because it is optimized" when such a variable already existed
+    # in an enclosing scope, aborting without installing anything). Prefixed
+    # names leave the user's session alone.
+    [Alias("Version")][string]$RequestedVersion = "latest",
+    [Alias("InstallDir")][string]$RequestedInstallDir = "",
     # Override the download base URL (used by the test suite and useful for
     # corporate mirrors / proxies). Empty means the official GitHub releases.
-    [string]$BaseUrlOverride = "",
+    [Alias("BaseUrlOverride")][string]$RequestedBaseUrlOverride = "",
     # Skip the user PATH update (used by the test suite).
-    [switch]$NoPathUpdate
+    [Alias("NoPathUpdate")][switch]$RequestedNoPathUpdate
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "DannyBaanks/ZiGrep"
+# Internal names, deliberately different from the parameter variables above.
+$repoSlug = "DannyBaanks/ZiGrep"
+$versionToUse = $RequestedVersion
+$skipPathUpdate = [bool]$RequestedNoPathUpdate
+$baseUrlToUse = $RequestedBaseUrlOverride
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "OK  $msg" -ForegroundColor Green }
@@ -68,7 +83,7 @@ function Invoke-Native {
 # Defined before the first call: PowerShell resolves function names at
 # runtime, not at parse time.
 function Install-ToPath {
-    if ($NoPathUpdate) {
+    if ($skipPathUpdate) {
         Write-Warn "PATH update skipped (-NoPathUpdate)"
         return
     }
@@ -78,26 +93,26 @@ function Install-ToPath {
     $parts = @()
     if ($userPath) { $parts = @($userPath -split ";" | Where-Object { $_ }) }
 
-    if ($parts -notcontains $InstallDir) {
-        $newPath = (@($parts) + $InstallDir) -join ";"
+    if ($parts -notcontains $targetDir) {
+        $newPath = (@($parts) + $targetDir) -join ";"
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-        Write-Ok "added $InstallDir to the user PATH"
+        Write-Ok "added $targetDir to the user PATH"
         Write-Host ""
         Write-Host "  Restart your terminal (or open a new one) so the PATH change applies." -ForegroundColor Yellow
     } else {
-        Write-Ok "$InstallDir is already in the user PATH"
+        Write-Ok "$targetDir is already in the user PATH"
     }
 
     # Make it usable in this session too.
-    if (($env:Path -split ";") -notcontains $InstallDir) {
-        $env:Path = "$env:Path;$InstallDir"
+    if (($env:Path -split ";") -notcontains $targetDir) {
+        $env:Path = "$env:Path;$targetDir"
     }
 
     Write-Host ""
     Write-Host "  Version check:" -ForegroundColor Cyan
     # Run the check through Invoke-Native: the binary may write on stderr and
     # that must not abort the installer.
-    $check = Invoke-Native -FilePath (Join-Path $InstallDir "zigrep.exe") -Arguments @("--version") -Capture
+    $check = Invoke-Native -FilePath (Join-Path $targetDir "zigrep.exe") -Arguments @("--version") -Capture
     if ($check.Output) { Write-Host "    $($check.Output)" }
     if ($check.ExitCode -ne 0) {
         Write-Warn "the version check returned exit code $($check.ExitCode)"
@@ -128,26 +143,26 @@ if ($arch -eq "ARM64") {
     exit 1
 }
 
-if (-not $InstallDir) {
-    $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\ZiGrep"
-}
+# The parameters are only READ here: assigning to them is what used to abort
+# the installer when `iex` had turned them into constants (see the note above).
+$targetDir = if ($RequestedInstallDir) { $RequestedInstallDir } else { Join-Path $env:LOCALAPPDATA "Programs\ZiGrep" }
 
 $AssetName = "zigrep-windows-$TargetArch.zip"
 
-if ($BaseUrlOverride) {
-    $BaseUrl = $BaseUrlOverride.TrimEnd("/")
-} elseif ($Version -eq "latest") {
-    $BaseUrl = "https://github.com/$Repo/releases/latest/download"
+if ($baseUrlToUse) {
+    $BaseUrl = $baseUrlToUse.TrimEnd("/")
+} elseif ($versionToUse -eq "latest") {
+    $BaseUrl = "https://github.com/$repoSlug/releases/latest/download"
 } else {
-    $tag = $Version
-    if (-not $tag.StartsWith("v")) { $tag = "v$Version" }
-    $BaseUrl = "https://github.com/$Repo/releases/download/$tag"
+    $tag = $versionToUse
+    if (-not $tag.StartsWith("v")) { $tag = "v$versionToUse" }
+    $BaseUrl = "https://github.com/$repoSlug/releases/download/$tag"
 }
 $DownloadUrl = "$BaseUrl/$AssetName"
 $ChecksumsUrl = "$BaseUrl/SHA256SUMS.txt"
 
 Write-Step "Architecture: $TargetArch"
-Write-Step "Install directory: $InstallDir"
+Write-Step "Install directory: $targetDir"
 
 # ---------------------------------------------------------------------------
 # 2. Download the release asset
@@ -171,25 +186,25 @@ try {
             # lives in a release, and the default branch may not have it (or
             # may not build on Windows at all).
             $cloneRef = $null
-            if ($Version -eq "latest") {
+            if ($versionToUse -eq "latest") {
                 # Resolve the real latest tag through the GitHub API.
                 try {
-                    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "ZiGrep-Installer" }
+                    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$repoSlug/releases/latest" -Headers @{ "User-Agent" = "ZiGrep-Installer" }
                     $cloneRef = $rel.tag_name
                 } catch {
                     Write-Warn "Could not resolve the latest release tag ($($_.Exception.Message))."
                 }
             } else {
-                $cloneRef = $Version
-                if (-not $cloneRef.StartsWith("v")) { $cloneRef = "v$cloneRef" }
+                $cloneRef = $versionToUse
+                if (-not $cloneRef.StartsWith("v")) { $cloneRef = "v$versionToUse" }
             }
             if (-not $cloneRef) {
                 Write-Err "Cannot determine which release to build from. Use -Version <tag>."
                 exit 1
             }
-            Write-Step "Cloning $Repo at $cloneRef and building..."
+            Write-Step "Cloning $repoSlug at $cloneRef and building..."
             $repoDir = Join-Path $tmp "repo"
-            $clone = Invoke-Native -FilePath "git" -Arguments @("clone", "--depth", "1", "--branch", $cloneRef, "https://github.com/$Repo.git", $repoDir) -Capture
+            $clone = Invoke-Native -FilePath "git" -Arguments @("clone", "--depth", "1", "--branch", $cloneRef, "https://github.com/$repoSlug.git", $repoDir) -Capture
             if ($clone.ExitCode -ne 0) {
                 Write-Err "git clone failed with exit code $($clone.ExitCode)"
                 if ($clone.Output) { Write-Host $clone.Output -ForegroundColor DarkGray }
@@ -206,14 +221,14 @@ try {
                 if ($build.Output) { Write-Host $build.Output -ForegroundColor DarkGray }
                 exit 1
             }
-            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-            Copy-Item (Join-Path $repoDir "zig-out\bin\zigrep.exe") (Join-Path $InstallDir "zigrep.exe") -Force
-            Copy-Item (Join-Path $repoDir "zig-out\bin\zgrep.exe") (Join-Path $InstallDir "zgrep.exe") -Force
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            Copy-Item (Join-Path $repoDir "zig-out\bin\zigrep.exe") (Join-Path $targetDir "zigrep.exe") -Force
+            Copy-Item (Join-Path $repoDir "zig-out\bin\zgrep.exe") (Join-Path $targetDir "zgrep.exe") -Force
             Install-ToPath
             exit 0
         } else {
             Write-Err "Zig is not installed. Install Zig 0.16+ from https://ziglang.org/download/"
-            Write-Host "or download the binary manually from https://github.com/$Repo/releases"
+            Write-Host "or download the binary manually from https://github.com/$repoSlug/releases"
             exit 1
         }
     }
@@ -257,12 +272,12 @@ try {
     $extractDir = Join-Path $tmp "extract"
     Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
-    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
     $installed = 0
     foreach ($name in @("zigrep.exe", "zgrep.exe")) {
         $src = Join-Path $extractDir $name
         if (Test-Path $src) {
-            Copy-Item $src (Join-Path $InstallDir $name) -Force
+            Copy-Item $src (Join-Path $targetDir $name) -Force
             $installed++
         }
     }
@@ -274,9 +289,9 @@ try {
     # self-contained (re-runnable to upgrade).
     $installerInZip = Join-Path $extractDir "install.ps1"
     if (Test-Path $installerInZip) {
-        Copy-Item $installerInZip (Join-Path $InstallDir "install.ps1") -Force
+        Copy-Item $installerInZip (Join-Path $targetDir "install.ps1") -Force
     }
-    Write-Ok "installed $installed executable(s) into $InstallDir"
+    Write-Ok "installed $installed executable(s) into $targetDir"
 
     Install-ToPath
 } finally {

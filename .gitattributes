@@ -1,0 +1,5 @@
+# Los fixtures del oráculo se comparan byte a byte. Con core.autocrlf=true
+# (el valor por defecto en Windows) git reescribiría sus finales de línea en
+# el checkout y un patrón como "search.zig" llegaría como "search.zig\r", que
+# ya no casa con nada. Marcarlos como binarios congela los bytes.
+scripts/fixtures/** -text
