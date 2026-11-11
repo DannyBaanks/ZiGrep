@@ -1,0 +1,42 @@
+PASS lote: todas las lineas son JSON
+PASS lote: schema zgrep/1 en cada evento
+PASS lote: summary es el ultimo evento
+PASS lote: consultas en el orden del fichero
+PASS equivalencia needle (2438 eventos, 2438 resultados, rc 0)
+PASS equivalencia rare_n (3 eventos, 3 resultados, rc 0)
+PASS equivalencia absent (0 eventos, 0 resultados, rc 1)
+PASS equivalencia rare_ctx (9 eventos, 3 resultados, rc 0)
+PASS equivalencia files (50 eventos, 50 resultados, rc 0)
+PASS equivalencia count (50 eventos, 50 resultados, rc 0)
+PASS equivalencia count_m (2 eventos, 2 resultados, rc 0)
+PASS equivalencia only (1 eventos, 1 resultados, rc 0)
+PASS equivalencia icase (2 eventos, 2 resultados, rc 0)
+PASS equivalencia word (0 eventos, 0 resultados, rc 1)
+PASS equivalencia invert (5 eventos, 5 resultados, rc 0)
+PASS equivalencia passthru (6 eventos, 1 resultados, rc 0)
+PASS equivalencia fixed_dot (1 eventos, 1 resultados, rc 0)
+PASS equivalencia src_fn (15 eventos, 15 resultados, rc 0)
+PASS equivalencia src_dir (69 eventos, 69 resultados, rc 0)
+PASS equivalencia missing (0 eventos, 0 resultados, rc 2)
+PASS summary: suma de resultados
+PASS rc del lote = 2
+PASS --max-results 0: returned=0 omitted=2640 reason=max-results
+PASS --max-results 1: returned=1 omitted=2639 reason=max-results
+PASS --max-results 7: returned=7 omitted=2633 reason=max-results
+PASS --max-results 1320: returned=1320 omitted=1320 reason=max-results
+PASS --max-results 2639: returned=2639 omitted=1 reason=max-results
+PASS --max-results 2640: returned=2640 omitted=0 reason=None
+PASS --max-results 2650: returned=2640 omitted=0 reason=None
+PASS --max-output-tokens 1: returned=0 omitted=2640 reason=max-output-tokens
+PASS --max-output-tokens 50: returned=0 omitted=2640 reason=max-output-tokens
+PASS --max-output-tokens 500: returned=4 omitted=2636 reason=max-output-tokens
+PASS --max-output-tokens 5000: returned=45 omitted=2595 reason=max-output-tokens
+PASS los dos presupuestos: returned=5 omitted=2635 reason=max-results
+PASS cerrado: id duplicado
+PASS cerrado: campo desconocido
+PASS cerrado: JSON roto
+PASS cerrado: -e global con lote
+PASS cerrado: presupuesto sin --json
+PASS cerrado: fichero de consultas inexistente
+PASS consulta invalida falla sola
+TOTAL 41 pass / 0 fail

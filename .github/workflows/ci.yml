@@ -81,14 +81,18 @@ jobs:
       - name: Long-line windows conformance (M9)
         run: python3 evidence/agent-native/m9_conformance.py
 
-      # El mismo diferencial contra un binario Debug (comprobacion de limites
-      # encendida). ReleaseFast escondia una lectura fuera del slice en la
-      # alineacion UTF-8 de la ventana (text[len]): la salida salia bien por
-      # suerte y en Debug abortaba. Prefijo aparte para no pisar zig-out.
-      - name: Long-line windows conformance (M9, Debug bounds checks)
+      # Los mismos diferenciales contra un binario Debug (comprobacion de
+      # limites encendida). ReleaseFast escondia una lectura fuera del slice en
+      # la alineacion UTF-8 de la ventana de M9 (text[len]): la salida salia
+      # bien por suerte y en Debug abortaba. Prefijo aparte para no pisar
+      # zig-out. El lote usa el corpus_50 generado en el paso de M3.
+      - name: Agent-native differentials (M3-M9, Debug bounds checks)
         run: |
           zig build -Doptimize=Debug --prefix zig-debug
-          python3 evidence/agent-native/m9_conformance.py --zgrep zig-debug/bin/zgrep
+          for t in batch provenance compact spill m9; do
+            echo "== $t (Debug)"
+            python3 evidence/agent-native/${t}_conformance.py --zgrep zig-debug/bin/zgrep
+          done
 
   windows-native:
     name: Native Windows Build, Tests & Oracle
