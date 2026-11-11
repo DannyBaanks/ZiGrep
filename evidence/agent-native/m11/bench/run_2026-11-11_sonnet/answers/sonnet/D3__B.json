@@ -1,0 +1,18 @@
+{
+ "qid": "D3",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f3b05fd4bf17d9db0ec57a3ca7b5320b4f0964a8f5aaca3b3d71a284e57c66b1",
+ "answer": "`windowOf` (src/out_json.zig:89-94) returns null in these cases, checked in this order:\n\n1. The budget `w` is 0 (line 90).\n2. The event has no span (`ev.span orelse return null`, line 91).\n3. The text already fits: `ev.text.len <= w` (line 92).\n4. The span lies outside the text: `sp.end > ev.text.len` (line 93).\n5. The emitted text is not the line itself: `ev.text` differs from `ev.line_bytes` (line 94). The doc comment says this rules out `--replace` and `-o` (lines 87-88). The `--replace` test at line 578-582 confirms it.\n\nThe caller, `emitLineEvent`, also skips `windowOf` and uses null when `max_columns` is not greater than 0 (line 154).\n\nThe doc comment (lines 85-88) states that the order of the checks is the contract.",
+ "usage": {
+  "cost_usd": 0.021310000000000003,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.99,
+ "headers": {}
+}

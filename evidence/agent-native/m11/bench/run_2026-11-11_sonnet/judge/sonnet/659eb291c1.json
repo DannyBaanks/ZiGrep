@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the information is not available; the reference identifies commit 53c34ef and the bug (reading text[len] one byte past the slice at end of line)."
+ ],
+ "reason": "The answer declines to answer, while the reference gives a definite commit and bug, so it provides none of the key points.",
+ "cost_usd": 0.006156
+}

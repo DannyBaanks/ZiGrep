@@ -1,0 +1,88 @@
+src/kamikaze.zig-37-/// Upper bound for the worker pool.
+src/kamikaze.zig-38-///
+src/kamikaze.zig-39-/// Every worker is an OS thread with its own stack, so the count has to stay
+src/kamikaze.zig-40-/// bounded. An unbounded value (`-j 18446744073709551615`) used to turn the
+src/kamikaze.zig-41-/// spawn loop below into an endless create-and-exit cycle: the machine was
+src/kamikaze.zig-42-/// pinned at 100% CPU and the process could not even be killed promptly.
+src/kamikaze.zig-43-/// The CLI rejects such values up front; this clamp is the second line of
+src/kamikaze.zig-44-/// defence for every other caller.
+src/kamikaze.zig:45:pub const max_threads: usize = 1024;
+src/kamikaze.zig-46-
+src/kamikaze.zig-47-/// A cluster of regular files within a single directory.
+src/kamikaze.zig-48-pub const DirectoryBatch = struct {
+src/kamikaze.zig-49-    dir_path: [:0]const u8,
+src/kamikaze.zig-50-    file_names: []const [:0]const u8,
+src/kamikaze.zig-51-    batch_idx: usize,
+src/kamikaze.zig-52-};
+src/kamikaze.zig-53-
+--
+src/kamikaze.zig-916-                try pool.pushRoot(root);
+src/kamikaze.zig-917-            } else if (info.kind == .file) {
+src/kamikaze.zig-918-                try pool.pushSingleFile(root);
+src/kamikaze.zig-919-            }
+src/kamikaze.zig-920-        }
+src/kamikaze.zig-921-    }
+src/kamikaze.zig-922-
+src/kamikaze.zig-923-    // Spawn concurrent hybrid worker swarm
+src/kamikaze.zig:924:    const actual_workers = @min(@max(1, threads_count), max_threads);
+src/kamikaze.zig-925-    if (actual_workers == 1) {
+src/kamikaze.zig-926-        // Zero-spawn fast path: single thread runs directly on calling thread
+src/kamikaze.zig-927-        kamikazeWorker(&ctx);
+src/kamikaze.zig-928-    } else {
+src/kamikaze.zig-929-        var threads: std.ArrayList(std.Thread) = .empty;
+src/kamikaze.zig-930-        defer threads.deinit(gpa);
+src/kamikaze.zig-931-
+src/kamikaze.zig-932-        var i: usize = 0;
+--
+src/main.zig-809-    opts.cache_roots[opts.cache_roots_count] = path;
+src/main.zig-810-    opts.cache_roots_count += 1;
+src/main.zig-811-}
+src/main.zig-812-
+src/main.zig-813-fn parseCount(value: []const u8) ?usize {
+src/main.zig-814-    return std.fmt.parseInt(usize, value, 10) catch null;
+src/main.zig-815-}
+src/main.zig-816-
+src/main.zig:817:/// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+src/main.zig:818:pub const max_threads: usize = kamikaze.max_threads;
+src/main.zig-819-
+src/main.zig-820-/// Parses a worker-thread count and rejects values that would blow the pool
+src/main.zig-821-/// up. Every worker is an OS thread with its own stack, so an absurd value
+src/main.zig-822-/// (`-j 18446744073709551615`) turns the spawn loop into an endless
+src/main.zig-823-/// create-and-exit cycle that pins the machine at 100% CPU.
+src/main.zig-824-///
+src/main.zig-825-/// `what` names the offending option so the usage message stays specific.
+src/main.zig-826-fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+src/main.zig-827-    const n = parseCount(value) orelse {
+src/main.zig-828-        opts.fail = .{ .what = what, .arg = value };
+src/main.zig-829-        return error.Usage;
+src/main.zig-830-    };
+src/main.zig:831:    if (n > max_threads) {
+src/main.zig-832-        opts.fail = .{
+src/main.zig:833:            .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+src/main.zig-834-            .arg = value,
+src/main.zig-835-        };
+src/main.zig-836-        return error.Usage;
+src/main.zig-837-    }
+src/main.zig-838-    return n;
+src/main.zig-839-}
+src/main.zig-840-
+src/main.zig-841-/// Reads patterns from a `-f` file: one per line, a trailing `\r` stripped, and
+--
+src/main.zig-2128-    if (opts.threads == 0) {
+src/main.zig-2129-        if (init.environ_map.get("ZIGREP_THREADS") orelse
+src/main.zig-2130-            init.environ_map.get("ZGREP_THREADS") orelse
+src/main.zig-2131-            init.environ_map.get("THREADS")) |val|
+src/main.zig-2132-        {
+src/main.zig-2133-            if (parseCount(val)) |t| {
+src/main.zig-2134-                // An out-of-range value is a hard error, not something to
+src/main.zig-2135-                // silently ignore: it would explode the worker pool.
+src/main.zig:2136:                if (t > max_threads) {
+src/main.zig:2137:                    std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
+src/main.zig-2138-                    return 2;
+src/main.zig-2139-                }
+src/main.zig-2140-                opts.threads = t;
+src/main.zig-2141-            }
+src/main.zig-2142-        }
+src/main.zig-2143-    }
+src/main.zig-2144-
+src/main.zig-2145-    // Patterns come from -e, from -f files, or from the first positional.

@@ -1,0 +1,18 @@
+{
+ "qid": "D1",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "dfc6c8ec343965b5008b88eb7cf15d7cc6f62237a84ca323d1daa951d53d3fdd",
+ "answer": "`--max-columns 0` is rejected as a usage error, so 0 is not a way to disable the window from the command line.\n\n- After parsing, `parseArgs` checks `if (opts.max_columns) |mc|` and, when `mc == 0`, sets the failure message \"--max-columns needs a positive number of bytes (a 0-byte window carries nothing)\" and returns `error.Usage` (src/main.zig:1743-1748). The comment says a 0-byte window \"would silently drop lines\" (src/main.zig:1744).\n- Internally, 0 does mean \"off\". `out_json.max_columns` is documented as \"0 = off, the byte for byte pre-M9 behaviour\" (src/out_json.zig:49-50). `emitLineEvent` only windows when `max_columns > 0` (src/out_json.zig:154).\n- To disable the window, omit the flag. The default is `null`, which is installed as 0 (src/main.zig:359, src/main.zig:2120).\n\nThe context shows no test for the `--max-columns 0` rejection. The visible parseArgs tests cover 400, 40 and the default (src/main.zig:3278-3291).",
+ "usage": {
+  "cost_usd": 0.055484,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.68,
+ "headers": {}
+}

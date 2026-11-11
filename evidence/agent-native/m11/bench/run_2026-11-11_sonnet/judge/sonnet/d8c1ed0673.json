@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "Answer matches the reference on directory, file name, and batch.Emitter.spill_dir; extra details (HOME-unset fallback, Options.spill_dir) are consistent and don't contradict it.",
+ "cost_usd": 0.006788000000000001
+}

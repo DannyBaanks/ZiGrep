@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly says no timing measurement exists and notes the measured effect is token savings (~58%), matching the reference.",
+ "cost_usd": 0.00567
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the 1024 limit, its definition at src/kamikaze.zig:45, the mirror in main.zig, the -j 5000 usage error, the ZIGREP_THREADS=5000 message with exit code 2, and the kamikaze clamp.",
+ "cost_usd": 0.007010000000000001
+}

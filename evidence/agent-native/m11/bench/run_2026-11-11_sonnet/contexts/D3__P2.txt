@@ -1,0 +1,188 @@
+CONTEXT PACK `windowOf`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 8 in 1 file(s); by role: code 8
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `windowOf` in fn:windowOf
+  src/out_json.zig:85-121  sha256:8b878fc7d76e0829  relation: declaration (pattern match, heuristic)
+    85 | /// The M9 window of `ev`, or null when the row must be emitted whole. The order
+    86 | /// of the checks is the contract: no span, short enough, span inside the text,
+    87 | /// and the text really is the line (that is what rules out `--replace` and
+    88 | /// `-o`, where the emitted text is not the line).
+>   89 | fn windowOf(ev: *const LineEvent, w: usize) ?Window {
+    90 |     if (w == 0) return null;
+    91 |     const sp = ev.span orelse return null;
+    92 |     if (ev.text.len <= w) return null;
+    93 |     if (sp.end > ev.text.len) return null;
+    94 |     if (!std.mem.eql(u8, ev.text, ev.line_bytes)) return null;
+    95 |     const m0 = sp.start;
+    96 |     const m1 = sp.end;
+    97 |     var start: usize = undefined;
+    98 |     var end: usize = undefined;
+    99 |     if (m1 - m0 >= w) {
+   100 |         // The match alone does not fit: the window is the match. Nothing is
+   101 |         // gained, but the "never cut the match" rule holds unconditionally.
+   102 |         start = m0;
+   103 |         end = m1;
+   104 |     } else {
+   105 |         // Centre the budget on the match and clamp to the line.
+   106 |         const pad = (w - (m1 - m0)) / 2;
+   107 |         const s0 = if (m0 > pad) m0 - pad else 0;
+   108 |         var s = s0;
+   109 |         var e = @min(ev.text.len, s0 + w);
+   110 |         s = if (e > w) e - w else 0;
+   111 |         // Align to codepoint boundaries without ever entering the match.
+   112 |         while (s < m0 and (ev.text[s] & 0xC0) == 0x80) s += 1;
+   113 |         // `e` is an exclusive end: at `e == text.len` the window already ends
+   114 |         // on the line's last byte, and `text[e]` would read past the slice
+   115 |         // (panic in Debug/ReleaseSafe, undefined behaviour in ReleaseFast).
+   116 |         while (e > m1 and e < ev.text.len and (ev.text[e] & 0xC0) == 0x80) e -= 1;
+   117 |         start = s;
+   118 |         end = e;
+   119 |     }
+   120 |     return .{ .start = start, .bytes = ev.text[start..end] };
+   121 | }
+
+REFERENCES
+src/out_json.zig in fn:emitLineEvent
+  [h2] line 154 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  src/out_json.zig:152-197  sha256:594e87490b58fcce
+   152 | pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+   153 |     // M9: computed once per event; null when this row goes out whole.
+>  154 |     const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+   155 |     if (compact) return emitLineRow(out, gpa, ev, win);
+   156 |     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+   157 |     try out.appendSlice(gpa, switch (ev.kind) {
+   158 |         .match => "match",
+   159 |         .context => "context",
+   160 |         .passthru => "passthru",
+   161 |         .occurrence => "occurrence",
+   162 |     });
+   163 |     try out.appendSlice(gpa, "\",\"path\":");
+   164 |     try appendJsonString(out, gpa, ev.path);
+   165 |     try out.appendSlice(gpa, ",\"line\":");
+   166 |     try appendInt(out, gpa, ev.line_no);
+   167 |     if (ev.span) |sp| {
+   168 |         const col = sp.start + 1;
+   169 |         const bstart = ev.line_start + sp.start;
+   170 |         const bend = ev.line_start + sp.end;
+   171 |         try out.appendSlice(gpa, ",\"column\":");
+   172 |         try appendInt(out, gpa, col);
+   173 |         try out.appendSlice(gpa, ",\"byte_start\":");
+   174 |         try appendInt(out, gpa, bstart);
+   175 |         try out.appendSlice(gpa, ",\"byte_end\":");
+   176 |         try appendInt(out, gpa, bend);
+   177 |         try out.appendSlice(gpa, ",\"match\":");
+   178 |         try appendJsonString(out, gpa, ev.line_bytes[sp.start..sp.end]);
+   179 |     } else {
+   180 |         try out.appendSlice(gpa, ",\"column\":null,\"byte_start\":null,\"byte_end\":null,\"match\":null");
+   181 |     }
+   182 |     try out.appendSlice(gpa, ",\"text\":");
+   183 |     try appendJsonString(out, gpa, if (win) |w| w.bytes else ev.text);
+   184 |     // M9: the two fields travel ONLY on a windowed row, so a row that fits is
+   185 |     // byte-identical to the pre-M9 event (the additive rule costs nothing in
+   186 |     // the common case). Their presence is the signal: this `text` is a window,
+   187 |     // it starts `win_start` bytes into the line and the line is `line_len` long.
+   188 |     if (win) |w| {
+   189 |         try out.appendSlice(gpa, ",\"win_start\":");
+   190 |         try appendInt(out, gpa, w.start);
+   191 |         try out.appendSlice(gpa, ",\"line_len\":");
+   192 |         try appendInt(out, gpa, ev.text.len);
+   193 |     }
+   194 |     try out.appendSlice(gpa, ",\"inverted\":");
+   195 |     try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+   196 |     try out.appendSlice(gpa, "}\n");
+   197 | }
+
+TESTS
+src/out_json.zig in test:M9: si el match solo no cabe en N, la ventana ES el match  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h3] line 547 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  src/out_json.zig:542-550  sha256:e9f9d3052a88f947
+   542 | test "M9: si el match solo no cabe en N, la ventana ES el match" {
+   543 |     max_columns = 3;
+   544 |     defer max_columns = 0;
+   545 |     var buf: [200]u8 = undefined;
+   546 |     const line = longLine(&buf, 50);
+>  547 |     const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = line }, 3).?;
+   548 |     try std.testing.expectEqual(@as(usize, 50), w.start);
+   549 |     try std.testing.expectEqualStrings("HIT", w.bytes);
+   550 | }
+src/out_json.zig in test:M9: la ventana no parte un carácter UTF-8 (ni al inicio ni al final)  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h4] line 561 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  [h5] line 572 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  src/out_json.zig:552-576  sha256:ed2b0ff0ba2ba7bd
+   552 | test "M9: la ventana no parte un carácter UTF-8 (ni al inicio ni al final)" {
+   553 |     max_columns = 9;
+   554 |     defer max_columns = 0;
+   555 |     // 8a + ññññ (8 B) + HIT + 40b: el corte cae en el segundo byte de una ñ.
+   556 |     var line: [71]u8 = undefined;
+   557 |     @memset(line[0..8], 'a');
+   558 |     @memcpy(line[8..16], "\xC3\xB1\xC3\xB1\xC3\xB1\xC3\xB1"[0..]);
+   559 |     @memcpy(line[16..19], "HIT");
+   560 |     @memset(line[19..], 'b');
+>  561 |     const w1 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 16, .end = 19 }, .kind = .match, .text = &line }, 9).?;
+   562 |     try std.testing.expectEqual(@as(usize, 14), w1.start);
+   563 |     try std.testing.expectEqualStrings("ñHITbbb", w1.bytes);
+   564 |     try std.testing.expect(std.unicode.utf8ValidateSlice(w1.bytes));
+   565 | 
+   566 |     // 10a + HIT + ññññ + 30b: el corte derecho cae dentro de una ñ.
+   567 |     var line2: [51]u8 = undefined;
+   568 |     @memset(line2[0..10], 'a');
+   569 |     @memcpy(line2[10..13], "HIT");
+   570 |     @memcpy(line2[13..21], "\xC3\xB1\xC3\xB1\xC3\xB1\xC3\xB1"[0..]);
+   571 |     @memset(line2[21..], 'b');
+>  572 |     const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 10, .end = 13 }, .kind = .match, .text = &line2 }, 8).?;
+   573 |     try std.testing.expectEqual(@as(usize, 8), w2.start);
+   574 |     try std.testing.expectEqualStrings("aaHITñ", w2.bytes);
+   575 |     try std.testing.expect(std.unicode.utf8ValidateSlice(w2.bytes));
+   576 | }
+src/out_json.zig in test:M9: --replace (el texto emitido no ES la línea) no se recorta  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h6] line 582 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  src/out_json.zig:578-583  sha256:55c9a8b3150b9d31
+   578 | test "M9: --replace (el texto emitido no ES la línea) no se recorta" {
+   579 |     var buf: [200]u8 = undefined;
+   580 |     const line = longLine(&buf, 50);
+   581 |     const replaced = "SUSTITUIDA";
+>  582 |     try std.testing.expect(windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = replaced }, 8) == null);
+   583 | }
+src/out_json.zig in test:M9: ventana que llega al final de la línea no lee fuera del slice  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h7] line 628 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  [h8] line 638 `windowOf`: unresolved (lexical_only; 1 declaration(s) named windowOf; none is linked by checkable evidence)
+  src/out_json.zig:621-642  sha256:0b3b3b8c946e1e06
+   621 | test "M9: ventana que llega al final de la línea no lee fuera del slice" {
+   622 |     // Match cerca del final: e = min(len, s0 + w) = len. Antes de la
+   623 |     // corrección, la alineación UTF-8 leía text[len] (panic en Debug).
+   624 |     var line: [105]u8 = undefined;
+   625 |     @memset(line[0..100], 'x');
+   626 |     @memcpy(line[100..103], "HIT");
+   627 |     @memcpy(line[103..105], "yy");
+>  628 |     const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line }, 10).?;
+   629 |     try std.testing.expectEqual(@as(usize, 95), w.start);
+   630 |     try std.testing.expectEqualStrings("xxxxxHITyy", w.bytes);
+   631 | 
+   632 |     // La línea termina en un carácter multibyte completo: la ventana lo
+   633 |     // conserva entero (el último byte es de continuación, pero e == len).
+   634 |     var line2: [105]u8 = undefined;
+   635 |     @memset(line2[0..100], 'x');
+   636 |     @memcpy(line2[100..103], "HIT");
+   637 |     @memcpy(line2[103..105], "\xC3\xB1");
+>  638 |     const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line2 }, 10).?;
+   639 |     try std.testing.expectEqual(@as(usize, 95), w2.start);
+   640 |     try std.testing.expectEqualStrings("xxxxxHITñ", w2.bytes);
+   641 |     try std.testing.expect(std.unicode.utf8ValidateSlice(w2.bytes));
+   642 | }
+
+UNCERTAINTY
+- 7 code reference(s) not linked to a declaration: h2, h3, h4, h5, h6, h7, h8
+- not analysed: aliases (const x = y.windowOf), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 390 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 11

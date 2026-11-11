@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says the ZIGREP_THREADS=5000 behavior cannot be determined, whereas the reference definitively says runSearch prints 'zgrep: 5000: thread count out of range (max 1024)' and returns 2",
+  "Hedges that the link between the check and -j is inferred, rather than definitively stating parseThreadCount fails with a usage error"
+ ],
+ "reason": "The 1024 limit, its location, the mirror in main.zig and the kamikaze @min clamp are correct, and -j 5000 is rejected with the right message, but the answer hedges on -j and does not state the ZIGREP_THREADS=5000 outcome (error and return 2).",
+ "cost_usd": 0.008446
+}

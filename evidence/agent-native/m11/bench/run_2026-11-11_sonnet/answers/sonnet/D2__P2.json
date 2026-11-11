@@ -1,0 +1,18 @@
+{
+ "qid": "D2",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5837bf7759b428d1cec3ae52dd6b5f3e98505e69d6085c5149b2dd3e20f2cce0",
+ "answer": "**No.** A query in a `--queries-file` batch cannot set its own `--max-columns` in \"flags\". The batch is rejected for that query.\n\n**Where it's decided:**\n- `batchQueryProblem` (src/main.zig:1878-1889) checks each query's parsed options. If `vo.max_columns != null`, it returns the error \"--max-columns is per call: put it on the command line, not in \\\"flags\\\"\" (src/main.zig:1887).\n- `runBatch` installs the value once for the whole stream from the command-line options: `out_json.max_columns = gopts.max_columns orelse 0;` (src/main.zig:1963-1966).\n- `runSearch` only resets it when it is not inside a batch (src/main.zig:2038). It also keeps the batch value when `batch_running` is true (src/main.zig:2117-2120).\n\nSo the column budget is per call, set on the command line, and shared by all queries in the batch.",
+ "usage": {
+  "cost_usd": 0.054751999999999995,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.61,
+ "headers": {}
+}

@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The answer says the code checks ZGREP_THREADS and THREADS rather than ZIGREP_THREADS, and that ZIGREP_THREADS isn't shown being read, contradicting the reference that ZIGREP_THREADS=5000 triggers the error and exit 2."
+ ],
+ "reason": "Limit, location, -j 5000 behavior and clamping are correct, but the answer fails to confirm ZIGREP_THREADS and claims different variable names, leaving that part uncertain/wrong.",
+ "cost_usd": 0.00792
+}

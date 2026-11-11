@@ -1,0 +1,18 @@
+{
+ "qid": "H1",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "47461df7a3fc88e16c77352e200382ba54362f5acb4d1095e46ce9cc13f4f8fa",
+ "answer": "**Limit:** 1024 worker threads. It is defined as `pub const max_threads: usize = 1024;` in `src/kamikaze.zig:45`. `src/main.zig:818` mirrors it as `kamikaze.max_threads`.\n\n**`-j 5000`:** `parseThreadCount` rejects it, since `n > max_threads` (`src/main.zig:831`). It sets a \"thread count out of range (max 1024)\" failure and returns `error.Usage` (`src/main.zig:832-836`).\n\n**`ZIGREP_THREADS=5000`:** The context doesn't show this variable being read. The code checks `ZGREP_THREADS` and `THREADS` (`src/main.zig:2130-2131`). For those, a value above the max prints `zgrep: 5000: thread count out of range (max 1024)` and returns exit code 2 (`src/main.zig:2136-2138`). So an out-of-range env value is a hard error, not silently ignored (`src/main.zig:2134-2135`). `ZIGREP_THREADS` itself would need a check of the lines above 2130 (not shown). The `-j` exit code isn't shown either.\n\n**Other callers:** Callers that skip the CLI are clamped to the same max (`src/kamikaze.zig:924`).",
+ "usage": {
+  "cost_usd": 0.022233999999999997,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.31,
+ "headers": {}
+}

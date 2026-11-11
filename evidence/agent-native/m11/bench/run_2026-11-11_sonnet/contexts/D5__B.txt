@@ -1,0 +1,74 @@
+src/main.zig-1862-        if (n == 0) break;
+src/main.zig-1863-        try buf.appendSlice(arena, chunk[0..n]);
+src/main.zig-1864-    }
+src/main.zig-1865-    return buf.items;
+src/main.zig-1866-}
+src/main.zig-1867-
+src/main.zig-1868-/// Set while runBatch drives its queries: the compact stream header is the
+src/main.zig-1869-/// batch's, written once, not each query's.
+src/main.zig:1870:var batch_running: bool = false;
+src/main.zig-1871-
+src/main.zig-1872-fn isOperandArg(a: [:0]const u8, operands: []const [:0]const u8) bool {
+src/main.zig-1873-    for (operands) |op| if (op.ptr == a.ptr) return true;
+src/main.zig-1874-    return false;
+src/main.zig-1875-}
+src/main.zig-1876-
+src/main.zig-1877-/// Why a query's own argv cannot run inside a batch, or null if it can.
+src/main.zig-1878-fn batchQueryProblem(vo: *const Options, gopts: *const Options) ?[]const u8 {
+--
+src/main.zig-1953-        .max_output_tokens = gopts.max_output_tokens,
+src/main.zig-1954-        .compact = gopts.json_compact,
+src/main.zig-1955-    };
+src/main.zig-1956-    defer em.deinit();
+src/main.zig-1957-    try configureSpill(init, arena, gopts, &em);
+src/main.zig-1958-    if (gopts.json_compact) _ = platform.writeStdoutRaw(io, out_json.compact_stream_header);
+src/main.zig-1959-    em.install();
+src/main.zig-1960-    defer em.uninstall();
+src/main.zig:1961:    batch_running = true;
+src/main.zig:1962:    defer batch_running = false;
+src/main.zig-1963-    // M9: the column budget is per CALL (a query cannot set it in "flags"),
+src/main.zig-1964-    // and it is not copied into each query's argv, so the batch installs it
+src/main.zig-1965-    // here for the whole stream. `runSearch` only clears it outside a batch.
+src/main.zig-1966-    out_json.max_columns = gopts.max_columns orelse 0;
+src/main.zig-1967-
+src/main.zig-1968-    var any_error = false;
+src/main.zig-1969-    var any_match = false;
+src/main.zig-1970-    for (queries) |q| {
+--
+src/main.zig-2030-    const gpa = init.gpa;
+src/main.zig-2031-    // Per-run globals: a previous run of the same process must not leak them.
+src/main.zig-2032-    // M9 is the exception on purpose: the column budget is per CALL, the batch
+src/main.zig-2033-    // installs it once for the whole stream and no query can change it, so it
+src/main.zig-2034-    // is only cleared when this search is not running inside a batch.
+src/main.zig-2035-    scan.out_sep = '\n';
+src/main.zig-2036-    scan.heading_mode = false;
+src/main.zig-2037-    out_json.compact = false;
+src/main.zig:2038:    if (!batch_running) out_json.max_columns = 0;
+src/main.zig-2039-
+src/main.zig-2040-    var opts: Options = .{};
+src/main.zig-2041-    const parsed = parseArgs(arena, args, &opts) catch {
+src/main.zig-2042-        if (opts.fail) |f| {
+src/main.zig-2043-            if (f.arg.len > 0) {
+src/main.zig-2044-                std.debug.print("zgrep: {s}: '{s}'\n", .{ f.what, f.arg });
+src/main.zig-2045-            } else {
+src/main.zig-2046-                std.debug.print("zgrep: {s}\n", .{f.what});
+--
+src/main.zig-2112-
+src/main.zig-2113-    // From here on it is a search: fix the JSON dialect for this run, and in
+src/main.zig-2114-    // compact mode open the stream with its schema header (a batch writes it
+src/main.zig-2115-    // once for the whole call).
+src/main.zig-2116-    out_json.compact = opts.json and opts.json_compact;
+src/main.zig-2117-    // M9: the column budget comes from this command line, EXCEPT inside a
+src/main.zig-2118-    // batch: there it is per CALL (the batch installed it before the queries
+src/main.zig-2119-    // and no query's argv carries it), so the batch value stands.
+src/main.zig:2120:    out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
+src/main.zig-2121-    platform.stdout_prefix_pending.store(false, .release);
+src/main.zig:2122:    if (out_json.compact and !batch_running) {
+src/main.zig-2123-        // Lazily: written before the first output line, never on an empty run.
+src/main.zig-2124-        platform.stdout_prefix = out_json.compact_stream_header;
+src/main.zig-2125-        platform.stdout_prefix_pending.store(true, .release);
+src/main.zig-2126-    }
+src/main.zig-2127-
+src/main.zig-2128-    if (opts.threads == 0) {
+src/main.zig-2129-        if (init.environ_map.get("ZIGREP_THREADS") orelse
+src/main.zig-2130-            init.environ_map.get("ZGREP_THREADS") orelse

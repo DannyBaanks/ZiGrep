@@ -1,0 +1,18 @@
+{
+ "qid": "H2",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ae36ddcf6f47f204b0b68fdb6804031d19c8a97d1548d3aba9b66a9377215833",
+ "answer": "**Directory (no dir given):** `configureSpill` in `src/main.zig:1814-1818` falls back when `opts.spill_dir` is null. If `XDG_CACHE_HOME` is set and non-empty, it uses `$XDG_CACHE_HOME/zgrep/spill` (line 1815). Otherwise it uses `$HOME/.cache/zgrep/spill`, with `HOME` defaulting to `.` (lines 1816-1817).\n\n**File name:** `spill-{ns}-{pid}.jsonl`, where `ns` is the real-clock nanoseconds and `pid` is the Linux pid (0 on other OSes) (`src/main.zig:1819-1822`). The file is created as `{dir}/{spill_name}` with mode 0600, exclusive (`src/batch.zig:177-185`).\n\n**Struct holding the final directory:** `Emitter`. `configureSpill` sets `em.spill_dir = dir` (`src/main.zig:1821`), and the field is declared at `src/batch.zig:127`. `spillOpen` reads it (`src/batch.zig:170`). `Options.spill_dir` (`src/main.zig:344`) holds only the user-supplied value, which is null here.\n\nNote: the pack lists the two `spill_dir` fields as unlinked homonyms. The Emitter link comes from the `em: *batch.Emitter` parameter type.",
+ "usage": {
+  "cost_usd": 0.029158,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.08,
+ "headers": {}
+}

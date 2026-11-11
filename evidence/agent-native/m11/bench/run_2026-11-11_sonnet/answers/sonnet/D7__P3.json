@@ -1,0 +1,18 @@
+{
+ "qid": "D7",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3f5557db1a6edae9181e582ac86df677cec5dcf128ba048092a8230a307537e7",
+ "answer": "`--max-columns=abc` is parsed by `parseArgs`. When the argument starts with `max-columns=`, it passes the text after the `=` to `parseCount` (src/main.zig:1187-1188).\n\n`parseCount` calls `std.fmt.parseInt(usize, value, 10)` and turns any error into `null` (src/main.zig:813-815). Since `\"abc\"` isn't a valid base-10 unsigned integer, it returns `null`.\n\nThe `orelse` branch then sets `opts.fail = .{ .what = \"bad value for --max-columns\", .arg = \"abc\" }` and returns `error.Usage` (src/main.zig:1188-1190). The user gets a usage error with the message \"bad value for --max-columns\" and the offending argument `abc`.\n\nThe context doesn't show how `opts.fail` is printed, so the exact output text and the exit code aren't confirmed here. The `--max-columns abc` (separate-argument) form is handled the same way (src/main.zig:1198-1200).",
+ "usage": {
+  "cost_usd": 0.03153,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.19,
+ "headers": {}
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: batchQueryProblem rejects per-query --max-columns with the stated message, and runBatch sets out_json.max_columns once from gopts. The extra runSearch details don't contradict the reference.",
+ "cost_usd": 0.006166
+}

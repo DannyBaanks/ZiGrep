@@ -1,0 +1,18 @@
+{
+ "qid": "D5",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ee9a4cf0c589e3fdc1c6f522db5d848be901458e123bbe75ea8f46d31b888c80",
+ "answer": "Because the column budget is per call, not per query. `runBatch` installs it once for the whole stream (`out_json.max_columns = gopts.max_columns orelse 0`, src/main.zig:1966). The code comment says it isn't copied into each query's argv, and a query can't set it in \"flags\" (src/main.zig:1963-1965).\n\nSo `runSearch` resets it to 0 only when `!batch_running` (src/main.zig:2038). `batch_running` is set to true while `runBatch` drives its queries (src/main.zig:1961-1962). Resetting inside a batch would wipe the batch's value.\n\nThe same rule appears where the budget is taken from the command line. Inside a batch, the existing value stands; otherwise it comes from `opts.max_columns orelse 0` (src/main.zig:2117-2120).",
+ "usage": {
+  "cost_usd": 0.01281,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.99,
+ "headers": {}
+}

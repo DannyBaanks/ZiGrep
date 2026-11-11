@@ -1,0 +1,115 @@
+src/batch.zig-119-    /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+src/batch.zig-120-    output_tokens_est: f64 = 0,
+src/batch.zig-121-    /// Linea de salida armada antes de decidir si cabe en el presupuesto.
+src/batch.zig-122-    line_buf: std.ArrayList(u8) = .empty,
+src/batch.zig-123-
+src/batch.zig-124-    // --- M8: spill (el "tee" de RTK, pero verificable) --------------------
+src/batch.zig-125-    /// Directorio y nombre del fichero de spill; `null` = sin `--spill`. El
+src/batch.zig-126-    /// fichero se crea al omitir el PRIMER evento (sin truncado, coste cero).
+src/batch.zig:127:    spill_dir: ?[]const u8 = null,
+src/batch.zig-128-    spill_name: []const u8 = "",
+src/batch.zig-129-    spill_file: ?std.Io.File = null,
+src/batch.zig-130-    spill_hash: std.crypto.hash.sha2.Sha256 = .init(.{}),
+src/batch.zig-131-    spill_bytes: usize = 0,
+src/batch.zig-132-    spill_events: usize = 0,
+src/batch.zig-133-    /// Fallo al crear o escribir el spill: va al summary, nunca se calla.
+src/batch.zig-134-    spill_err: ?[]const u8 = null,
+src/batch.zig-135-    reason: ?Reason = null,
+--
+src/batch.zig-162-        self.spill_bytes += bytes.len;
+src/batch.zig-163-    }
+src/batch.zig-164-
+src/batch.zig-165-    /// Abre el spill la primera vez que hace falta. En compacto el fichero es
+src/batch.zig-166-    /// un stream zgrep/1c valido por si solo: su cabecera y el marcador de la
+src/batch.zig-167-    /// consulta en curso van delante.
+src/batch.zig-168-    fn spillOpen(self: *Emitter) bool {
+src/batch.zig-169-        if (self.spill_file != null) return self.spill_err == null;
+src/batch.zig:170:        const dir = self.spill_dir orelse return false;
+src/batch.zig-171-        if (self.spill_err != null) return false;
+src/batch.zig-172-        std.Io.Dir.cwd().createDirPath(self.io, dir) catch |e| {
+src/batch.zig-173-            self.spill_err = @errorName(e);
+src/batch.zig-174-            return false;
+src/batch.zig-175-        };
+src/batch.zig-176-        var path_buf: [4096]u8 = undefined;
+src/batch.zig-177-        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ dir, self.spill_name }) catch {
+src/batch.zig-178-            self.spill_err = "NameTooLong";
+--
+src/batch.zig-441-        } else if (self.spill_file) |f| {
+src/batch.zig-442-            f.close(self.io);
+src/batch.zig-443-            self.spill_file = null;
+src/batch.zig-444-            var digest: [32]u8 = undefined;
+src/batch.zig-445-            self.spill_hash.final(&digest);
+src/batch.zig-446-            const hex = std.fmt.bytesToHex(digest, .lower);
+src/batch.zig-447-            try self.staged.appendSlice(g, "{\"path\":");
+src/batch.zig-448-            var path_buf: [4096]u8 = undefined;
+src/batch.zig:449:            const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ self.spill_dir.?, self.spill_name }) catch self.spill_name;
+src/batch.zig-450-            try out_json.appendJsonString(&self.staged, g, path);
+src/batch.zig-451-            try self.staged.appendSlice(g, ",\"sha256\":\"");
+src/batch.zig-452-            try self.staged.appendSlice(g, &hex);
+src/batch.zig-453-            try self.staged.appendSlice(g, "\",\"bytes\":");
+src/batch.zig-454-            try appendInt(&self.staged, g, self.spill_bytes);
+src/batch.zig-455-            try self.staged.appendSlice(g, ",\"events\":");
+src/batch.zig-456-            try appendInt(&self.staged, g, self.spill_events);
+src/batch.zig-457-            try self.staged.append(g, '}');
+--
+src/main.zig-336-    max_depth: usize = 0,
+src/main.zig-337-    /// `--max-filesize=N[KMGT]` (rg): 0 = unlimited.
+src/main.zig-338-    max_filesize: usize = 0,
+src/main.zig-339-    /// M3: `--queries-file FILE` runs every JSONL query in this one process.
+src/main.zig-340-    queries_file: ?[]const u8 = null,
+src/main.zig-341-    /// M8: `--spill[=DIR]`: what the budget omits goes to a JSONL file whose
+src/main.zig-342-    /// path, sha256, size and event count travel in the summary.
+src/main.zig-343-    spill: bool = false,
+src/main.zig:344:    spill_dir: ?[]const u8 = null,
+src/main.zig-345-    /// M5: `--json=compact` (schema zgrep/1c), same information, ~0.4x tokens.
+src/main.zig-346-    json_compact: bool = false,
+src/main.zig-347-    /// In a batch, the stream header is written once by the batch, not per query.
+src/main.zig-348-    suppress_stream_header: bool = false,
+src/main.zig-349-    /// M4: `--provenance` adds a `provenance` event (sha256, size, mtime) per
+src/main.zig-350-    /// file with output. JSON only.
+src/main.zig-351-    provenance: bool = false,
+src/main.zig-352-    /// M3: budget over the whole call, with explicit truncation (`summary`).
+--
+src/main.zig-1133-                opts.max_depth = parseCount(args[i]) orelse {
+src/main.zig-1134-                    opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
+src/main.zig-1135-                    return error.Usage;
+src/main.zig-1136-                };
+src/main.zig-1137-            } else if (std.mem.eql(u8, body, "spill")) {
+src/main.zig-1138-                opts.spill = true;
+src/main.zig-1139-            } else if (std.mem.startsWith(u8, body, "spill=")) {
+src/main.zig-1140-                opts.spill = true;
+src/main.zig:1141:                opts.spill_dir = body["spill=".len..];
+src/main.zig:1142:                if (opts.spill_dir.?.len == 0) {
+src/main.zig-1143-                    opts.fail = .{ .what = "--spill= needs a directory", .arg = a };
+src/main.zig-1144-                    return error.Usage;
+src/main.zig-1145-                }
+src/main.zig-1146-            } else if (std.mem.eql(u8, body, "provenance")) {
+src/main.zig-1147-                opts.provenance = true;
+src/main.zig-1148-            } else if (std.mem.startsWith(u8, body, "queries-file=")) {
+src/main.zig-1149-                opts.queries_file = body["queries-file=".len..];
+src/main.zig-1150-            } else if (std.mem.eql(u8, body, "queries-file")) {
+--
+src/main.zig-1806-    std.process.exit(try runCli(init, arena, args));
+src/main.zig-1807-}
+src/main.zig-1808-
+src/main.zig-1809-/// M8: where the spill of this call goes. `--spill=DIR` or
+src/main.zig-1810-/// `$XDG_CACHE_HOME/zgrep/spill` (else `~/.cache/zgrep/spill`); the name is
+src/main.zig-1811-/// unique per call (wall-clock ns + pid), created exclusive and 0600.
+src/main.zig-1812-fn configureSpill(init: std.process.Init, arena: Allocator, opts: *const Options, em: *batch.Emitter) !void {
+src/main.zig-1813-    if (!opts.spill) return;
+src/main.zig:1814:    const dir: []const u8 = opts.spill_dir orelse blk: {
+src/main.zig-1815-        if (init.environ_map.get("XDG_CACHE_HOME")) |x| if (x.len > 0) break :blk try std.fmt.allocPrint(arena, "{s}/zgrep/spill", .{x});
+src/main.zig-1816-        const home = init.environ_map.get("HOME") orelse ".";
+src/main.zig-1817-        break :blk try std.fmt.allocPrint(arena, "{s}/.cache/zgrep/spill", .{home});
+src/main.zig-1818-    };
+src/main.zig-1819-    const ns = std.Io.Clock.now(.real, init.io).nanoseconds;
+src/main.zig-1820-    const pid: i64 = if (builtin.os.tag == .linux) std.os.linux.getpid() else 0;
+src/main.zig:1821:    em.spill_dir = dir;
+src/main.zig-1822-    em.spill_name = try std.fmt.allocPrint(arena, "spill-{d}-{d}.jsonl", .{ ns, pid });
+src/main.zig-1823-}
+src/main.zig-1824-
+src/main.zig-1825-/// Dispatch: a batch (`--queries-file`), a budgeted single search
+src/main.zig-1826-/// (`--max-results` / `--max-output-tokens` with `--json`), or the plain search.
+src/main.zig-1827-fn runCli(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+src/main.zig-1828-    var opts: Options = .{};
+src/main.zig-1829-    // A bad command line is reported by runSearch, with its usual message.

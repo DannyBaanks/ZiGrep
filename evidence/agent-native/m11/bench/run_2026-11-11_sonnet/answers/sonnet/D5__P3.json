@@ -1,0 +1,18 @@
+{
+ "qid": "D5",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "906da8d88a2689b94b518cfa505a7944832e5e8ddb71fcca28dc086d5001607c",
+ "answer": "Because the column budget (`max_columns`) is per call, not per query. `runBatch` installs it once for the whole stream (`out_json.max_columns = gopts.max_columns orelse 0;`, src/main.zig:1966). The comment at src/main.zig:1963-1965 explains that a query cannot set it in \"flags\" and it isn't copied into each query's argv. If `runSearch` reset it to 0 on every query, it would wipe the batch's value.\n\nSo `runSearch` only clears it when not in a batch: `if (!batch_running) out_json.max_columns = 0;` (src/main.zig:2038, comment at 2032-2034). Later it also keeps the existing value inside a batch: `out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);` (src/main.zig:2117-2120).\n\n`batch_running` is set true in `runBatch` and reset by `defer` (src/main.zig:1961-1962).",
+ "usage": {
+  "cost_usd": 0.015758,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.83,
+ "headers": {}
+}

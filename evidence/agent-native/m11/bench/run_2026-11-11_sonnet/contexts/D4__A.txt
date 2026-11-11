@@ -1,0 +1,17 @@
+src/main.zig:107:    \\                    plus win_start and line_len, so the whole line is
+src/main.zig:1749:        // The window travels in the JSON fields (`text`, `win_start`,
+src/main.zig:1753:            opts.fail = .{ .what = "--max-columns needs --json (or --queries-file): the window travels in the text, win_start and line_len fields", .arg = "" };
+src/out_json.zig:71:///     `line_start + win_start` (with `--provenance`, verifiable by hash).
+src/out_json.zig:74:/// windowed): `zgrep/1` gains `win_start` + `line_len` next to `text`;
+src/out_json.zig:76:/// `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (+ `match` when
+src/out_json.zig:187:    // it starts `win_start` bytes into the line and the line is `line_len` long.
+src/out_json.zig:189:        try out.appendSlice(gpa, ",\"win_start\":");
+src/out_json.zig:494:test "M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está" {
+src/out_json.zig:508:        \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":1,"column":29,"byte_start":1028,"byte_end":1031,"match":"HIT","text":"xxxxxxxxHITyyyyyyyyy","win_start":20,"line_len":60,"inverted":false}
+src/out_json.zig:522:    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig:539:    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig:598:    // [t=w, line, col, byte_start, len, ventana, win_start, line_len]
+GUIA.md:1009:| `[t+"w", line, col, byte_start, len, ventana, win_start, line_len]` | el `text` es una ventana: a lo sumo N bytes alrededor del match |
+GUIA.md:1015:{"schema":"zgrep/1","type":"match","path":"evidence/agent-native/m9/fix/long.txt","line":1,"column":201,"byte_start":200,"byte_end":203,"match":"HIT","text":"xxxxxxxxxxxxxxxxxxHITyyyyyyyyyyyyyyyyyyy","win_start":182,"line_len":403,"inverted":false}
+GUIA.md:1018:`win_start` y `line_len` viajan **solo** en la fila recortada: su presencia es la
+GUIA.md:1024:`line_start + win_start`—; con `--provenance`, verificable por sha256.

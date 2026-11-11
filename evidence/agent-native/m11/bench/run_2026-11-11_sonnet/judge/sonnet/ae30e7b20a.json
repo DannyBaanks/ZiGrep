@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims the context doesn't show ZIGREP_THREADS and that the env lookup reads ZGREP_THREADS/THREADS, implying ZIGREP_THREADS may not be the variable checked — hedged where the reference is definite",
+  "Says it is unknown how the usage error is printed/exit code, hedging where reference states usage error"
+ ],
+ "reason": "Limit, location, -j 5000 message and the env var output/exit code 2 match the reference, but the answer hedges on whether ZIGREP_THREADS is even read and on the usage-error handling, making it incomplete and partly uncertain.",
+ "cost_usd": 0.008294
+}

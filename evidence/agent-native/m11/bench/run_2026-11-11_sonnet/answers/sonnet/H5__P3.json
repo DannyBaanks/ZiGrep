@@ -1,0 +1,18 @@
+{
+ "qid": "H5",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6138aae2cd670d1abecbbbd64d375a2fd31608c4a755af948c414dc849ee4733",
+ "answer": "The context does not say. It contains no timing measurement for `--max-columns 400`, and no benchmark on a 655 MB monorepo.\n\nWhat it does show:\n\n- `--max-columns` is JSON-only and per call (src/out_json.zig:46-50).\n- The cost is a per-event `windowOf` call when `max_columns > 0` (src/out_json.zig:154).\n- The documented measurement is token savings, not latency: about 58.4 % fewer compact-output tokens at N=400 (src/out_json.zig:52-55).\n- That measurement is registered in `evidence/agent-native/m9/`, which was not searched.\n\nMissing: a latency benchmark, such as timings with and without the flag on the 655 MB tree. It might be in the m9 evidence directory or in the spill file (`pack_max_columns_c6aa6c1b826a.json`), but neither is in the context. I can't give a millisecond figure without guessing.",
+ "usage": {
+  "cost_usd": 0.054582,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.22,
+ "headers": {}
+}

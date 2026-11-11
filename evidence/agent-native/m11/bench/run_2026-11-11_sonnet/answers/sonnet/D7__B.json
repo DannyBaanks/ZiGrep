@@ -1,0 +1,18 @@
+{
+ "qid": "D7",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "e6d44f3ba754ac92faadda433f1256ec3f324e4adf91a7d5a72669a8ec78ce83",
+ "answer": "**Parsing:** `--max-columns=abc` hits the `max-columns=` prefix branch (src/main.zig:1187-1188), which passes the text after `=` to `parseCount`. `parseCount` is just `std.fmt.parseInt(usize, value, 10) catch null` (src/main.zig:813-815), so `\"abc\"` isn't a valid base-10 unsigned integer and returns `null`.\n\n**What the user gets:** The `orelse` branch sets `opts.fail = .{ .what = \"bad value for --max-columns\", .arg = \"abc\" }` and returns `error.Usage` (src/main.zig:1188-1190). So it's a usage error naming the option and the bad value, not a silent zero.\n\n**Caveat:** The context doesn't show the code that renders `opts.fail` or the exit code for usage errors. I can't say the exact message format. The one comparable case, the `ZGREP_THREADS` out-of-range error, returns 2 (src/main.zig:2137-2138), but that is a different path.\n\nThe separate-argument form (`--max-columns abc`) behaves the same way (src/main.zig:1198-1200).",
+ "usage": {
+  "cost_usd": 0.031704,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.69,
+ "headers": {}
+}

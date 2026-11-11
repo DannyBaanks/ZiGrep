@@ -1,0 +1,18 @@
+{
+ "qid": "H1",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a519a3fa280a43e26543e54b784daebd73ffd02b113bdcf352d853d8943d3553",
+ "answer": "The largest accepted worker-thread count is **1024**. It is defined at `src/kamikaze.zig:45` as `pub const max_threads: usize = 1024;`. `src/main.zig:817-818` re-exports it as `max_threads = kamikaze.max_threads`, described as the hard limit for the worker pool.\n\n**`-j 5000`:** The code at `src/main.zig:2136-2137` checks `t > max_threads`. If true, it prints `zgrep: <val>: thread count out of range (max 1024)`. This looks like the CLI-flag path, though the context doesn't show which option that code handles, so I'm inferring the link to `-j`. It's rejected with an error, not clamped.\n\n**`ZIGREP_THREADS=5000`:** The context is insufficient to say for certain. `src/main.zig:831-833` has a check, `n > max_threads`, that produces an error with \"thread count out of range (max {d})\". That is likely a shared parsing helper, but the context doesn't show whether it handles the environment variable or what it does with the error. Not shown: the code that reads `ZIGREP_THREADS`.\n\nSeparately, `src/kamikaze.zig:924` clamps the worker count with `@min(@max(1, threads_count), max_threads)`, so any value that reached the pool would be capped at 1024.",
+ "usage": {
+  "cost_usd": 0.008928,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.32,
+ "headers": {}
+}

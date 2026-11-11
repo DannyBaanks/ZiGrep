@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly describes the !batch_running gating and hedges toward the right inference (batch sets max_columns once and per-query calls would clobber it), but it doesn't definitively state the reason, including that per-query argv lacks --max-columns.",
+ "cost_usd": 0.006254
+}

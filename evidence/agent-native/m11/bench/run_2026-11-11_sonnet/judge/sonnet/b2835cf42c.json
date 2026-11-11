@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "It correctly identifies em.spill_dir as the final directory (hedged, type name Emitter not stated) and distinguishes it from opts.spill_dir, but it gives no default directory (XDG_CACHE_HOME or ~/.cache/zgrep/spill) and no file name pattern, which the reference states definitively.",
+ "cost_usd": 0.0070880000000000006
+}

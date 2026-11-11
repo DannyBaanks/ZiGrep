@@ -1,0 +1,235 @@
+src/main.zig-587-
+src/main.zig-588-// ---------------------------------------------------------------------------
+src/main.zig-589-// CLI
+src/main.zig-590-// ---------------------------------------------------------------------------
+src/main.zig-591-
+src/main.zig-592-/// Parses a line-count argument (`-A2`, `--context 3`, ...). A non-numeric
+src/main.zig-593-/// value is a usage error, not a silent zero.
+src/main.zig-594-fn parseContextArg(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+src/main.zig:595:    return parseCount(value) orelse {
+src/main.zig-596-        opts.fail = .{ .what = what, .arg = value };
+src/main.zig-597-        return error.Usage;
+src/main.zig-598-    };
+src/main.zig-599-}
+src/main.zig-600-
+src/main.zig-601-pub const max_exec_args = 64;
+src/main.zig-602-
+src/main.zig-603-/// The argv of one `--exec` command. Returned BY VALUE: the array lives inside
+--
+src/main.zig-718-    const mult: usize = switch (v[v.len - 1]) {
+src/main.zig-719-        'k', 'K' => 1024,
+src/main.zig-720-        'm', 'M' => 1024 * 1024,
+src/main.zig-721-        'g', 'G' => 1024 * 1024 * 1024,
+src/main.zig-722-        't', 'T' => 1024 * 1024 * 1024 * 1024,
+src/main.zig-723-        else => 1,
+src/main.zig-724-    };
+src/main.zig-725-    if (mult != 1) v = v[0 .. v.len - 1];
+src/main.zig:726:    return (parseCount(v) orelse return null) *| mult;
+src/main.zig-727-}
+src/main.zig-728-
+src/main.zig-729-/// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+src/main.zig-730-fn applyTypes(filter_engine: *filter.FilterEngine, opts: *const Options) void {
+src/main.zig-731-    for (opts.type_include[0..opts.type_include_count]) |t| {
+src/main.zig-732-        for (t.exts) |ext| filter_engine.addIncludedExts(ext) catch {};
+src/main.zig-733-    }
+src/main.zig-734-    for (opts.type_exclude[0..opts.type_exclude_count]) |t| {
+--
+src/main.zig-805-        opts.fail = .{ .what = "too many --cache-root (max 16)", .arg = path };
+src/main.zig-806-        return error.Usage;
+src/main.zig-807-    }
+src/main.zig-808-    opts.cache = true;
+src/main.zig-809-    opts.cache_roots[opts.cache_roots_count] = path;
+src/main.zig-810-    opts.cache_roots_count += 1;
+src/main.zig-811-}
+src/main.zig-812-
+src/main.zig:813:fn parseCount(value: []const u8) ?usize {
+src/main.zig-814-    return std.fmt.parseInt(usize, value, 10) catch null;
+src/main.zig-815-}
+src/main.zig-816-
+src/main.zig-817-/// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+src/main.zig-818-pub const max_threads: usize = kamikaze.max_threads;
+src/main.zig-819-
+src/main.zig-820-/// Parses a worker-thread count and rejects values that would blow the pool
+src/main.zig-821-/// up. Every worker is an OS thread with its own stack, so an absurd value
+src/main.zig-822-/// (`-j 18446744073709551615`) turns the spawn loop into an endless
+src/main.zig-823-/// create-and-exit cycle that pins the machine at 100% CPU.
+src/main.zig-824-///
+src/main.zig-825-/// `what` names the offending option so the usage message stays specific.
+src/main.zig-826-fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+src/main.zig:827:    const n = parseCount(value) orelse {
+src/main.zig-828-        opts.fail = .{ .what = what, .arg = value };
+src/main.zig-829-        return error.Usage;
+src/main.zig-830-    };
+src/main.zig-831-    if (n > max_threads) {
+src/main.zig-832-        opts.fail = .{
+src/main.zig-833-            .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+src/main.zig-834-            .arg = value,
+src/main.zig-835-        };
+--
+src/main.zig-996-            } else if (std.mem.eql(u8, body, "files-with-matches")) {
+src/main.zig-997-                opts.mode = .files;
+src/main.zig-998-            } else if (std.mem.eql(u8, body, "count")) {
+src/main.zig-999-                opts.mode = .count;
+src/main.zig-1000-            } else if (std.mem.eql(u8, body, "quiet") or std.mem.eql(u8, body, "silent")) {
+src/main.zig-1001-                opts.mode = .quiet;
+src/main.zig-1002-            } else if (std.mem.startsWith(u8, body, "max-count=")) {
+src/main.zig-1003-                const v = body["max-count=".len..];
+src/main.zig:1004:                opts.max_count = parseCount(v) orelse {
+src/main.zig-1005-                    opts.fail = .{ .what = "bad value for --max-count", .arg = v };
+src/main.zig-1006-                    return error.Usage;
+src/main.zig-1007-                };
+src/main.zig-1008-            } else if (std.mem.eql(u8, body, "max-count")) {
+src/main.zig-1009-                i += 1;
+src/main.zig-1010-                if (i >= args.len) {
+src/main.zig-1011-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1012-                    return error.Usage;
+src/main.zig-1013-                }
+src/main.zig:1014:                opts.max_count = parseCount(args[i]) orelse {
+src/main.zig-1015-                    opts.fail = .{ .what = "bad value for --max-count", .arg = args[i] };
+src/main.zig-1016-                    return error.Usage;
+src/main.zig-1017-                };
+src/main.zig-1018-            } else if (std.mem.eql(u8, body, "word-regexp")) {
+src/main.zig-1019-                opts.word = true;
+src/main.zig-1020-            } else if (std.mem.eql(u8, body, "basic-regexp")) {
+src/main.zig-1021-                opts.basic_regexp = true;
+src/main.zig-1022-            } else if (std.mem.eql(u8, body, "line-regexp")) {
+--
+src/main.zig-1115-                }
+src/main.zig-1116-                if (opts.exclude_from_count >= opts.exclude_from.len) {
+src/main.zig-1117-                    opts.fail = .{ .what = "too many --exclude-from files (max 8)", .arg = a };
+src/main.zig-1118-                    return error.Usage;
+src/main.zig-1119-                }
+src/main.zig-1120-                opts.exclude_from[opts.exclude_from_count] = args[i];
+src/main.zig-1121-                opts.exclude_from_count += 1;
+src/main.zig-1122-            } else if (std.mem.startsWith(u8, body, "max-depth=")) {
+src/main.zig:1123:                opts.max_depth = parseCount(body["max-depth=".len..]) orelse {
+src/main.zig-1124-                    opts.fail = .{ .what = "bad value for --max-depth", .arg = body["max-depth=".len..] };
+src/main.zig-1125-                    return error.Usage;
+src/main.zig-1126-                };
+src/main.zig-1127-            } else if (std.mem.eql(u8, body, "max-depth")) {
+src/main.zig-1128-                i += 1;
+src/main.zig-1129-                if (i >= args.len) {
+src/main.zig-1130-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1131-                    return error.Usage;
+src/main.zig-1132-                }
+src/main.zig:1133:                opts.max_depth = parseCount(args[i]) orelse {
+src/main.zig-1134-                    opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
+src/main.zig-1135-                    return error.Usage;
+src/main.zig-1136-                };
+src/main.zig-1137-            } else if (std.mem.eql(u8, body, "spill")) {
+src/main.zig-1138-                opts.spill = true;
+src/main.zig-1139-            } else if (std.mem.startsWith(u8, body, "spill=")) {
+src/main.zig-1140-                opts.spill = true;
+src/main.zig-1141-                opts.spill_dir = body["spill=".len..];
+--
+src/main.zig-1150-            } else if (std.mem.eql(u8, body, "queries-file")) {
+src/main.zig-1151-                i += 1;
+src/main.zig-1152-                if (i >= args.len) {
+src/main.zig-1153-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1154-                    return error.Usage;
+src/main.zig-1155-                }
+src/main.zig-1156-                opts.queries_file = args[i];
+src/main.zig-1157-            } else if (std.mem.startsWith(u8, body, "max-results=")) {
+src/main.zig:1158:                opts.max_results = parseCount(body["max-results=".len..]) orelse {
+src/main.zig-1159-                    opts.fail = .{ .what = "bad value for --max-results", .arg = body["max-results=".len..] };
+src/main.zig-1160-                    return error.Usage;
+src/main.zig-1161-                };
+src/main.zig-1162-            } else if (std.mem.eql(u8, body, "max-results")) {
+src/main.zig-1163-                i += 1;
+src/main.zig-1164-                if (i >= args.len) {
+src/main.zig-1165-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1166-                    return error.Usage;
+src/main.zig-1167-                }
+src/main.zig:1168:                opts.max_results = parseCount(args[i]) orelse {
+src/main.zig-1169-                    opts.fail = .{ .what = "bad value for --max-results", .arg = args[i] };
+src/main.zig-1170-                    return error.Usage;
+src/main.zig-1171-                };
+src/main.zig-1172-            } else if (std.mem.startsWith(u8, body, "max-output-tokens=")) {
+src/main.zig:1173:                opts.max_output_tokens = parseCount(body["max-output-tokens=".len..]) orelse {
+src/main.zig-1174-                    opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = body["max-output-tokens=".len..] };
+src/main.zig-1175-                    return error.Usage;
+src/main.zig-1176-                };
+src/main.zig-1177-            } else if (std.mem.eql(u8, body, "max-output-tokens")) {
+src/main.zig-1178-                i += 1;
+src/main.zig-1179-                if (i >= args.len) {
+src/main.zig-1180-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1181-                    return error.Usage;
+src/main.zig-1182-                }
+src/main.zig:1183:                opts.max_output_tokens = parseCount(args[i]) orelse {
+src/main.zig-1184-                    opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = args[i] };
+src/main.zig-1185-                    return error.Usage;
+src/main.zig-1186-                };
+src/main.zig-1187-            } else if (std.mem.startsWith(u8, body, "max-columns=")) {
+src/main.zig:1188:                opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+src/main.zig-1189-                    opts.fail = .{ .what = "bad value for --max-columns", .arg = body["max-columns=".len..] };
+src/main.zig-1190-                    return error.Usage;
+src/main.zig-1191-                };
+src/main.zig-1192-            } else if (std.mem.eql(u8, body, "max-columns")) {
+src/main.zig-1193-                i += 1;
+src/main.zig-1194-                if (i >= args.len) {
+src/main.zig-1195-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1196-                    return error.Usage;
+src/main.zig-1197-                }
+src/main.zig:1198:                opts.max_columns = parseCount(args[i]) orelse {
+src/main.zig-1199-                    opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+src/main.zig-1200-                    return error.Usage;
+src/main.zig-1201-                };
+src/main.zig-1202-            } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+src/main.zig-1203-                opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+src/main.zig-1204-                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+src/main.zig-1205-                    return error.Usage;
+src/main.zig-1206-                };
+--
+src/main.zig-1300-            } else if (std.mem.eql(u8, body, "cache-root")) {
+src/main.zig-1301-                i += 1;
+src/main.zig-1302-                if (i >= args.len) {
+src/main.zig-1303-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1304-                    return error.Usage;
+src/main.zig-1305-                }
+src/main.zig-1306-                add_cache_root(opts, args[i]) catch return error.Usage;
+src/main.zig-1307-            } else if (std.mem.startsWith(u8, body, "cache-depth=")) {
+src/main.zig:1308:                opts.cache_depth = parseCount(body["cache-depth=".len..]) orelse {
+src/main.zig-1309-                    opts.fail = .{ .what = "bad value for --cache-depth", .arg = body["cache-depth=".len..] };
+src/main.zig-1310-                    return error.Usage;
+src/main.zig-1311-                };
+src/main.zig-1312-            } else if (std.mem.eql(u8, body, "cache-include-out")) {
+src/main.zig-1313-                opts.cache = true;
+src/main.zig-1314-                opts.cache_include_out = true;
+src/main.zig-1315-            } else if (std.mem.eql(u8, body, "cache-no-global")) {
+src/main.zig-1316-                opts.cache = true;
+--
+src/main.zig-1572-                    const value: []const u8 = if (rest.len > 0) rest else blk: {
+src/main.zig-1573-                        i += 1;
+src/main.zig-1574-                        if (i >= args.len) {
+src/main.zig-1575-                            opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1576-                            return error.Usage;
+src/main.zig-1577-                        }
+src/main.zig-1578-                        break :blk args[i];
+src/main.zig-1579-                    };
+src/main.zig:1580:                    if (parseCount(value)) |mc| {
+src/main.zig-1581-                        opts.max_count = mc;
+src/main.zig-1582-                    } else {
+src/main.zig-1583-                        opts.nav_plan = nav.NavPlan.parse(value) catch {
+src/main.zig-1584-                            opts.fail = .{ .what = "invalid Befunge navigation spec or max-count number", .arg = value };
+src/main.zig-1585-                            return error.Usage;
+src/main.zig-1586-                        };
+src/main.zig-1587-                    }
+src/main.zig-1588-                    ci = chars.len;
+--
+src/main.zig-2125-        platform.stdout_prefix_pending.store(true, .release);
+src/main.zig-2126-    }
+src/main.zig-2127-
+src/main.zig-2128-    if (opts.threads == 0) {
+src/main.zig-2129-        if (init.environ_map.get("ZIGREP_THREADS") orelse
+src/main.zig-2130-            init.environ_map.get("ZGREP_THREADS") orelse
+src/main.zig-2131-            init.environ_map.get("THREADS")) |val|
+src/main.zig-2132-        {
+src/main.zig:2133:            if (parseCount(val)) |t| {
+src/main.zig-2134-                // An out-of-range value is a hard error, not something to
+src/main.zig-2135-                // silently ignore: it would explode the worker pool.
+src/main.zig-2136-                if (t > max_threads) {
+src/main.zig-2137-                    std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
+src/main.zig-2138-                    return 2;
+src/main.zig-2139-                }
+src/main.zig-2140-                opts.threads = t;
+src/main.zig-2141-            }

@@ -1,0 +1,225 @@
+CONTEXT PACK `skip_hidden`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 10 in 2 file(s); by role: code 10
+  declarations found by pattern: 2
+
+BLOCKS
+src/filter.zig:92-104  sha256:0fe3ea807777c78e
+    92 |     return false;
+    93 | }
+    94 | 
+    95 | pub const FilterEngine = struct {
+    96 |     gpa: Allocator,
+    97 |     use_defaults: bool = true,
+>   98 |     skip_hidden: bool = false,
+    99 |     no_ignore: bool = false,
+   100 |     /// Set once `loadIgnoreFiles` has run. The upward `.dataignore` /
+   101 |     /// `.gitignore` walk is deferred until a run actually needs it, so a
+   102 |     /// micro-tree never pays for it.
+   103 |     ignore_files_loaded: bool = false,
+   104 | 
+src/filter.zig:241-263  sha256:0b4497e34874886a
+   241 |     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+   242 |         if (self.no_ignore) return false;
+   243 | 
+>  244 |         if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+   245 |             return true;
+   246 |         }
+   247 | 
+   248 |         if (self.use_defaults) {
+   249 |             for (default_excluded_dirs) |d| {
+   250 |                 if (std.mem.eql(u8, dir_name, d)) return true;
+   251 |             }
+   252 |         }
+   253 | 
+   254 |         for (self.excluded_dirs.items) |ex| {
+   255 |             if (matchPattern(dir_name, ex)) return true;
+   256 |         }
+   257 | 
+   258 |         for (self.ignore_patterns.items) |pat| {
+   259 |             if (matchPattern(dir_name, pat)) return true;
+   260 |         }
+   261 | 
+   262 |         return false;
+   263 |     }
+src/filter.zig:265-315  sha256:3c044b82060bdee7
+   265 |     pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+   266 |         if (self.no_ignore) return false;
+   267 | 
+>  268 |         if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+   269 |             return true;
+   270 |         }
+   271 | 
+   272 |         if (self.use_defaults) {
+   273 |             for (default_excluded_exts) |ext| {
+   274 |                 if (matchesExt(file_name, ext)) return true;
+   275 |             }
+   276 |         }
+   277 | 
+   278 |         for (self.excluded_exts.items) |ext| {
+   279 |             if (matchesExt(file_name, ext)) return true;
+   280 |         }
+   281 | 
+   282 |         for (self.excluded_patterns.items) |pat| {
+   283 |             if (matchPattern(file_name, pat)) return true;
+   284 |         }
+   285 | 
+   286 |         for (self.ignore_patterns.items) |pat| {
+   287 |             if (matchPattern(file_name, pat)) return true;
+   288 |         }
+   289 | 
+   290 |         // If specific extensions or patterns were requested via --include,
+   291 |         // any file not matching at least one is excluded:
+   292 |         if (self.included_exts.items.len > 0) {
+   293 |             var matched = false;
+   294 |             for (self.included_exts.items) |ext| {
+   295 |                 if (matchesExt(file_name, ext)) {
+   296 |                     matched = true;
+   297 |                     break;
+   298 |                 }
+   299 |             }
+   300 |             if (!matched) return true;
+   301 |         }
+   302 | 
+   303 |         if (self.included_patterns.items.len > 0) {
+   304 |             var matched = false;
+   305 |             for (self.included_patterns.items) |pat| {
+   306 |                 if (matchPattern(file_name, pat)) {
+   307 |                     matched = true;
+   308 |                     break;
+   309 |                 }
+   310 |             }
+   311 |             if (!matched) return true;
+   312 |         }
+   313 | 
+   314 |         return false;
+   315 |     }
+src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+src/main.zig:274-286  sha256:9c1e70c10a1449c8
+   274 |     include_exts: [64][]const u8 = undefined,
+   275 |     include_exts_count: usize = 0,
+   276 |     exclude_patterns: [64][]const u8 = undefined,
+   277 |     exclude_patterns_count: usize = 0,
+   278 |     include_patterns: [64][]const u8 = undefined,
+   279 |     include_patterns_count: usize = 0,
+>  280 |     skip_hidden: bool = false,
+   281 |     fixed: bool = false,
+   282 |     ignore_case: bool = false,
+   283 |     word: bool = false,
+   284 |     /// `-x`: the pattern must match a whole line.
+   285 |     line_regexp: bool = false,
+   286 |     /// `-s` / `--no-messages`: do not report unreadable files.
+src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+src/main.zig:1413-1425  sha256:48215ed6a51ce54d
+  1413 |                     opts.fail = .{ .what = "too many -e patterns (max 16)", .arg = a };
+  1414 |                     return error.Usage;
+  1415 |                 }
+  1416 |                 opts.patterns[opts.patterns_count] = args[i];
+  1417 |                 opts.patterns_count += 1;
+  1418 |             } else if (std.mem.eql(u8, body, "no-hidden")) {
+> 1419 |                 opts.skip_hidden = true;
+  1420 |             } else if (std.mem.eql(u8, body, "no-ignore")) {
+  1421 |                 opts.no_ignore = true;
+  1422 |             } else if (std.mem.eql(u8, body, "no-default-ignore")) {
+  1423 |                 opts.no_default_ignore = true;
+  1424 |             } else if (std.mem.eql(u8, body, "force-swarm") or std.mem.eql(u8, body, "swarm")) {
+  1425 |                 opts.force_swarm = true;
+src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+src/main.zig:2379-2391  sha256:9f9d8184da3d4474
+  2379 |     var engine_state: io_engine.State = .{};
+  2380 |         var filter_engine = filter.FilterEngine.init(gpa);
+  2381 |         defer filter_engine.deinit();
+  2382 | 
+  2383 |         filter_engine.no_ignore = opts.no_ignore;
+  2384 |         filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+> 2385 |         filter_engine.skip_hidden = opts.skip_hidden;
+  2386 | 
+  2387 |         for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+  2388 |             try filter_engine.addExcludedDirs(d);
+  2389 |         }
+  2390 |         for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+  2391 |             try filter_engine.addExcludedExts(e);
+src/main.zig:2499-2511  sha256:5809f493687b0bbd
+  2499 |     // --- collect the file list (deterministic sorted walk with filter engine) -
+  2500 |     var filter_engine = filter.FilterEngine.init(gpa);
+  2501 |     defer filter_engine.deinit();
+  2502 | 
+  2503 |     filter_engine.no_ignore = opts.no_ignore;
+  2504 |     filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+> 2505 |     filter_engine.skip_hidden = opts.skip_hidden;
+  2506 | 
+  2507 |     for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+  2508 |         try filter_engine.addExcludedDirs(d);
+  2509 |     }
+  2510 |     for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+  2511 |         try filter_engine.addExcludedExts(e);
+src/main.zig:2956-3014  sha256:a2878048b6c11f37
+  2956 | test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+  2957 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  2958 |     defer arena.deinit();
+  2959 |     const alloc = arena.allocator();
+  2960 |     {
+  2961 |         var o: Options = .{};
+  2962 |         const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
+  2963 |         _ = try parseArgs(alloc, &a, &o);
+  2964 |         try std.testing.expect(o.kamikaze);
+  2965 |     }
+  2966 |     {
+  2967 |         var o: Options = .{};
+  2968 |         const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+  2969 |         _ = try parseArgs(alloc, &a, &o);
+  2970 |         try std.testing.expect(o.kamikaze);
+> 2971 |         try std.testing.expect(o.skip_hidden);
+  2972 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+  2973 |         try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+  2974 |     }
+  2975 |     {
+  2976 |         var o: Options = .{};
+  2977 |         const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+  2978 |         _ = try parseArgs(alloc, &a, &o);
+  2979 |         try std.testing.expect(o.no_ignore);
+  2980 |         try std.testing.expect(o.no_default_ignore);
+  2981 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+  2982 |         try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+  2983 |         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+  2984 |         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+  2985 |     }
+  2986 |     {
+  2987 |         var o: Options = .{};
+  2988 |         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+  2989 |         _ = try parseArgs(alloc, &a, &o);
+  2990 |         try std.testing.expect(o.sort);
+  2991 |         try std.testing.expect(!o.kamikaze);
+  2992 |     }
+  2993 |     {
+  2994 |         var o: Options = .{};
+  2995 |         const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+  2996 |         _ = try parseArgs(alloc, &a, &o);
+  2997 |         try std.testing.expect(o.nav_plan.has_trampoline);
+  2998 |         try std.testing.expect(!o.nav_plan.has_ceiling);
+  2999 |     }
+  3000 |     {
+  3001 |         var o: Options = .{};
+  3002 |         const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+  3003 |         _ = try parseArgs(alloc, &a, &o);
+  3004 |         try std.testing.expect(o.nav_plan.has_ceiling);
+  3005 |         try std.testing.expect(!o.nav_plan.has_trampoline);
+  3006 |     }
+  3007 |     {
+  3008 |         var o: Options = .{};
+  3009 |         const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+  3010 |         _ = try parseArgs(alloc, &a, &o);
+  3011 |         try std.testing.expect(o.sort);
+  3012 |         try std.testing.expect(!o.kamikaze);
+  3013 |     }
+  3014 | }
+
+TRUNCATION
+  truncated: false   items: 11

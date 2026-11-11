@@ -1,0 +1,12 @@
+{
+ "schema": "zpack/0",
+ "symbol": "max_columns",
+ "revision": "22a99c1408304f3a20be0222a91f8f23a5b84742",
+ "full_text_of": [
+  {
+   "section": "TESTS",
+   "id": "src/out_json.zig#test:M9: fila compacta windowed en contexto invertido (-v) lleva mvW",
+   "text": "src/out_json.zig in test:M9: fila compacta windowed en contexto invertido (-v) lleva mvW  coverage: NOT_DEMONSTRATED (the pack runs nothing)\n  [h30] line 608 `max_columns`: same_file_top_level -> h15 (heuristic; single top-level declaration in src/out_json.zig:79, no local shadow found)\n  [h31] line 610 `max_columns`: same_file_top_level -> h15 (heuristic; single top-level declaration in src/out_json.zig:79, no local shadow found)\n  src/out_json.zig:605-619  sha256:f2ea53f1b7ccddc9\n   605 | test \"M9: fila compacta windowed en contexto invertido (-v) lleva mvW\" {\n   606 |     const gpa = std.testing.allocator;\n   607 |     compact = true;\n>  608 |     max_columns = 20;\n   609 |     defer compact = false;\n>  610 |     defer max_columns = 0;\n   611 |     var buf: [60]u8 = undefined;\n   612 |     const line = longLine(&buf, 28);\n   613 |     var out: std.ArrayList(u8) = .empty;\n   614 |     defer out.deinit(gpa);\n   615 |     try emitLineEvent(&out, gpa, .{\n   616 |         .path = \"a\", .line_no = 3, .line_start = 0, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line, .inverted = true,\n   617 |     });\n   618 |     try std.testing.expect(std.mem.startsWith(u8, out.items, \"[\\\"mvw\\\",3,29,28,3,\"));\n   619 | }"
+  }
+ ]
+}

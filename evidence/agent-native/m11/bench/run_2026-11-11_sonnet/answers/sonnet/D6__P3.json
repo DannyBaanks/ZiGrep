@@ -1,0 +1,18 @@
+{
+ "qid": "D6",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "54c83b498626f9aeaa24b0ca5a3dc5affd201e0628b3abe789a80ab56e18cc63",
+ "answer": "A windowed row differs from a normal compact row in three ways (all in `emitLineRow`, src/out_json.zig:233-279):\n\n1. **Kind suffix:** the kind tag gets a `w` appended (after the optional `v` for inverted), e.g. `mw` / `mvw` (src/out_json.zig:241-245).\n2. **Text:** it carries the window bytes (`w.bytes`) instead of the full line text (src/out_json.zig:256).\n3. **Two extra trailing elements:** the window's start offset (`w.start`) and the full line length (`ev.text.len`) (src/out_json.zig:268-273). The comment says the `w` row \"carries two extra elements after the text\" (src/out_json.zig:242-243).\n\nAlso, the match string is only included when it can't be derived from the emitted text; with a window, the column-based position shifts by the window start (src/out_json.zig:258-267).\n\nWindows only apply to rows with a span; rows without one are never trimmed (test at src/out_json.zig:526). A window is only computed when `max_columns > 0` (src/out_json.zig:154).",
+ "usage": {
+  "cost_usd": 0.021506,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.69,
+ "headers": {}
+}

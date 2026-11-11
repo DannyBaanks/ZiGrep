@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists the same five null cases as the reference (w==0, no span, text fits, span past text, text != line_bytes), with extra caller detail that does not contradict it.",
+ "cost_usd": 0.005886
+}

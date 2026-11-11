@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The caller-side claim that w==0 null comes only from the caller, not windowOf, contradicts the reference, which lists w == 0 as a windowOf null case"
+ ],
+ "reason": "The answer admits it cannot enumerate the cases and only identifies the replaced-text case, missing no-span, fits, and span-past-end cases, and it wrongly attributes the w==0 null to the caller alone.",
+ "cost_usd": 0.006736
+}

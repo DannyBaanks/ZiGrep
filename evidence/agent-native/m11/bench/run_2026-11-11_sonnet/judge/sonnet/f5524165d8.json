@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: No, batchQueryProblem at src/main.zig:1887 rejects it with the same message, and runBatch installs the value once via out_json.max_columns = gopts.max_columns orelse 0; the extra details don't contradict the reference.",
+ "cost_usd": 0.006518
+}

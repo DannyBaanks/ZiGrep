@@ -1,0 +1,18 @@
+{
+ "qid": "H4",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "09b28ac308441b22e6466e5ad3155ba2df17c820be631b47b209d7c1965e19e4",
+ "answer": "The context does not identify a commit. It contains no git history, commit hashes, or log output, only a source snapshot at revision 22a99c140830 (the working tree is clean). So I can't say which commit made the fix.\n\nIt does show what the bug was. The test at src/out_json.zig:621-623 says that when the window reaches the end of the line (`e = min(len, s0 + w) = len`), the UTF-8 alignment, before the fix, read `text[len]`. That is a panic in Debug.\n\nThe comment at src/out_json.zig:113-115 agrees. It says that with `e == text.len`, reading `text[e]` would go past the slice. That is a panic in Debug/ReleaseSafe and undefined behaviour in ReleaseFast. The current code guards this with `e < ev.text.len` (src/out_json.zig:116).\n\nTo find the commit, you would need `git log` or `git blame` output for src/out_json.zig, lines 113-116 or the test at 621.",
+ "usage": {
+  "cost_usd": 0.02818,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.44,
+ "headers": {}
+}

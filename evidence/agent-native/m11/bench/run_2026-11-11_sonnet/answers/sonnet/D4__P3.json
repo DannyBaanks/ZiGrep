@@ -1,0 +1,18 @@
+{
+ "qid": "D4",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "50ff9e56e88a1ca1c2dade03501b1f95d10e9677ac627720e0c0d4c29af595f7",
+ "answer": "**When they appear:** only on a windowed row, meaning `--max-columns N` is set with `--json` (or `--queries-file`) and the line is longer than N bytes (src/main.zig:104-107, 1749-1753). Rows that fit are byte-identical to the old output, so the fields' presence signals a window (src/out_json.zig:184-187). Rows with no match span are never windowed (src/out_json.zig:526-539).\n\n**Meaning:**\n- `win_start`: the offset in bytes into the line where the `text` window begins (src/out_json.zig:187, 189-190).\n- `line_len`: the full line's length in bytes (src/out_json.zig:191-192).\n\n**Recovering the line:** `col` and `byte_start` still refer to the whole line. So `line_start = byte_start - (col - 1)`, the line is `file[line_start .. line_start + line_len]`, and the window starts at `line_start + win_start` (src/out_json.zig:68-71).\n\nIn the compact `zgrep/1c` format, they are the last two elements of a `w`-tagged row (src/out_json.zig:75-76).",
+ "usage": {
+  "cost_usd": 0.040104,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.91,
+ "headers": {}
+}

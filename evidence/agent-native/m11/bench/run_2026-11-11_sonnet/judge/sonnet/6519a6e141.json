@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The last paragraph claims a row with no match span may still have the w suffix set but emit no window fields, which is unsupported by and not in the reference and muddles the description."
+ ],
+ "reason": "The answer matches the reference on the 'w' suffix, window text, and two extra elements (win_start, line_len) and the match-derivability condition, but adds a dubious claim that a w-tagged row can omit the window fields.",
+ "cost_usd": 0.007186
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "H5",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "20e9ec64f43ee11b7aabcbd98c99731b2a944ae7872382fc2b562c41d3bcff49",
+ "answer": "The context does not answer this. It contains no timing measurement for `--max-columns 400` on a 655 MB monorepo, and no latency figure in milliseconds at all.\n\nWhat the context does show:\n- The M9 doc comment reports a token saving, not a time cost: about 58 % of the compact output's real tokens at N=400 (src/out_json.zig:52-57).\n- The window is computed once per event only when `max_columns > 0` (src/out_json.zig:154), and the value is fixed once per run before scanning (src/out_json.zig:49-50).\n\nThose facts suggest the per-row work is small, but they give no number.\n\nWhat is missing: a benchmark or timing result, probably under `evidence/agent-native/m9/` (mentioned at src/out_json.zig:56). It would need a baseline run versus a `--max-columns 400` run on the 655 MB tree. Nothing in the pack mentions a 655 MB repo or any timings.",
+ "usage": {
+  "cost_usd": 0.054744,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.2,
+ "headers": {}
+}

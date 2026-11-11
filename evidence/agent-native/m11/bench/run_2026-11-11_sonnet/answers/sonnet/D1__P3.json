@@ -1,0 +1,18 @@
+{
+ "qid": "D1",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a440fb73a5be8025e2181d8b577db1459ea60fcf227e10a4c6aa98e2357a01ba",
+ "answer": "**No. On the command line, `--max-columns 0` is rejected as a usage error, not treated as \"off\".**\n\nAfter parsing, `parseArgs` checks `opts.max_columns`. If the value is 0, it sets the failure message \"--max-columns needs a positive number of bytes (a 0-byte window carries nothing)\" and returns `error.Usage` (src/main.zig:1743-1748). The stated reason is that a 0-byte window would silently drop lines (src/main.zig:1744).\n\nThe internal value 0 does mean \"off\". `out_json.max_columns` defaults to 0, where \"0 = off\", giving byte-for-byte pre-M9 behaviour (src/out_json.zig:49-50, 79). `emitLineEvent` only windows when `max_columns > 0` (src/out_json.zig:154). Omitting the flag leaves `opts.max_columns` as null, which becomes 0 (src/main.zig:2120, 3291).\n\nTo disable windowing, omit the flag. The context does not show what the user sees on stderr beyond the message text.",
+ "usage": {
+  "cost_usd": 0.055032,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.37,
+ "headers": {}
+}

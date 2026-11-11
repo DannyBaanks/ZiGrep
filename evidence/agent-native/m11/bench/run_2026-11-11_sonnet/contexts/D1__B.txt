@@ -1,0 +1,318 @@
+src/main.zig-351-    provenance: bool = false,
+src/main.zig-352-    /// M3: budget over the whole call, with explicit truncation (`summary`).
+src/main.zig-353-    max_results: ?usize = null,
+src/main.zig-354-    max_output_tokens: ?usize = null,
+src/main.zig-355-    /// M9: `--max-columns N` (JSON only): a row whose LINE is longer than N
+src/main.zig-356-    /// bytes emits a window of at most N bytes around the match instead of the
+src/main.zig-357-    /// whole line, plus where it starts and how long the line is (GUIA §4s).
+src/main.zig-358-    /// Null = off: byte for byte the pre-M9 output.
+src/main.zig:359:    max_columns: ?usize = null,
+src/main.zig-360-    /// `-b`: byte offset of the match within the file (grep semantics).
+src/main.zig-361-    byte_offset: bool = false,
+src/main.zig-362-    /// `--json`: structured JSONL output (schema zgrep/1) instead of text.
+src/main.zig-363-    json: bool = false,
+src/main.zig-364-    /// `--cache`: analyse and clean the Zig build caches.
+src/main.zig-365-    cache: bool = false,
+src/main.zig-366-    cache_dry_run: bool = false,
+src/main.zig-367-    cache_force: bool = false,
+--
+src/main.zig-1180-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1181-                    return error.Usage;
+src/main.zig-1182-                }
+src/main.zig-1183-                opts.max_output_tokens = parseCount(args[i]) orelse {
+src/main.zig-1184-                    opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = args[i] };
+src/main.zig-1185-                    return error.Usage;
+src/main.zig-1186-                };
+src/main.zig-1187-            } else if (std.mem.startsWith(u8, body, "max-columns=")) {
+src/main.zig:1188:                opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+src/main.zig-1189-                    opts.fail = .{ .what = "bad value for --max-columns", .arg = body["max-columns=".len..] };
+src/main.zig-1190-                    return error.Usage;
+src/main.zig-1191-                };
+src/main.zig-1192-            } else if (std.mem.eql(u8, body, "max-columns")) {
+src/main.zig-1193-                i += 1;
+src/main.zig-1194-                if (i >= args.len) {
+src/main.zig-1195-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1196-                    return error.Usage;
+src/main.zig-1197-                }
+src/main.zig:1198:                opts.max_columns = parseCount(args[i]) orelse {
+src/main.zig-1199-                    opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+src/main.zig-1200-                    return error.Usage;
+src/main.zig-1201-                };
+src/main.zig-1202-            } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+src/main.zig-1203-                opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+src/main.zig-1204-                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+src/main.zig-1205-                    return error.Usage;
+src/main.zig-1206-                };
+--
+src/main.zig-1735-        return error.Usage;
+src/main.zig-1736-    }
+src/main.zig-1737-    if ((opts.max_results != null or opts.max_output_tokens != null) and !opts.json and opts.queries_file == null) {
+src/main.zig-1738-        // The truncation marker is a JSON event; text output has no honest
+src/main.zig-1739-        // place for it, so the budget is a JSON-only contract.
+src/main.zig-1740-        opts.fail = .{ .what = "--max-results / --max-output-tokens need --json (or --queries-file)", .arg = "" };
+src/main.zig-1741-        return error.Usage;
+src/main.zig-1742-    }
+src/main.zig:1743:    if (opts.max_columns) |mc| {
+src/main.zig-1744-        // A window of 0 bytes carries nothing: it would silently drop lines.
+src/main.zig-1745-        if (mc == 0) {
+src/main.zig-1746-            opts.fail = .{ .what = "--max-columns needs a positive number of bytes (a 0-byte window carries nothing)", .arg = "" };
+src/main.zig-1747-            return error.Usage;
+src/main.zig-1748-        }
+src/main.zig-1749-        // The window travels in the JSON fields (`text`, `win_start`,
+src/main.zig-1750-        // `line_len`); text output would print a line cut with no way to say
+src/main.zig-1751-        // where the rest is.
+--
+src/main.zig-1879-    if (vo.json_compact != gopts.json_compact) return "the JSON dialect (--json / --json=compact) is per call, not per query";
+src/main.zig-1880-    if (vo.print_help or vo.print_version or vo.print_type_list) return "informational actions (--help, --version, --type-list) are not queries";
+src/main.zig-1881-    if (vo.cache) return "--cache is not a query";
+src/main.zig-1882-    if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
+src/main.zig-1883-    if (vo.pattern_files_count > 0 or vo.patterns_count != 1) return "a query has exactly one pattern: use \"pattern\", not -e / -f in \"flags\"";
+src/main.zig-1884-    if (vo.queries_file != null) return "--queries-file cannot nest";
+src/main.zig-1885-    if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
+src/main.zig-1886-    if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+src/main.zig:1887:    if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
+src/main.zig-1888-    return null;
+src/main.zig-1889-}
+src/main.zig-1890-
+src/main.zig-1891-/// `--queries-file FILE|-`: every JSONL query runs in THIS process, in file
+src/main.zig-1892-/// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+src/main.zig-1893-/// Each event carries `query_id`; each query ends with `query_end`; the stream
+src/main.zig-1894-/// ends with `summary`. Exit status: 2 if any query failed, else 0 if any
+src/main.zig-1895-/// matched, else 1. `--sort` makes the batch deterministic, so it is
+--
+src/main.zig-1958-    if (gopts.json_compact) _ = platform.writeStdoutRaw(io, out_json.compact_stream_header);
+src/main.zig-1959-    em.install();
+src/main.zig-1960-    defer em.uninstall();
+src/main.zig-1961-    batch_running = true;
+src/main.zig-1962-    defer batch_running = false;
+src/main.zig-1963-    // M9: the column budget is per CALL (a query cannot set it in "flags"),
+src/main.zig-1964-    // and it is not copied into each query's argv, so the batch installs it
+src/main.zig-1965-    // here for the whole stream. `runSearch` only clears it outside a batch.
+src/main.zig:1966:    out_json.max_columns = gopts.max_columns orelse 0;
+src/main.zig-1967-
+src/main.zig-1968-    var any_error = false;
+src/main.zig-1969-    var any_match = false;
+src/main.zig-1970-    for (queries) |q| {
+src/main.zig-1971-        var qarena = std.heap.ArenaAllocator.init(init.gpa);
+src/main.zig-1972-        defer qarena.deinit();
+src/main.zig-1973-        const qa = qarena.allocator();
+src/main.zig-1974-
+--
+src/main.zig-2030-    const gpa = init.gpa;
+src/main.zig-2031-    // Per-run globals: a previous run of the same process must not leak them.
+src/main.zig-2032-    // M9 is the exception on purpose: the column budget is per CALL, the batch
+src/main.zig-2033-    // installs it once for the whole stream and no query can change it, so it
+src/main.zig-2034-    // is only cleared when this search is not running inside a batch.
+src/main.zig-2035-    scan.out_sep = '\n';
+src/main.zig-2036-    scan.heading_mode = false;
+src/main.zig-2037-    out_json.compact = false;
+src/main.zig:2038:    if (!batch_running) out_json.max_columns = 0;
+src/main.zig-2039-
+src/main.zig-2040-    var opts: Options = .{};
+src/main.zig-2041-    const parsed = parseArgs(arena, args, &opts) catch {
+src/main.zig-2042-        if (opts.fail) |f| {
+src/main.zig-2043-            if (f.arg.len > 0) {
+src/main.zig-2044-                std.debug.print("zgrep: {s}: '{s}'\n", .{ f.what, f.arg });
+src/main.zig-2045-            } else {
+src/main.zig-2046-                std.debug.print("zgrep: {s}\n", .{f.what});
+--
+src/main.zig-2112-
+src/main.zig-2113-    // From here on it is a search: fix the JSON dialect for this run, and in
+src/main.zig-2114-    // compact mode open the stream with its schema header (a batch writes it
+src/main.zig-2115-    // once for the whole call).
+src/main.zig-2116-    out_json.compact = opts.json and opts.json_compact;
+src/main.zig-2117-    // M9: the column budget comes from this command line, EXCEPT inside a
+src/main.zig-2118-    // batch: there it is per CALL (the batch installed it before the queries
+src/main.zig-2119-    // and no query's argv carries it), so the batch value stands.
+src/main.zig:2120:    out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
+src/main.zig-2121-    platform.stdout_prefix_pending.store(false, .release);
+src/main.zig-2122-    if (out_json.compact and !batch_running) {
+src/main.zig-2123-        // Lazily: written before the first output line, never on an empty run.
+src/main.zig-2124-        platform.stdout_prefix = out_json.compact_stream_header;
+src/main.zig-2125-        platform.stdout_prefix_pending.store(true, .release);
+src/main.zig-2126-    }
+src/main.zig-2127-
+src/main.zig-2128-    if (opts.threads == 0) {
+--
+src/main.zig-3270-test "parseArgs: --max-columns (M9), valor y errores de uso" {
+src/main.zig-3271-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+src/main.zig-3272-    defer arena.deinit();
+src/main.zig-3273-    const alloc = arena.allocator();
+src/main.zig-3274-    {
+src/main.zig-3275-        var o: Options = .{};
+src/main.zig-3276-        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns=400", "pat", "f.txt" };
+src/main.zig-3277-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3278:        try std.testing.expectEqual(@as(?usize, 400), o.max_columns);
+src/main.zig-3279-    }
+src/main.zig-3280-    {
+src/main.zig-3281-        var o: Options = .{};
+src/main.zig-3282-        const a = [_][:0]const u8{ "zgrep", "--json=compact", "--max-columns", "40", "pat", "f.txt" };
+src/main.zig-3283-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3284:        try std.testing.expectEqual(@as(?usize, 40), o.max_columns);
+src/main.zig-3285-    }
+src/main.zig-3286-    // Por defecto no está: la salida es la de antes, byte a byte.
+src/main.zig-3287-    {
+src/main.zig-3288-        var o: Options = .{};
+src/main.zig-3289-        const a = [_][:0]const u8{ "zgrep", "--json", "pat", "f.txt" };
+src/main.zig-3290-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3291:        try std.testing.expect(o.max_columns == null);
+src/main.zig-3292-    }
+src/main.zig-3293-    // Sin --json la ventana no tiene dónde viajar.
+src/main.zig-3294-    {
+src/main.zig-3295-        var o: Options = .{};
+src/main.zig-3296-        const a = [_][:0]const u8{ "zgrep", "--max-columns", "40", "pat", "f.txt" };
+src/main.zig-3297-        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+src/main.zig-3298-    }
+src/main.zig-3299-    // 0 bytes no es una ventana: borraría líneas sin decirlo.
+--
+src/out_json.zig-71-///     `line_start + win_start` (with `--provenance`, verifiable by hash).
+src/out_json.zig-72-///
+src/out_json.zig-73-/// Where the extra information travels (additive, and ONLY when a row is
+src/out_json.zig-74-/// windowed): `zgrep/1` gains `win_start` + `line_len` next to `text`;
+src/out_json.zig-75-/// `zgrep/1c` gains the `w` suffix on the row tag and two positional elements,
+src/out_json.zig-76-/// `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (+ `match` when
+src/out_json.zig-77-/// it is not derivable inside the window). An unwindowed row is byte-identical
+src/out_json.zig-78-/// to pre-M9 output, so a reader that does not know the flag sees nothing new.
+src/out_json.zig:79:pub var max_columns: usize = 0;
+src/out_json.zig-80-
+src/out_json.zig-81-/// A window over a row's own text: `bytes` = `text[start ..]`, at most the
+src/out_json.zig-82-/// budget long, never cutting the match and never splitting a character.
+src/out_json.zig-83-const Window = struct { start: usize, bytes: []const u8 };
+src/out_json.zig-84-
+src/out_json.zig-85-/// The M9 window of `ev`, or null when the row must be emitted whole. The order
+src/out_json.zig-86-/// of the checks is the contract: no span, short enough, span inside the text,
+src/out_json.zig-87-/// and the text really is the line (that is what rules out `--replace` and
+--
+src/out_json.zig-146-    text: []const u8,
+src/out_json.zig-147-    /// La línea se emitió porque NO coincide y se pidió `-v`. Viene del flag,
+src/out_json.zig-148-    /// no se deduce de "match sin span" (eso etiquetaba mal el passthru).
+src/out_json.zig-149-    inverted: bool = false,
+src/out_json.zig-150-};
+src/out_json.zig-151-
+src/out_json.zig-152-pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+src/out_json.zig-153-    // M9: computed once per event; null when this row goes out whole.
+src/out_json.zig:154:    const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+src/out_json.zig-155-    if (compact) return emitLineRow(out, gpa, ev, win);
+src/out_json.zig-156-    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+src/out_json.zig-157-    try out.appendSlice(gpa, switch (ev.kind) {
+src/out_json.zig-158-        .match => "match",
+src/out_json.zig-159-        .context => "context",
+src/out_json.zig-160-        .passthru => "passthru",
+src/out_json.zig-161-        .occurrence => "occurrence",
+src/out_json.zig-162-    });
+--
+src/out_json.zig-488-    @memset(buf[0..m0], 'x');
+src/out_json.zig-489-    @memcpy(buf[m0 .. m0 + 3], "HIT");
+src/out_json.zig-490-    @memset(buf[m0 + 3 ..], 'y');
+src/out_json.zig-491-    return buf;
+src/out_json.zig-492-}
+src/out_json.zig-493-
+src/out_json.zig-494-test "M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está" {
+src/out_json.zig-495-    const gpa = std.testing.allocator;
+src/out_json.zig:496:    max_columns = 20;
+src/out_json.zig:497:    defer max_columns = 0;
+src/out_json.zig-498-    var buf: [60]u8 = undefined;
+src/out_json.zig-499-    const line = longLine(&buf, 28); // 28 x + HIT + 29 y
+src/out_json.zig-500-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-501-    defer out.deinit(gpa);
+src/out_json.zig-502-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-503-        .path = "a.txt", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+src/out_json.zig-504-    });
+src/out_json.zig-505-    // 28 bytes de margen a cada lado del recorte; col y byte_start siguen
+--
+src/out_json.zig-507-    try std.testing.expectEqualStrings(
+src/out_json.zig-508-        \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":1,"column":29,"byte_start":1028,"byte_end":1031,"match":"HIT","text":"xxxxxxxxHITyyyyyyyyy","win_start":20,"line_len":60,"inverted":false}
+src/out_json.zig-509-        \\
+src/out_json.zig-510-    , out.items);
+src/out_json.zig-511-}
+src/out_json.zig-512-
+src/out_json.zig-513-test "M9: sin ventana cuando la línea cabe: bytes idénticos a los de antes" {
+src/out_json.zig-514-    const gpa = std.testing.allocator;
+src/out_json.zig:515:    max_columns = 400;
+src/out_json.zig:516:    defer max_columns = 0;
+src/out_json.zig-517-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-518-    defer out.deinit(gpa);
+src/out_json.zig-519-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-520-        .path = "a.txt", .line_no = 1, .line_start = 0, .line_bytes = "short HIT line", .span = .{ .start = 6, .end = 9 }, .kind = .match, .text = "short HIT line",
+src/out_json.zig-521-    });
+src/out_json.zig-522-    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig-523-    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"text\":\"short HIT line\"") != null);
+src/out_json.zig-524-}
+src/out_json.zig-525-
+src/out_json.zig-526-test "M9: fila sin span no se recorta NUNCA (no hay match que centrar)" {
+src/out_json.zig-527-    const gpa = std.testing.allocator;
+src/out_json.zig:528:    max_columns = 8;
+src/out_json.zig:529:    defer max_columns = 0;
+src/out_json.zig-530-    var buf: [300]u8 = undefined;
+src/out_json.zig-531-    const line = longLine(&buf, 100);
+src/out_json.zig-532-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-533-    defer out.deinit(gpa);
+src/out_json.zig-534-    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 7, .line_start = 0, .line_bytes = line, .span = null, .kind = .context, .text = line });
+src/out_json.zig-535-    // El text del evento es la línea ENTERA: se localiza el campo y se compara.
+src/out_json.zig-536-    const marker = ",\"text\":\"";
+src/out_json.zig-537-    const at = std.mem.indexOf(u8, out.items, marker).? + marker.len;
+src/out_json.zig-538-    try std.testing.expectEqualStrings(line, out.items[at .. at + line.len]);
+src/out_json.zig-539-    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig-540-}
+src/out_json.zig-541-
+src/out_json.zig-542-test "M9: si el match solo no cabe en N, la ventana ES el match" {
+src/out_json.zig:543:    max_columns = 3;
+src/out_json.zig:544:    defer max_columns = 0;
+src/out_json.zig-545-    var buf: [200]u8 = undefined;
+src/out_json.zig-546-    const line = longLine(&buf, 50);
+src/out_json.zig-547-    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = line }, 3).?;
+src/out_json.zig-548-    try std.testing.expectEqual(@as(usize, 50), w.start);
+src/out_json.zig-549-    try std.testing.expectEqualStrings("HIT", w.bytes);
+src/out_json.zig-550-}
+src/out_json.zig-551-
+src/out_json.zig-552-test "M9: la ventana no parte un carácter UTF-8 (ni al inicio ni al final)" {
+src/out_json.zig:553:    max_columns = 9;
+src/out_json.zig:554:    defer max_columns = 0;
+src/out_json.zig-555-    // 8a + ññññ (8 B) + HIT + 40b: el corte cae en el segundo byte de una ñ.
+src/out_json.zig-556-    var line: [71]u8 = undefined;
+src/out_json.zig-557-    @memset(line[0..8], 'a');
+src/out_json.zig-558-    @memcpy(line[8..16], "\xC3\xB1\xC3\xB1\xC3\xB1\xC3\xB1"[0..]);
+src/out_json.zig-559-    @memcpy(line[16..19], "HIT");
+src/out_json.zig-560-    @memset(line[19..], 'b');
+src/out_json.zig-561-    const w1 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 16, .end = 19 }, .kind = .match, .text = &line }, 9).?;
+src/out_json.zig-562-    try std.testing.expectEqual(@as(usize, 14), w1.start);
+--
+src/out_json.zig-580-    const line = longLine(&buf, 50);
+src/out_json.zig-581-    const replaced = "SUSTITUIDA";
+src/out_json.zig-582-    try std.testing.expect(windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = replaced }, 8) == null);
+src/out_json.zig-583-}
+src/out_json.zig-584-
+src/out_json.zig-585-test "M9: fila compacta ventana: sufijo w y dos elementos posicionales" {
+src/out_json.zig-586-    const gpa = std.testing.allocator;
+src/out_json.zig-587-    compact = true;
+src/out_json.zig:588:    max_columns = 20;
+src/out_json.zig-589-    defer compact = false;
+src/out_json.zig:590:    defer max_columns = 0;
+src/out_json.zig-591-    var buf: [60]u8 = undefined;
+src/out_json.zig-592-    const line = longLine(&buf, 28);
+src/out_json.zig-593-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-594-    defer out.deinit(gpa);
+src/out_json.zig-595-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-596-        .path = "a", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+src/out_json.zig-597-    });
+src/out_json.zig-598-    // [t=w, line, col, byte_start, len, ventana, win_start, line_len]
+--
+src/out_json.zig-600-        \\["mw",1,29,1028,3,"xxxxxxxxHITyyyyyyyyy",20,60]
+src/out_json.zig-601-        \\
+src/out_json.zig-602-    , out.items);
+src/out_json.zig-603-}
+src/out_json.zig-604-
+src/out_json.zig-605-test "M9: fila compacta windowed en contexto invertido (-v) lleva mvW" {
+src/out_json.zig-606-    const gpa = std.testing.allocator;
+src/out_json.zig-607-    compact = true;
+src/out_json.zig:608:    max_columns = 20;
+src/out_json.zig-609-    defer compact = false;
+src/out_json.zig:610:    defer max_columns = 0;
+src/out_json.zig-611-    var buf: [60]u8 = undefined;
+src/out_json.zig-612-    const line = longLine(&buf, 28);
+src/out_json.zig-613-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-614-    defer out.deinit(gpa);
+src/out_json.zig-615-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-616-        .path = "a", .line_no = 3, .line_start = 0, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line, .inverted = true,
+src/out_json.zig-617-    });
+src/out_json.zig-618-    try std.testing.expect(std.mem.startsWith(u8, out.items, "[\"mvw\",3,29,28,3,"));

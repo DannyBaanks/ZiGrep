@@ -1,0 +1,18 @@
+{
+ "qid": "H1",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6e6ff13531ffd98bbafea620e0ffba0d0ce73922f696a460c93c6142544bbc0d",
+ "answer": "**Maximum: 1024 worker threads.**\n\n**Where defined:** `src/kamikaze.zig:45` (`pub const max_threads: usize = 1024;`). `src/main.zig:817-818` re-exports it as `max_threads = kamikaze.max_threads`, described as mirroring the kamikaze value.\n\n**`-j 5000`:** `parseThreadCount` (`src/main.zig:826-839`) checks `n > max_threads` (line 831). It sets a failure message, \"thread count out of range (max 1024)\", and returns `error.Usage` (lines 832-836). So the CLI rejects it as a usage error. I'm inferring that `-j` is routed through `parseThreadCount`. The context doesn't show that call site.\n\n**`ZIGREP_THREADS=5000`:** The context doesn't show this variable. The visible code reads `ZGREP_THREADS` and `THREADS` (`src/main.zig:2130-2131`). For those, a value above the max prints `zgrep: 5000: thread count out of range (max 1024)` and returns exit code 2 (`src/main.zig:2136-2138`). Whether `ZIGREP_THREADS` is handled the same way isn't established. The lines before 2130 aren't shown.\n\n**Other callers:** `src/kamikaze.zig:924` clamps the worker count to `max_threads` (`@min(@max(1, threads_count), max_threads)`). It's described as a second line of defence (`src/kamikaze.zig:43-44`).",
+ "usage": {
+  "cost_usd": 0.019472,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.43,
+ "headers": {}
+}

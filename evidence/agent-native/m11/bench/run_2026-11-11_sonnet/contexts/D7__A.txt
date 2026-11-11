@@ -1,0 +1,17 @@
+src/main.zig:595:    return parseCount(value) orelse {
+src/main.zig:726:    return (parseCount(v) orelse return null) *| mult;
+src/main.zig:813:fn parseCount(value: []const u8) ?usize {
+src/main.zig:827:    const n = parseCount(value) orelse {
+src/main.zig:1004:                opts.max_count = parseCount(v) orelse {
+src/main.zig:1014:                opts.max_count = parseCount(args[i]) orelse {
+src/main.zig:1123:                opts.max_depth = parseCount(body["max-depth=".len..]) orelse {
+src/main.zig:1133:                opts.max_depth = parseCount(args[i]) orelse {
+src/main.zig:1158:                opts.max_results = parseCount(body["max-results=".len..]) orelse {
+src/main.zig:1168:                opts.max_results = parseCount(args[i]) orelse {
+src/main.zig:1173:                opts.max_output_tokens = parseCount(body["max-output-tokens=".len..]) orelse {
+src/main.zig:1183:                opts.max_output_tokens = parseCount(args[i]) orelse {
+src/main.zig:1188:                opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+src/main.zig:1198:                opts.max_columns = parseCount(args[i]) orelse {
+src/main.zig:1308:                opts.cache_depth = parseCount(body["cache-depth=".len..]) orelse {
+src/main.zig:1580:                    if (parseCount(value)) |mc| {
+src/main.zig:2133:            if (parseCount(val)) |t| {

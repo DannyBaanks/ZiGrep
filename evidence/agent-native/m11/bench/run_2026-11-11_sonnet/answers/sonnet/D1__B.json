@@ -1,0 +1,18 @@
+{
+ "qid": "D1",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5fac9ae20025c8a4639b5836d8627b31050f0c1b4ae0dd3b9b7176072c03f55a",
+ "answer": "`--max-columns 0` is rejected, so 0 does not disable the window.\n\n- `--max-columns` is parsed with `parseCount` (src/main.zig:1188, 1198), and then a check refuses a value of 0. It sets a usage error: \"--max-columns needs a positive number of bytes (a 0-byte window carries nothing)\" (src/main.zig:1743-1748). The test comment gives the same reason: a 0-byte window \"borraría líneas sin decirlo\" (would erase lines silently) (src/main.zig:3299).\n- The command therefore returns `error.Usage` and prints `zgrep: <message>` (src/main.zig:2041-2046), and it does not run the search.\n- To disable the window, omit the flag. The default is `null` (\"Null = off\", src/main.zig:355-359).\n- Internally, `out_json.max_columns = 0` is the \"off\" sentinel (src/out_json.zig:154), but users cannot set it through the flag.\n\nNot shown in the context: the exit code for the usage error.",
+ "usage": {
+  "cost_usd": 0.045208,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.49,
+ "headers": {}
+}

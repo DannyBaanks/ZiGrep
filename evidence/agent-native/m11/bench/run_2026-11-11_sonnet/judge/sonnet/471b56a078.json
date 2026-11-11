@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists the same five null-return cases as the reference (w==0, no span, text fits, span past text, text != line_bytes), and the extra note about the caller is consistent.",
+ "cost_usd": 0.00604
+}

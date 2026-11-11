@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the XDG_CACHE_HOME/HOME fallback path, the spill-<ns>-<pid>.jsonl name, and Emitter.spill_dir as the final directory, with Options.spill_dir holding only the user value; it omits the empty --spill= usage error, which the question does not ask about.",
+ "cost_usd": 0.007496000000000001
+}

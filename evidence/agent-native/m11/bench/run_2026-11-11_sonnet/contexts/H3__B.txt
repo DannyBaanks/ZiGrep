@@ -1,0 +1,143 @@
+src/filter.zig-90-        return std.mem.endsWith(u8, name, ext);
+src/filter.zig-91-    }
+src/filter.zig-92-    return false;
+src/filter.zig-93-}
+src/filter.zig-94-
+src/filter.zig-95-pub const FilterEngine = struct {
+src/filter.zig-96-    gpa: Allocator,
+src/filter.zig-97-    use_defaults: bool = true,
+src/filter.zig:98:    skip_hidden: bool = false,
+src/filter.zig-99-    no_ignore: bool = false,
+src/filter.zig-100-    /// Set once `loadIgnoreFiles` has run. The upward `.dataignore` /
+src/filter.zig-101-    /// `.gitignore` walk is deferred until a run actually needs it, so a
+src/filter.zig-102-    /// micro-tree never pays for it.
+src/filter.zig-103-    ignore_files_loaded: bool = false,
+src/filter.zig-104-
+src/filter.zig-105-    excluded_dirs: std.ArrayList([]const u8),
+src/filter.zig-106-    excluded_exts: std.ArrayList([]const u8),
+--
+src/filter.zig-236-        for (roots) |root| {
+src/filter.zig-237-            self.loadUpwardIgnoreFiles(io, root);
+src/filter.zig-238-        }
+src/filter.zig-239-    }
+src/filter.zig-240-
+src/filter.zig-241-    pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+src/filter.zig-242-        if (self.no_ignore) return false;
+src/filter.zig-243-
+src/filter.zig:244:        if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+src/filter.zig-245-            return true;
+src/filter.zig-246-        }
+src/filter.zig-247-
+src/filter.zig-248-        if (self.use_defaults) {
+src/filter.zig-249-            for (default_excluded_dirs) |d| {
+src/filter.zig-250-                if (std.mem.eql(u8, dir_name, d)) return true;
+src/filter.zig-251-            }
+src/filter.zig-252-        }
+--
+src/filter.zig-260-        }
+src/filter.zig-261-
+src/filter.zig-262-        return false;
+src/filter.zig-263-    }
+src/filter.zig-264-
+src/filter.zig-265-    pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+src/filter.zig-266-        if (self.no_ignore) return false;
+src/filter.zig-267-
+src/filter.zig:268:        if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+src/filter.zig-269-            return true;
+src/filter.zig-270-        }
+src/filter.zig-271-
+src/filter.zig-272-        if (self.use_defaults) {
+src/filter.zig-273-            for (default_excluded_exts) |ext| {
+src/filter.zig-274-                if (matchesExt(file_name, ext)) return true;
+src/filter.zig-275-            }
+src/filter.zig-276-        }
+--
+src/main.zig-272-    exclude_exts: [64][]const u8 = undefined,
+src/main.zig-273-    exclude_exts_count: usize = 0,
+src/main.zig-274-    include_exts: [64][]const u8 = undefined,
+src/main.zig-275-    include_exts_count: usize = 0,
+src/main.zig-276-    exclude_patterns: [64][]const u8 = undefined,
+src/main.zig-277-    exclude_patterns_count: usize = 0,
+src/main.zig-278-    include_patterns: [64][]const u8 = undefined,
+src/main.zig-279-    include_patterns_count: usize = 0,
+src/main.zig:280:    skip_hidden: bool = false,
+src/main.zig-281-    fixed: bool = false,
+src/main.zig-282-    ignore_case: bool = false,
+src/main.zig-283-    word: bool = false,
+src/main.zig-284-    /// `-x`: the pattern must match a whole line.
+src/main.zig-285-    line_regexp: bool = false,
+src/main.zig-286-    /// `-s` / `--no-messages`: do not report unreadable files.
+src/main.zig-287-    no_messages: bool = false,
+src/main.zig-288-    /// Line numbers are OFF by default (`-n`/`--line-number` turns them on), like
+--
+src/main.zig-1411-                }
+src/main.zig-1412-                if (opts.patterns_count >= opts.patterns.len) {
+src/main.zig-1413-                    opts.fail = .{ .what = "too many -e patterns (max 16)", .arg = a };
+src/main.zig-1414-                    return error.Usage;
+src/main.zig-1415-                }
+src/main.zig-1416-                opts.patterns[opts.patterns_count] = args[i];
+src/main.zig-1417-                opts.patterns_count += 1;
+src/main.zig-1418-            } else if (std.mem.eql(u8, body, "no-hidden")) {
+src/main.zig:1419:                opts.skip_hidden = true;
+src/main.zig-1420-            } else if (std.mem.eql(u8, body, "no-ignore")) {
+src/main.zig-1421-                opts.no_ignore = true;
+src/main.zig-1422-            } else if (std.mem.eql(u8, body, "no-default-ignore")) {
+src/main.zig-1423-                opts.no_default_ignore = true;
+src/main.zig-1424-            } else if (std.mem.eql(u8, body, "force-swarm") or std.mem.eql(u8, body, "swarm")) {
+src/main.zig-1425-                opts.force_swarm = true;
+src/main.zig-1426-            } else if (std.mem.startsWith(u8, body, "exclude-dir=")) {
+src/main.zig-1427-                if (opts.exclude_dirs_count < opts.exclude_dirs.len) {
+--
+src/main.zig-2377-    if (!opts.sort) {
+src/main.zig-2378-        var k_stats: kamikaze.KamikazeStats = .{};
+src/main.zig-2379-    var engine_state: io_engine.State = .{};
+src/main.zig-2380-        var filter_engine = filter.FilterEngine.init(gpa);
+src/main.zig-2381-        defer filter_engine.deinit();
+src/main.zig-2382-
+src/main.zig-2383-        filter_engine.no_ignore = opts.no_ignore;
+src/main.zig-2384-        filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+src/main.zig:2385:        filter_engine.skip_hidden = opts.skip_hidden;
+src/main.zig-2386-
+src/main.zig-2387-        for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+src/main.zig-2388-            try filter_engine.addExcludedDirs(d);
+src/main.zig-2389-        }
+src/main.zig-2390-        for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+src/main.zig-2391-            try filter_engine.addExcludedExts(e);
+src/main.zig-2392-        }
+src/main.zig-2393-        for (opts.include_exts[0..opts.include_exts_count]) |e| {
+--
+src/main.zig-2497-    }
+src/main.zig-2498-
+src/main.zig-2499-    // --- collect the file list (deterministic sorted walk with filter engine) -
+src/main.zig-2500-    var filter_engine = filter.FilterEngine.init(gpa);
+src/main.zig-2501-    defer filter_engine.deinit();
+src/main.zig-2502-
+src/main.zig-2503-    filter_engine.no_ignore = opts.no_ignore;
+src/main.zig-2504-    filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+src/main.zig:2505:    filter_engine.skip_hidden = opts.skip_hidden;
+src/main.zig-2506-
+src/main.zig-2507-    for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
+src/main.zig-2508-        try filter_engine.addExcludedDirs(d);
+src/main.zig-2509-    }
+src/main.zig-2510-    for (opts.exclude_exts[0..opts.exclude_exts_count]) |e| {
+src/main.zig-2511-        try filter_engine.addExcludedExts(e);
+src/main.zig-2512-    }
+src/main.zig-2513-    for (opts.include_exts[0..opts.include_exts_count]) |e| {
+--
+src/main.zig-2963-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-2964-        try std.testing.expect(o.kamikaze);
+src/main.zig-2965-    }
+src/main.zig-2966-    {
+src/main.zig-2967-        var o: Options = .{};
+src/main.zig-2968-        const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+src/main.zig-2969-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-2970-        try std.testing.expect(o.kamikaze);
+src/main.zig:2971:        try std.testing.expect(o.skip_hidden);
+src/main.zig-2972-        try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+src/main.zig-2973-        try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+src/main.zig-2974-    }
+src/main.zig-2975-    {
+src/main.zig-2976-        var o: Options = .{};
+src/main.zig-2977-        const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+src/main.zig-2978-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-2979-        try std.testing.expect(o.no_ignore);

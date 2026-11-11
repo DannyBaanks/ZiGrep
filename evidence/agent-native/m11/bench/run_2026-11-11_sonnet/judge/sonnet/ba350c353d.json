@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "Matches the reference: parse in main.zig sets skip_hidden, it is copied to filter_engine, and FilterEngine skips both dirs (~244) and files (~268) starting with '.'; extra details (no_ignore early return, second copy site) don't contradict it.",
+ "cost_usd": 0.006606000000000001
+}

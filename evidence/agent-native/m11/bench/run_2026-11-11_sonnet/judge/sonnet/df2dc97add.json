@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states that no timing data exists for --max-columns, matching the reference's not-answerable conclusion; the extra mechanism details don't contradict it.",
+ "cost_usd": 0.005778
+}

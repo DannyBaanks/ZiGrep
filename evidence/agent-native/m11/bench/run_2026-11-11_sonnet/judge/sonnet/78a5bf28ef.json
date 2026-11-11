@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: the fields appear only on windowed rows, win_start is the window's byte offset in the line, line_len is the full line length, and fitting rows are byte-identical to the old output with neither field.",
+ "cost_usd": 0.006384
+}

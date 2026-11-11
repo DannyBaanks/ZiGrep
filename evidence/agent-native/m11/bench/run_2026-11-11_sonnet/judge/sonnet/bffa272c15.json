@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: 'w' suffix on the tag, two extra elements after the text (win_start and line_len), the text is the window, and the match is included only when not derivable.",
+ "cost_usd": 0.006124
+}

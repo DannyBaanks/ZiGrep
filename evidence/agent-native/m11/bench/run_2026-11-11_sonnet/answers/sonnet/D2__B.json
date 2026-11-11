@@ -1,0 +1,18 @@
+{
+ "qid": "D2",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5fac9ae20025c8a4639b5836d8627b31050f0c1b4ae0dd3b9b7176072c03f55a",
+ "answer": "**No.** A query's `\"flags\"` cannot set `--max-columns`; it must go on the command line for the whole call.\n\n- **Where it's rejected:** the batch validation function returns the error `\"--max-columns is per call: put it on the command line, not in \\\"flags\\\"\"` when a query's parsed flags have `max_columns != null` (src/main.zig:1887). It sits beside the similar per-call rules for `--spill` and the budget flags (src/main.zig:1885-1886).\n- **Where the value comes from:** the batch installs the call-level value once for the whole stream, `out_json.max_columns = gopts.max_columns orelse 0` (src/main.zig:1966). It is not copied into each query's argv (src/main.zig:1963-1965).\n- **Why a query can't override it:** inside a batch, `runSearch` keeps the batch value (`if (batch_running) out_json.max_columns ...`, src/main.zig:2120). It only clears the value outside a batch (src/main.zig:2038).",
+ "usage": {
+  "cost_usd": 0.045136,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.94,
+ "headers": {}
+}

@@ -1,0 +1,2 @@
+src/out_json.zig:155:    if (compact) return emitLineRow(out, gpa, ev, win);
+src/out_json.zig:233:fn emitLineRow(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent, win: ?Window) Allocator.Error!void {

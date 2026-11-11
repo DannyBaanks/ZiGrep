@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly says no latency measurement exists and notes the documented measurement is token savings (~58.4%), matching the reference.",
+ "cost_usd": 0.005706
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "D6",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "b07cda5b94a1307a537b7fc067ec82b784801ca14a33c6d1e7f9683f03e56508",
+ "answer": "The context doesn't contain enough information to answer this.\n\nWhat it shows is only that, in `src/out_json.zig`, line 155 does `if (compact) return emitLineRow(out, gpa, ev, win);`, and line 233 declares `fn emitLineRow(out, gpa, ev: LineEvent, win: ?Window)`. So the compact path takes an optional `Window` (`?Window`), which suggests a windowed row is one where `win` is non-null.\n\nThe function body isn't included. I can't say what a windowed row emits differently from a normal one (extra fields, different layout, etc.). Also missing are the definition of `Window` and any README.md/GUIA.md description of the compact dialect (zgrep/1c).\n\nTo answer, I'd need the body of `emitLineRow` (from line 233 onward in `src/out_json.zig`), the `Window` type, and any docs on the 1c format.",
+ "usage": {
+  "cost_usd": 0.006666,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.22,
+ "headers": {}
+}

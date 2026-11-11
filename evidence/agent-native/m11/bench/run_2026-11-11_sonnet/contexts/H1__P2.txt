@@ -1,0 +1,113 @@
+CONTEXT PACK `max_threads`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 9 in 2 file(s); by role: code 8, doc_comment 1
+  declarations found by pattern: 3
+
+DEFINITION
+[h1] const/var `max_threads` in file top level  [homonym 1/3]
+  src/kamikaze.zig:37-45  sha256:954b46d586217d99  relation: declaration (pattern match, heuristic)
+    37 | /// Upper bound for the worker pool.
+    38 | ///
+    39 | /// Every worker is an OS thread with its own stack, so the count has to stay
+    40 | /// bounded. An unbounded value (`-j 18446744073709551615`) used to turn the
+    41 | /// spawn loop below into an endless create-and-exit cycle: the machine was
+    42 | /// pinned at 100% CPU and the process could not even be killed promptly.
+    43 | /// The CLI rejects such values up front; this clamp is the second line of
+    44 | /// defence for every other caller.
+>   45 | pub const max_threads: usize = 1024;
+[h4] const/var `max_threads` in file top level  [homonym 2/3]
+  src/main.zig:817-818  sha256:5babed3613a1bc25  relation: declaration (pattern match, heuristic)
+   817 | /// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+>  818 | pub const max_threads: usize = kamikaze.max_threads;
+[h5] const/var `max_threads` in file top level  [homonym 3/3]
+  src/main.zig:817-818  sha256:5babed3613a1bc25  relation: declaration (pattern match, heuristic)
+   817 | /// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+>  818 | pub const max_threads: usize = kamikaze.max_threads;
+
+REFERENCES
+src/kamikaze.zig in file
+  [h2] line 924 `max_threads`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/kamikaze.zig:45, no local shadow found)
+  src/kamikaze.zig:918-930  sha256:f86e5a31b625c3da
+   918 |                 try pool.pushSingleFile(root);
+   919 |             }
+   920 |         }
+   921 |     }
+   922 | 
+   923 |     // Spawn concurrent hybrid worker swarm
+>  924 |     const actual_workers = @min(@max(1, threads_count), max_threads);
+   925 |     if (actual_workers == 1) {
+   926 |         // Zero-spawn fast path: single thread runs directly on calling thread
+   927 |         kamikazeWorker(&ctx);
+   928 |     } else {
+   929 |         var threads: std.ArrayList(std.Thread) = .empty;
+   930 |         defer threads.deinit(gpa);
+src/main.zig in fn:parseThreadCount
+  [h6] line 831 `max_threads`: unresolved (lexical_only; 3 declaration(s) named max_threads; none is linked by checkable evidence)
+  [h7] line 833 `max_threads`: unresolved (lexical_only; 3 declaration(s) named max_threads; none is linked by checkable evidence)
+  src/main.zig:826-839  sha256:c0cd474a38a2525b
+   826 | fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+   827 |     const n = parseCount(value) orelse {
+   828 |         opts.fail = .{ .what = what, .arg = value };
+   829 |         return error.Usage;
+   830 |     };
+>  831 |     if (n > max_threads) {
+   832 |         opts.fail = .{
+>  833 |             .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+   834 |             .arg = value,
+   835 |         };
+   836 |         return error.Usage;
+   837 |     }
+   838 |     return n;
+   839 | }
+src/main.zig in fn:runSearch
+  [h8] line 2136 `max_threads`: unresolved (lexical_only; 3 declaration(s) named max_threads; none is linked by checkable evidence)
+  [h9] line 2137 `max_threads`: unresolved (lexical_only; 3 declaration(s) named max_threads; none is linked by checkable evidence)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2130-2143  sha256:15d75c65ee60ae6b
+  2130 |             init.environ_map.get("ZGREP_THREADS") orelse
+  2131 |             init.environ_map.get("THREADS")) |val|
+  2132 |         {
+  2133 |             if (parseCount(val)) |t| {
+  2134 |                 // An out-of-range value is a hard error, not something to
+  2135 |                 // silently ignore: it would explode the worker pool.
+> 2136 |                 if (t > max_threads) {
+> 2137 |                     std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
+  2138 |                     return 2;
+  2139 |                 }
+  2140 |                 opts.threads = t;
+  2141 |             }
+  2142 |         }
+  2143 |     }
+mentions inside comments or strings (1): textual only, not a dependency
+  [h3] src/main.zig:817 (doc_comment) /// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+src/main.zig in file: textual mention(s) only, not a code reference: [h3] line 817 (doc_comment)
+  src/main.zig:811-823  sha256:1a9df473466e02ef
+   811 | }
+   812 | 
+   813 | fn parseCount(value: []const u8) ?usize {
+   814 |     return std.fmt.parseInt(usize, value, 10) catch null;
+   815 | }
+   816 | 
+>  817 | /// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+   818 | pub const max_threads: usize = kamikaze.max_threads;
+   819 | 
+   820 | /// Parses a worker-thread count and rejects values that would blow the pool
+   821 | /// up. Every worker is an OS thread with its own stack, so an absurd value
+   822 | /// (`-j 18446744073709551615`) turns the spawn loop into an endless
+   823 | /// create-and-exit cycle that pins the machine at 100% CPU.
+
+UNCERTAINTY
+- 3 declarations named `max_threads` (homonyms): h1=src/kamikaze.zig:45, h4=src/main.zig:818, h5=src/main.zig:818
+- 4 code reference(s) not linked to a declaration: h6, h7, h8, h9
+- not analysed: aliases (const x = y.max_threads), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 415 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 14

@@ -1,0 +1,108 @@
+CONTEXT PACK `emitLineRow`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+BLOCKS
+src/out_json.zig:152-197  sha256:594e87490b58fcce
+   152 | pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+   153 |     // M9: computed once per event; null when this row goes out whole.
+   154 |     const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+>  155 |     if (compact) return emitLineRow(out, gpa, ev, win);
+   156 |     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+   157 |     try out.appendSlice(gpa, switch (ev.kind) {
+   158 |         .match => "match",
+   159 |         .context => "context",
+   160 |         .passthru => "passthru",
+   161 |         .occurrence => "occurrence",
+   162 |     });
+   163 |     try out.appendSlice(gpa, "\",\"path\":");
+   164 |     try appendJsonString(out, gpa, ev.path);
+   165 |     try out.appendSlice(gpa, ",\"line\":");
+   166 |     try appendInt(out, gpa, ev.line_no);
+   167 |     if (ev.span) |sp| {
+   168 |         const col = sp.start + 1;
+   169 |         const bstart = ev.line_start + sp.start;
+   170 |         const bend = ev.line_start + sp.end;
+   171 |         try out.appendSlice(gpa, ",\"column\":");
+   172 |         try appendInt(out, gpa, col);
+   173 |         try out.appendSlice(gpa, ",\"byte_start\":");
+   174 |         try appendInt(out, gpa, bstart);
+   175 |         try out.appendSlice(gpa, ",\"byte_end\":");
+   176 |         try appendInt(out, gpa, bend);
+   177 |         try out.appendSlice(gpa, ",\"match\":");
+   178 |         try appendJsonString(out, gpa, ev.line_bytes[sp.start..sp.end]);
+   179 |     } else {
+   180 |         try out.appendSlice(gpa, ",\"column\":null,\"byte_start\":null,\"byte_end\":null,\"match\":null");
+   181 |     }
+   182 |     try out.appendSlice(gpa, ",\"text\":");
+   183 |     try appendJsonString(out, gpa, if (win) |w| w.bytes else ev.text);
+   184 |     // M9: the two fields travel ONLY on a windowed row, so a row that fits is
+   185 |     // byte-identical to the pre-M9 event (the additive rule costs nothing in
+   186 |     // the common case). Their presence is the signal: this `text` is a window,
+   187 |     // it starts `win_start` bytes into the line and the line is `line_len` long.
+   188 |     if (win) |w| {
+   189 |         try out.appendSlice(gpa, ",\"win_start\":");
+   190 |         try appendInt(out, gpa, w.start);
+   191 |         try out.appendSlice(gpa, ",\"line_len\":");
+   192 |         try appendInt(out, gpa, ev.text.len);
+   193 |     }
+   194 |     try out.appendSlice(gpa, ",\"inverted\":");
+   195 |     try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+   196 |     try out.appendSlice(gpa, "}\n");
+   197 | }
+src/out_json.zig:233-279  sha256:19ed38365f17543f
+>  233 | fn emitLineRow(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent, win: ?Window) Allocator.Error!void {
+   234 |     try out.appendSlice(gpa, "[\"");
+   235 |     try out.append(gpa, switch (ev.kind) {
+   236 |         .match => 'm',
+   237 |         .context => 'c',
+   238 |         .passthru => 'p',
+   239 |         .occurrence => 'o',
+   240 |     });
+   241 |     if (ev.inverted) try out.append(gpa, 'v');
+   242 |     // M9: the `w` suffix marks a windowed row, which carries two extra
+   243 |     // elements after the text.
+   244 |     if (win != null) try out.append(gpa, 'w');
+   245 |     try out.appendSlice(gpa, "\",");
+   246 |     try appendInt(out, gpa, ev.line_no);
+   247 |     if (ev.span) |sp| {
+   248 |         const len = sp.end - sp.start;
+   249 |         try out.append(gpa, ',');
+   250 |         try appendInt(out, gpa, sp.start + 1);
+   251 |         try out.append(gpa, ',');
+   252 |         try appendInt(out, gpa, ev.line_start + sp.start);
+   253 |         try out.append(gpa, ',');
+   254 |         try appendInt(out, gpa, len);
+   255 |         try out.append(gpa, ',');
+   256 |         const text: []const u8 = if (win) |w| w.bytes else ev.text;
+   257 |         try appendJsonString(out, gpa, text);
+   258 |         // The match is derivable from the EMITTED text only. With a window the
+   259 |         // column counts from the start of the line, so the match moves inside
+   260 |         // the text by the window start.
+   261 |         const shift: usize = if (win) |w| sp.start - w.start else sp.start;
+   262 |         const m = ev.line_bytes[sp.start..sp.end];
+   263 |         const derivable = shift + len <= text.len and std.mem.eql(u8, text[shift .. shift + len], m);
+   264 |         if (!derivable) {
+   265 |             try out.append(gpa, ',');
+   266 |             try appendJsonString(out, gpa, m);
+   267 |         }
+   268 |         if (win) |w| {
+   269 |             try out.append(gpa, ',');
+   270 |             try appendInt(out, gpa, w.start);
+   271 |             try out.append(gpa, ',');
+   272 |             try appendInt(out, gpa, ev.text.len);
+   273 |         }
+   274 |     } else {
+   275 |         try out.append(gpa, ',');
+   276 |         try appendJsonString(out, gpa, ev.text);
+   277 |     }
+   278 |     try out.appendSlice(gpa, "]\n");
+   279 | }
+
+TRUNCATION
+  truncated: false   items: 2

@@ -1,0 +1,9 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "`--json --max-columns 0` would behave the same as not passing the flag, i.e. 0 disables windowing (\"effectively yes\"); in fact parseArgs rejects 0 as a usage error (rc 2)",
+  "Implies 0 is a way to disable the window from the CLI; the reference says it is not"
+ ],
+ "reason": "The answer concludes 0 disables the window, but the reference says the CLI rejects 0 with a usage error before it reaches the JSON writer.",
+ "cost_usd": 0.00724
+}

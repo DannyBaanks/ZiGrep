@@ -1,0 +1,18 @@
+{
+ "qid": "D7",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "346f13ba3d46a65dcf6c0809e477e9876c99f1c800be6c14439621e0e20c8b98",
+ "answer": "`--max-columns=abc` is parsed as a base-10 `usize`. `parseCount` calls `std.fmt.parseInt(usize, value, 10) catch null` (src/main.zig:813-814), so \"abc\" yields `null`.\n\nIn `parseArgs`, the `max-columns=` branch takes the text after the `=` and passes it to `parseCount`. On `null` it sets `opts.fail` with `.what = \"bad value for --max-columns\"` and `.arg` set to the offending value, then returns `error.Usage` (src/main.zig:1187-1191).\n\nSo the user gets a usage error naming \"bad value for --max-columns\" and echoing \"abc\". The option is not set.\n\nThe context does not show how `opts.fail` is printed. It also doesn't show the exact stderr text or the exit code for `error.Usage`. The only exit code visible is `return 2` for the thread-count environment variable path (src/main.zig:2138), which is a different path. Tests were requested (`--sections tests`) but none appear in the output.",
+ "usage": {
+  "cost_usd": 0.030483999999999997,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.52,
+ "headers": {}
+}

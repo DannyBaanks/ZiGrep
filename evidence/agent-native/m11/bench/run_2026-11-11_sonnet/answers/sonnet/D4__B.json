@@ -1,0 +1,18 @@
+{
+ "qid": "D4",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3038564f02f769ff5eabfee1779bdde8df24cbead8f985eab9106e0611fe6d6b",
+ "answer": "**When they appear:** only on a windowed row, meaning a match line longer than `--max-columns N` emitted with `--json`. Rows that fit are byte-identical to the old output, and rows with no match (context, `-v`, passthru) are never windowed, so they carry neither field (src/out_json.zig:73-78, 184-193; GUIA.md:1018-1019, 1029-1030). The test confirms that short lines omit `win_start` (src/out_json.zig:522).\n\n**Meaning:**\n- `text` is only a window of at most N bytes around the match. The match and UTF-8 characters are never cut (src/main.zig:103-107).\n- `win_start` is the byte offset into the line where the window begins.\n- `line_len` is the full line's length in bytes (src/out_json.zig:187-192).\n\nTheir presence signals that `text` is a window. To recover the whole line, compute `line_start = byte_start - (col - 1)`. The line is `file[line_start .. line_start + line_len]`, and the window starts at `line_start + win_start` (src/out_json.zig:68-71; GUIA.md:1022-1024).\n\nExample: `win_start\":20,\"line_len\":60` (src/out_json.zig:508).",
+ "usage": {
+  "cost_usd": 0.031904,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.98,
+ "headers": {}
+}

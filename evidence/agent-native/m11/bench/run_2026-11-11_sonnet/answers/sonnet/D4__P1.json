@@ -1,0 +1,18 @@
+{
+ "qid": "D4",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "e828d9d8b6a60b7c80516182a5da399cd2095238d6e15587a2bc6f9ef9f8eaa3",
+ "answer": "**When they appear:** only on a *windowed* (truncated) row. This happens when `--max-columns N` is used with `--json` and a line with a match is longer than N bytes. A row that fits is byte-identical to the old output, and the presence of `win_start` is the signal that `text` is a window (GUIA.md:1018-1019; src/out_json.zig:184-187). Rows without a match (context, `-v`, passthru) are never cut and never carry them (GUIA.md:1029-1030; src/out_json.zig:526-540).\n\n**Meaning:**\n- `win_start`: the byte offset in the line where the `text` window starts (src/out_json.zig:187).\n- `line_len`: the length of the whole line in bytes (src/out_json.zig:187, 192).\n\n**Recovering the line:** `column` and `byte_start` still refer to the whole line. So `line_start = byte_start - (col - 1)`, the line is `file[line_start .. line_start + line_len]`, and the window starts at `line_start + win_start` (GUIA.md:1020-1024).\n\nIn compact `zgrep/1c`, they are the last two elements of a row whose tag has a `w` suffix (GUIA.md:1009).",
+ "usage": {
+  "cost_usd": 0.029921999999999997,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.52,
+ "headers": {}
+}

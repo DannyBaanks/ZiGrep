@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The context does not identify a commit / cannot say which commit made the fix (reference gives 53c34ef)"
+ ],
+ "reason": "The answer correctly describes the bug (text[len] read past the slice at end of line, panic/UB, fixed with e < ev.text.len) but fails to identify commit 53c34ef, which the question asks for.",
+ "cost_usd": 0.006560000000000001
+}

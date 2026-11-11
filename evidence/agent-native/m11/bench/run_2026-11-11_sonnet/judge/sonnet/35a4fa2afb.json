@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: usage error with the same message in src/main.zig, 0 is not a CLI way to disable, and only the internal out_json.max_columns uses 0 as off (default when the flag is absent).",
+ "cost_usd": 0.00642
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "H4",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9b255f07de3557e9be2061a40d37438c0a3993910862538021a9052106273cd0",
+ "answer": "**Commit 53c34ef** is the most likely fix. The HISTORY section lists it as the last commit touching `src/out_json.zig`: \"fix(M9): la ventana leia text[len] al llegar al final de la linea\" (HISTORY).\n\n**The bug:** when the window reached the end of the line (`e == text.len`), the UTF-8 alignment step read `text[len]`, one byte past the slice. The code comment says this panics in Debug/ReleaseSafe and is undefined behaviour in ReleaseFast (src/out_json.zig:113-116). The regression test says the same: \"Antes de la corrección, la alineación UTF-8 leía text[len] (panic en Debug)\" (src/out_json.zig:622-623). The fix is the `e < ev.text.len` guard on line 116.\n\n**Caveat:** the context does not show the diff of 53c34ef. Blame for line 89 points to e2d7c07f3f, the commit that introduced M9. The link between the fix commit and this code comes from the commit message, the code comment and the test, not from a diff.",
+ "usage": {
+  "cost_usd": 0.031886,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.22,
+ "headers": {}
+}

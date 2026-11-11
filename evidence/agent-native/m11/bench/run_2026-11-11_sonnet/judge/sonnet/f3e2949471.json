@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer identifies commit 53c34ef and describes the bug (text[len] read one byte past the slice, panic in Debug/ReleaseSafe, UB in ReleaseFast) and the e < ev.text.len fix, matching the reference; the hedging about the missing diff does not contradict it.",
+ "cost_usd": 0.006668
+}

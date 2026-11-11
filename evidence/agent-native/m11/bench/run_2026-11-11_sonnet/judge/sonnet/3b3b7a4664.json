@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the XDG/HOME fallback directory, the spill-<ns>-<pid>.jsonl name, and Emitter.spill_dir as the struct holding the final directory, and its extra details do not contradict the reference.",
+ "cost_usd": 0.0072239999999999995
+}

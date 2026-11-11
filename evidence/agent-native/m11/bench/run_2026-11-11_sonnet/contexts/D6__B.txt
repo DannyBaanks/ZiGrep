@@ -1,0 +1,35 @@
+src/out_json.zig-147-    /// La línea se emitió porque NO coincide y se pidió `-v`. Viene del flag,
+src/out_json.zig-148-    /// no se deduce de "match sin span" (eso etiquetaba mal el passthru).
+src/out_json.zig-149-    inverted: bool = false,
+src/out_json.zig-150-};
+src/out_json.zig-151-
+src/out_json.zig-152-pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+src/out_json.zig-153-    // M9: computed once per event; null when this row goes out whole.
+src/out_json.zig-154-    const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+src/out_json.zig:155:    if (compact) return emitLineRow(out, gpa, ev, win);
+src/out_json.zig-156-    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+src/out_json.zig-157-    try out.appendSlice(gpa, switch (ev.kind) {
+src/out_json.zig-158-        .match => "match",
+src/out_json.zig-159-        .context => "context",
+src/out_json.zig-160-        .passthru => "passthru",
+src/out_json.zig-161-        .occurrence => "occurrence",
+src/out_json.zig-162-    });
+src/out_json.zig-163-    try out.appendSlice(gpa, "\",\"path\":");
+--
+src/out_json.zig-225-        const t = std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable;
+src/out_json.zig-226-        try out.appendSlice(gpa, t);
+src/out_json.zig-227-    } else try out.appendSlice(gpa, "null");
+src/out_json.zig-228-    try out.appendSlice(gpa, ",\"source\":\"");
+src/out_json.zig-229-    try out.appendSlice(gpa, source);
+src/out_json.zig-230-    try out.appendSlice(gpa, "\"}\n");
+src/out_json.zig-231-}
+src/out_json.zig-232-
+src/out_json.zig:233:fn emitLineRow(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent, win: ?Window) Allocator.Error!void {
+src/out_json.zig-234-    try out.appendSlice(gpa, "[\"");
+src/out_json.zig-235-    try out.append(gpa, switch (ev.kind) {
+src/out_json.zig-236-        .match => 'm',
+src/out_json.zig-237-        .context => 'c',
+src/out_json.zig-238-        .passthru => 'p',
+src/out_json.zig-239-        .occurrence => 'o',
+src/out_json.zig-240-    });
+src/out_json.zig-241-    if (ev.inverted) try out.append(gpa, 'v');

@@ -1,0 +1,212 @@
+CONTEXT PACK `win_start`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 17 in 3 file(s); by role: comment 3, doc_comment 3, documentation 4, string 7
+  declarations found by pattern: 0
+
+REFERENCES
+mentions inside comments or strings (13): textual only, not a dependency
+  [h5] src/main.zig:107 (string) \\                    plus win_start and line_len, so the whole line is
+  [h6] src/main.zig:1749 (comment) // The window travels in the JSON fields (`text`, `win_start`,
+  [h7] src/main.zig:1753 (string) opts.fail = .{ .what = "--max-columns needs --json (or --queries-file): the window travels in the text, win_start and line_len fields", .arg = "" };
+  [h8] src/out_json.zig:71 (doc_comment) ///     `line_start + win_start` (with `--provenance`, verifiable by hash).
+  [h9] src/out_json.zig:74 (doc_comment) /// windowed): `zgrep/1` gains `win_start` + `line_len` next to `text`;
+  [h10] src/out_json.zig:76 (doc_comment) /// `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (+ `match` when
+  [h11] src/out_json.zig:187 (comment) // it starts `win_start` bytes into the line and the line is `line_len` long.
+  [h12] src/out_json.zig:189 (string) try out.appendSlice(gpa, ",\"win_start\":");
+  [h13] src/out_json.zig:494 (string) test "M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está" {
+  [h14] src/out_json.zig:508 (string) \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":1,"column":29,"byte_start":1028,"byte_end":1031,"match":"HIT","text":"xxxxxxxxHITyyyyyyyyy","win_star
+  [h15] src/out_json.zig:522 (string) try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+  [h16] src/out_json.zig:539 (string) try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+  [h17] src/out_json.zig:598 (comment) // [t=w, line, col, byte_start, len, ventana, win_start, line_len]
+src/main.zig in file: textual mention(s) only, not a code reference: [h5] line 107 (string)
+  src/main.zig:101-113  sha256:1fa384fdce15e407
+   101 |     \\                    The final summary says truncated, reason,
+   102 |     \\                    returned, omitted, output_tokens_est
+   103 |     \\      --max-columns N
+   104 |     \\                    with --json: a line longer than N bytes is emitted
+   105 |     \\                    as a window of at most N bytes around the match
+   106 |     \\                    (the match is never cut, nor is a UTF-8 character),
+>  107 |     \\                    plus win_start and line_len, so the whole line is
+   108 |     \\                    read back from the file; rows with no match are
+   109 |     \\                    never cut. Measured: ~58 % fewer real tokens on a
+   110 |     \\                    tree with long lines (evidence/agent-native/m9)
+   111 |     \\  -c, --count       print only a count of matching lines per file
+   112 |     \\  -l, --files-with-matches
+   113 |     \\                    print only the names of files with matches
+src/main.zig in fn:parseArgs: textual mention(s) only, not a code reference: [h6] line 1749 (comment), [h7] line 1753 (string)
+  src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+  src/main.zig:1743-1759  sha256:571a946f86d172a3
+  1743 |     if (opts.max_columns) |mc| {
+  1744 |         // A window of 0 bytes carries nothing: it would silently drop lines.
+  1745 |         if (mc == 0) {
+  1746 |             opts.fail = .{ .what = "--max-columns needs a positive number of bytes (a 0-byte window carries nothing)", .arg = "" };
+  1747 |             return error.Usage;
+  1748 |         }
+> 1749 |         // The window travels in the JSON fields (`text`, `win_start`,
+  1750 |         // `line_len`); text output would print a line cut with no way to say
+  1751 |         // where the rest is.
+  1752 |         if (!opts.json and opts.queries_file == null) {
+> 1753 |             opts.fail = .{ .what = "--max-columns needs --json (or --queries-file): the window travels in the text, win_start and line_len fields", .arg = "" };
+  1754 |             return error.Usage;
+  1755 |         }
+  1756 |     }
+  1757 |     if (opts.queries_file != null) {
+  1758 |         if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
+  1759 |             opts.fail = .{ .what = "--queries-file takes the patterns from the file; drop -e / -f", .arg = "" };
+src/out_json.zig in file: textual mention(s) only, not a code reference: [h8] line 71 (doc_comment), [h9] line 74 (doc_comment), [h10] line 76 (doc_comment)
+  src/out_json.zig:65-82  sha256:79c6a6a9632a216f
+    65 | ///     alone does not fit in N bytes the window IS the match;
+    66 | ///   * a UTF-8 character is never split (the window is aligned to codepoint
+    67 | ///     boundaries), so every windowed `text` decodes;
+    68 | ///   * `col`, `byte_start` and `len` keep their whole-line meaning, so nothing
+    69 | ///     is lost: `line_start = byte_start - (col - 1)`, the whole line is
+    70 | ///     `file[line_start .. line_start + line_len]` and the window starts at
+>   71 | ///     `line_start + win_start` (with `--provenance`, verifiable by hash).
+    72 | ///
+    73 | /// Where the extra information travels (additive, and ONLY when a row is
+>   74 | /// windowed): `zgrep/1` gains `win_start` + `line_len` next to `text`;
+    75 | /// `zgrep/1c` gains the `w` suffix on the row tag and two positional elements,
+>   76 | /// `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (+ `match` when
+    77 | /// it is not derivable inside the window). An unwindowed row is byte-identical
+    78 | /// to pre-M9 output, so a reader that does not know the flag sees nothing new.
+    79 | pub var max_columns: usize = 0;
+    80 | 
+    81 | /// A window over a row's own text: `bytes` = `text[start ..]`, at most the
+    82 | /// budget long, never cutting the match and never splitting a character.
+src/out_json.zig in fn:emitLineEvent: textual mention(s) only, not a code reference: [h11] line 187 (comment), [h12] line 189 (string)
+  src/out_json.zig:152-197  sha256:594e87490b58fcce
+   152 | pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+   153 |     // M9: computed once per event; null when this row goes out whole.
+   154 |     const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+   155 |     if (compact) return emitLineRow(out, gpa, ev, win);
+   156 |     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+   157 |     try out.appendSlice(gpa, switch (ev.kind) {
+   158 |         .match => "match",
+   159 |         .context => "context",
+   160 |         .passthru => "passthru",
+   161 |         .occurrence => "occurrence",
+   162 |     });
+   163 |     try out.appendSlice(gpa, "\",\"path\":");
+   164 |     try appendJsonString(out, gpa, ev.path);
+   165 |     try out.appendSlice(gpa, ",\"line\":");
+   166 |     try appendInt(out, gpa, ev.line_no);
+   167 |     if (ev.span) |sp| {
+   168 |         const col = sp.start + 1;
+   169 |         const bstart = ev.line_start + sp.start;
+   170 |         const bend = ev.line_start + sp.end;
+   171 |         try out.appendSlice(gpa, ",\"column\":");
+   172 |         try appendInt(out, gpa, col);
+   173 |         try out.appendSlice(gpa, ",\"byte_start\":");
+   174 |         try appendInt(out, gpa, bstart);
+   175 |         try out.appendSlice(gpa, ",\"byte_end\":");
+   176 |         try appendInt(out, gpa, bend);
+   177 |         try out.appendSlice(gpa, ",\"match\":");
+   178 |         try appendJsonString(out, gpa, ev.line_bytes[sp.start..sp.end]);
+   179 |     } else {
+   180 |         try out.appendSlice(gpa, ",\"column\":null,\"byte_start\":null,\"byte_end\":null,\"match\":null");
+   181 |     }
+   182 |     try out.appendSlice(gpa, ",\"text\":");
+   183 |     try appendJsonString(out, gpa, if (win) |w| w.bytes else ev.text);
+   184 |     // M9: the two fields travel ONLY on a windowed row, so a row that fits is
+   185 |     // byte-identical to the pre-M9 event (the additive rule costs nothing in
+   186 |     // the common case). Their presence is the signal: this `text` is a window,
+>  187 |     // it starts `win_start` bytes into the line and the line is `line_len` long.
+   188 |     if (win) |w| {
+>  189 |         try out.appendSlice(gpa, ",\"win_start\":");
+   190 |         try appendInt(out, gpa, w.start);
+   191 |         try out.appendSlice(gpa, ",\"line_len\":");
+   192 |         try appendInt(out, gpa, ev.text.len);
+   193 |     }
+   194 |     try out.appendSlice(gpa, ",\"inverted\":");
+   195 |     try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+   196 |     try out.appendSlice(gpa, "}\n");
+   197 | }
+
+TESTS
+src/out_json.zig in test:M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está: textual mention(s) only, not a code reference: [h13] line 494 (string), [h14] line 508 (string)
+  src/out_json.zig:494-511  sha256:bf61c98212685106
+>  494 | test "M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está" {
+   495 |     const gpa = std.testing.allocator;
+   496 |     max_columns = 20;
+   497 |     defer max_columns = 0;
+   498 |     var buf: [60]u8 = undefined;
+   499 |     const line = longLine(&buf, 28); // 28 x + HIT + 29 y
+   500 |     var out: std.ArrayList(u8) = .empty;
+   501 |     defer out.deinit(gpa);
+   502 |     try emitLineEvent(&out, gpa, .{
+   503 |         .path = "a.txt", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+   504 |     });
+   505 |     // 28 bytes de margen a cada lado del recorte; col y byte_start siguen
+   506 |     // contando la línea ENTERA (col 29, byte_start 1028, byte_end 1031).
+   507 |     try std.testing.expectEqualStrings(
+>  508 |         \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":1,"column":29,"byte_start":1028,"byte_end":1031,"match":"HIT","text":"xxxxxxxxHITyyyyyyyyy","win_start":20,"line_len":60,"inverted":false}
+   509 |         \\
+   510 |     , out.items);
+   511 | }
+src/out_json.zig in test:M9: sin ventana cuando la línea cabe: bytes idénticos a los de antes: textual mention(s) only, not a code reference: [h15] line 522 (string)
+  src/out_json.zig:513-524  sha256:5390a0ee5c5fabec
+   513 | test "M9: sin ventana cuando la línea cabe: bytes idénticos a los de antes" {
+   514 |     const gpa = std.testing.allocator;
+   515 |     max_columns = 400;
+   516 |     defer max_columns = 0;
+   517 |     var out: std.ArrayList(u8) = .empty;
+   518 |     defer out.deinit(gpa);
+   519 |     try emitLineEvent(&out, gpa, .{
+   520 |         .path = "a.txt", .line_no = 1, .line_start = 0, .line_bytes = "short HIT line", .span = .{ .start = 6, .end = 9 }, .kind = .match, .text = "short HIT line",
+   521 |     });
+>  522 |     try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+   523 |     try std.testing.expect(std.mem.indexOf(u8, out.items, "\"text\":\"short HIT line\"") != null);
+   524 | }
+src/out_json.zig in test:M9: fila sin span no se recorta NUNCA (no hay match que centrar): textual mention(s) only, not a code reference: [h16] line 539 (string)
+  src/out_json.zig:526-540  sha256:fa096ca50c0b64b6
+   526 | test "M9: fila sin span no se recorta NUNCA (no hay match que centrar)" {
+   527 |     const gpa = std.testing.allocator;
+   528 |     max_columns = 8;
+   529 |     defer max_columns = 0;
+   530 |     var buf: [300]u8 = undefined;
+   531 |     const line = longLine(&buf, 100);
+   532 |     var out: std.ArrayList(u8) = .empty;
+   533 |     defer out.deinit(gpa);
+   534 |     try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 7, .line_start = 0, .line_bytes = line, .span = null, .kind = .context, .text = line });
+   535 |     // El text del evento es la línea ENTERA: se localiza el campo y se compara.
+   536 |     const marker = ",\"text\":\"";
+   537 |     const at = std.mem.indexOf(u8, out.items, marker).? + marker.len;
+   538 |     try std.testing.expectEqualStrings(line, out.items[at .. at + line.len]);
+>  539 |     try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+   540 | }
+src/out_json.zig in test:M9: fila compacta ventana: sufijo w y dos elementos posicionales: textual mention(s) only, not a code reference: [h17] line 598 (comment)
+  src/out_json.zig:585-603  sha256:14f5c827cd9889e7
+   585 | test "M9: fila compacta ventana: sufijo w y dos elementos posicionales" {
+   586 |     const gpa = std.testing.allocator;
+   587 |     compact = true;
+   588 |     max_columns = 20;
+   589 |     defer compact = false;
+   590 |     defer max_columns = 0;
+   591 |     var buf: [60]u8 = undefined;
+   592 |     const line = longLine(&buf, 28);
+   593 |     var out: std.ArrayList(u8) = .empty;
+   594 |     defer out.deinit(gpa);
+   595 |     try emitLineEvent(&out, gpa, .{
+   596 |         .path = "a", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+   597 |     });
+>  598 |     // [t=w, line, col, byte_start, len, ventana, win_start, line_len]
+   599 |     try std.testing.expectEqualStrings(
+   600 |         \\["mw",1,29,1028,3,"xxxxxxxxHITyyyyyyyyy",20,60]
+   601 |         \\
+   602 |     , out.items);
+   603 | }
+
+UNCERTAINTY
+- no declaration of `win_start` found by pattern in scope; it may be declared elsewhere, generated, or not a symbol
+- not analysed: aliases (const x = y.win_start), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 395 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 14

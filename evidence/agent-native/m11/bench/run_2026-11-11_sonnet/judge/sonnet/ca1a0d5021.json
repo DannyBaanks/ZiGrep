@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly locates parseCount and infers it returns null for 'abc', but it does not state the parseInt base-10 parsing or the 'bad value for --max-columns' error with rc 2, which the reference gives definitively.",
+ "cost_usd": 0.006172
+}

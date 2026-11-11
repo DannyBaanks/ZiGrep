@@ -1,0 +1,8 @@
+src/batch.zig:127:    spill_dir: ?[]const u8 = null,
+src/batch.zig:170:        const dir = self.spill_dir orelse return false;
+src/batch.zig:449:            const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ self.spill_dir.?, self.spill_name }) catch self.spill_name;
+src/main.zig:344:    spill_dir: ?[]const u8 = null,
+src/main.zig:1141:                opts.spill_dir = body["spill=".len..];
+src/main.zig:1142:                if (opts.spill_dir.?.len == 0) {
+src/main.zig:1814:    const dir: []const u8 = opts.spill_dir orelse blk: {
+src/main.zig:1821:    em.spill_dir = dir;

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,6 +51,17 @@ def command(cond: str, zgrep: str, sym: str, scope: list[str], spill: Path, budg
             "--sections", sect, "--budget-bytes", str(budget), "--spill-dir", str(spill)]
 
 
+def display(cmd: list[str]) -> str:
+    """The command as the reader sees it: no local absolute paths."""
+    out = []
+    for i, c in enumerate(cmd):
+        if i == 0 or c.endswith(("/zgrep", "/zigrep")):
+            c = Path(c).name
+        c = c.replace(str(ROOT) + "/", "").replace(str(ROOT), ".")
+        out.append(c)
+    return " ".join(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--zgrep", required=True)
@@ -59,7 +71,7 @@ def main() -> int:
     qs = json.loads((HERE / "questions.json").read_text())
     out = Path(a.out)
     (out / "contexts").mkdir(parents=True, exist_ok=True)
-    spill = out / "spill"
+    spill = Path(os.path.relpath(out.resolve() / "spill", ROOT))
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "status", "--porcelain", "--", "src"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     manifest = {"revision": head, "src_dirty": bool(dirty), "budget": a.budget, "scope": qs["scope"], "items": []}
@@ -76,7 +88,7 @@ def main() -> int:
             path.write_text(text)
             manifest["items"].append({
                 "qid": q["id"], "cond": cond,
-                "command": " ".join(c if c != str(ROOT) else "<repo>" for c in [Path(cmd[0]).name if i == 0 else c for i, c in enumerate(cmd)]),
+                "command": display(cmd),
                 "raw_bytes": len(raw.encode()), "delivered_bytes": len(text.encode()),
                 "harness_truncated": truncated, "pack_truncated": pack_trunc,
                 "sha256": hashlib.sha256(text.encode()).hexdigest(),

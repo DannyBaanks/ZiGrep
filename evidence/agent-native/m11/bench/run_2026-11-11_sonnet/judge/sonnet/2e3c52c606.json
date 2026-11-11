@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: max_columns is per call, runBatch installs it once, it isn't in per-query argv, and runSearch clears it only when !batch_running; the extra line citations are consistent and don't contradict the reference.",
+ "cost_usd": 0.006168
+}

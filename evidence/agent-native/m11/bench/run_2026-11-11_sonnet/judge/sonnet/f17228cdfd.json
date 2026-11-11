@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says the fields appear when `--max-columns` is used, implying any such use; reference says only on rows whose text is longer than N with a span, and rows that fit have neither field",
+  "\"line_start + win_start\" as recovering full line start is garbled: win_start is the offset of the window within the line, not an addition to recover the line start"
+ ],
+ "reason": "It captures that the fields appear only on windowed rows and gives win_start/line_len meanings correctly, but omits that rows that fit under --max-columns lack the fields and adds a muddled claim about line_start.",
+ "cost_usd": 0.0072440000000000004
+}

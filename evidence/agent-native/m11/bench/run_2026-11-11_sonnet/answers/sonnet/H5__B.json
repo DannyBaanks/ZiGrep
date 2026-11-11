@@ -1,0 +1,18 @@
+{
+ "qid": "H5",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5fac9ae20025c8a4639b5836d8627b31050f0c1b4ae0dd3b9b7176072c03f55a",
+ "answer": "The context doesn't say. It contains no timing or benchmark data: nothing about a 655 MB monorepo, and no millisecond figure for `--max-columns 400`.\n\nWhat the context does show is the mechanism. `--max-columns N` is JSON-only (src/main.zig:355-358). When it is off, output is byte-for-byte the pre-M9 output (src/main.zig:358). When it is on, the window is computed once per event, and only if `max_columns > 0` (src/out_json.zig:153-154). Rows whose line fits within the limit are emitted unchanged (src/out_json.zig:513-524).\n\nSo the cost is per emitted row, not per byte scanned. Measuring it would need a benchmark, or the README.md/GUIA.md performance sections. The search output shows no README.md or GUIA.md hits for `max_columns`, though GUIA §4s is referenced at src/main.zig:357.",
+ "usage": {
+  "cost_usd": 0.044788,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.64,
+ "headers": {}
+}

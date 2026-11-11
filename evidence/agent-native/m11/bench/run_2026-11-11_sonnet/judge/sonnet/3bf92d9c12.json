@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Parsing and the 'bad value for --max-columns' error.Usage are correct, but the answer hedges on the exit code, which the reference states definitively as 2.",
+ "cost_usd": 0.00611
+}

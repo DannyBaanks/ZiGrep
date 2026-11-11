@@ -1,0 +1,18 @@
+{
+ "qid": "H5",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9ad6c663a5b214f5006deb4d6c059fdb491b761d5354e4479337d60b20196fe9",
+ "answer": "The context doesn't say. It contains only code references to the `max_columns` option, with no benchmark or timing data, and nothing about a 655 MB monorepo.\n\nWhat the matches do show:\n- `max_columns` is an optional `usize` option (src/main.zig:359), parsed from `--max-columns` (src/main.zig:1188, src/main.zig:1198).\n- In JSON output, the window is computed only when `max_columns > 0` (src/out_json.zig:154).\n- A test sets it to 400 (src/main.zig:3278), but it checks parsing and says nothing about performance.\n\nTo answer, I'd need benchmark results or documentation (for example in README.md or GUIA.md) that gives timings for searches with and without `--max-columns 400`. The search returned no matches in either file.",
+ "usage": {
+  "cost_usd": 0.00903,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.96,
+ "headers": {}
+}

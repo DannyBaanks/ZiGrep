@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Parsing and the 'bad value for --max-columns' error with error.Usage are correct, but the answer says it cannot confirm the exit code (reference says rc 2) and hedges on the message format.",
+ "cost_usd": 0.0062840000000000005
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "H3",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "13339360e3a5209c6a613afe44a2961e6121a00245e53e9f6e4587fd5308f002",
+ "answer": "The skipping happens in the filter engine in `src/filter.zig`, and it covers both directories and files.\n\n- `src/filter.zig:244`: `if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.')` checks directory names for a leading dot.\n- `src/filter.zig:268`: `if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.')` does the same for file names.\n\nHow the flag gets there:\n- `src/main.zig:1419` sets `opts.skip_hidden = true`. The context doesn't show the `--no-hidden` string itself, but this is presumably the parsing branch.\n- `src/main.zig:2385` and `src/main.zig:2505` copy it into `filter_engine.skip_hidden`.\n\nWhat the context doesn't show is the body of those `if` blocks (for example, whether the directory check prunes the whole subtree) or the callers of the two checks. So I can confirm both checks exist, but not exactly what they do on a match.",
+ "usage": {
+  "cost_usd": 0.007766,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.17,
+ "headers": {}
+}

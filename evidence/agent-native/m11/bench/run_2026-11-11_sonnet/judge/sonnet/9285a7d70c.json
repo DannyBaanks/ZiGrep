@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly describes parseCount and the 'bad value for --max-columns' Usage error, but hedges and does not state the definite exit code 2 that the reference gives.",
+ "cost_usd": 0.006004
+}

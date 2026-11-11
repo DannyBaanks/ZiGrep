@@ -1,0 +1,18 @@
+{
+ "qid": "D5",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "1ed80a12efeb0e186d5a89d699c297b34272c8fe62973d820ecb176f698c8418",
+ "answer": "The context shows the behavior but not an explicit reason.\n\nWhat the code shows:\n- `batch_running` is a global flag, initially false (src/main.zig:1870). It is set to true for the duration of the batch and reset via `defer` (src/main.zig:1961-1962).\n- At src/main.zig:2038, the reset `out_json.max_columns = 0` happens only `if (!batch_running)`, so it is skipped inside a batch.\n- At src/main.zig:2120, `max_columns` is set from `opts.max_columns orelse 0` only when not in a batch. Inside a batch, it keeps the existing value.\n- Compact handling at src/main.zig:2122 is likewise gated on `!batch_running`.\n\nLikely inference (not stated in the context): the batch sets `max_columns` once, and each per-search call would otherwise clobber it. That is a guess.\n\nMissing: comments or the batch setup code near src/main.zig:1961 and the lines around 2038 and 2120, which would confirm the intent.",
+ "usage": {
+  "cost_usd": 0.007316,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.57,
+ "headers": {}
+}

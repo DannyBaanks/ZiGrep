@@ -1,0 +1,112 @@
+src/out_json.zig-81-/// A window over a row's own text: `bytes` = `text[start ..]`, at most the
+src/out_json.zig-82-/// budget long, never cutting the match and never splitting a character.
+src/out_json.zig-83-const Window = struct { start: usize, bytes: []const u8 };
+src/out_json.zig-84-
+src/out_json.zig-85-/// The M9 window of `ev`, or null when the row must be emitted whole. The order
+src/out_json.zig-86-/// of the checks is the contract: no span, short enough, span inside the text,
+src/out_json.zig-87-/// and the text really is the line (that is what rules out `--replace` and
+src/out_json.zig-88-/// `-o`, where the emitted text is not the line).
+src/out_json.zig:89:fn windowOf(ev: *const LineEvent, w: usize) ?Window {
+src/out_json.zig-90-    if (w == 0) return null;
+src/out_json.zig-91-    const sp = ev.span orelse return null;
+src/out_json.zig-92-    if (ev.text.len <= w) return null;
+src/out_json.zig-93-    if (sp.end > ev.text.len) return null;
+src/out_json.zig-94-    if (!std.mem.eql(u8, ev.text, ev.line_bytes)) return null;
+src/out_json.zig-95-    const m0 = sp.start;
+src/out_json.zig-96-    const m1 = sp.end;
+src/out_json.zig-97-    var start: usize = undefined;
+--
+src/out_json.zig-146-    text: []const u8,
+src/out_json.zig-147-    /// La línea se emitió porque NO coincide y se pidió `-v`. Viene del flag,
+src/out_json.zig-148-    /// no se deduce de "match sin span" (eso etiquetaba mal el passthru).
+src/out_json.zig-149-    inverted: bool = false,
+src/out_json.zig-150-};
+src/out_json.zig-151-
+src/out_json.zig-152-pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+src/out_json.zig-153-    // M9: computed once per event; null when this row goes out whole.
+src/out_json.zig:154:    const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+src/out_json.zig-155-    if (compact) return emitLineRow(out, gpa, ev, win);
+src/out_json.zig-156-    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
+src/out_json.zig-157-    try out.appendSlice(gpa, switch (ev.kind) {
+src/out_json.zig-158-        .match => "match",
+src/out_json.zig-159-        .context => "context",
+src/out_json.zig-160-        .passthru => "passthru",
+src/out_json.zig-161-        .occurrence => "occurrence",
+src/out_json.zig-162-    });
+--
+src/out_json.zig-539-    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig-540-}
+src/out_json.zig-541-
+src/out_json.zig-542-test "M9: si el match solo no cabe en N, la ventana ES el match" {
+src/out_json.zig-543-    max_columns = 3;
+src/out_json.zig-544-    defer max_columns = 0;
+src/out_json.zig-545-    var buf: [200]u8 = undefined;
+src/out_json.zig-546-    const line = longLine(&buf, 50);
+src/out_json.zig:547:    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = line }, 3).?;
+src/out_json.zig-548-    try std.testing.expectEqual(@as(usize, 50), w.start);
+src/out_json.zig-549-    try std.testing.expectEqualStrings("HIT", w.bytes);
+src/out_json.zig-550-}
+src/out_json.zig-551-
+src/out_json.zig-552-test "M9: la ventana no parte un carácter UTF-8 (ni al inicio ni al final)" {
+src/out_json.zig-553-    max_columns = 9;
+src/out_json.zig-554-    defer max_columns = 0;
+src/out_json.zig-555-    // 8a + ññññ (8 B) + HIT + 40b: el corte cae en el segundo byte de una ñ.
+src/out_json.zig-556-    var line: [71]u8 = undefined;
+src/out_json.zig-557-    @memset(line[0..8], 'a');
+src/out_json.zig-558-    @memcpy(line[8..16], "\xC3\xB1\xC3\xB1\xC3\xB1\xC3\xB1"[0..]);
+src/out_json.zig-559-    @memcpy(line[16..19], "HIT");
+src/out_json.zig-560-    @memset(line[19..], 'b');
+src/out_json.zig:561:    const w1 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 16, .end = 19 }, .kind = .match, .text = &line }, 9).?;
+src/out_json.zig-562-    try std.testing.expectEqual(@as(usize, 14), w1.start);
+src/out_json.zig-563-    try std.testing.expectEqualStrings("ñHITbbb", w1.bytes);
+src/out_json.zig-564-    try std.testing.expect(std.unicode.utf8ValidateSlice(w1.bytes));
+src/out_json.zig-565-
+src/out_json.zig-566-    // 10a + HIT + ññññ + 30b: el corte derecho cae dentro de una ñ.
+src/out_json.zig-567-    var line2: [51]u8 = undefined;
+src/out_json.zig-568-    @memset(line2[0..10], 'a');
+src/out_json.zig-569-    @memcpy(line2[10..13], "HIT");
+src/out_json.zig-570-    @memcpy(line2[13..21], "\xC3\xB1\xC3\xB1\xC3\xB1\xC3\xB1"[0..]);
+src/out_json.zig-571-    @memset(line2[21..], 'b');
+src/out_json.zig:572:    const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 10, .end = 13 }, .kind = .match, .text = &line2 }, 8).?;
+src/out_json.zig-573-    try std.testing.expectEqual(@as(usize, 8), w2.start);
+src/out_json.zig-574-    try std.testing.expectEqualStrings("aaHITñ", w2.bytes);
+src/out_json.zig-575-    try std.testing.expect(std.unicode.utf8ValidateSlice(w2.bytes));
+src/out_json.zig-576-}
+src/out_json.zig-577-
+src/out_json.zig-578-test "M9: --replace (el texto emitido no ES la línea) no se recorta" {
+src/out_json.zig-579-    var buf: [200]u8 = undefined;
+src/out_json.zig-580-    const line = longLine(&buf, 50);
+src/out_json.zig-581-    const replaced = "SUSTITUIDA";
+src/out_json.zig:582:    try std.testing.expect(windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = replaced }, 8) == null);
+src/out_json.zig-583-}
+src/out_json.zig-584-
+src/out_json.zig-585-test "M9: fila compacta ventana: sufijo w y dos elementos posicionales" {
+src/out_json.zig-586-    const gpa = std.testing.allocator;
+src/out_json.zig-587-    compact = true;
+src/out_json.zig-588-    max_columns = 20;
+src/out_json.zig-589-    defer compact = false;
+src/out_json.zig-590-    defer max_columns = 0;
+--
+src/out_json.zig-620-
+src/out_json.zig-621-test "M9: ventana que llega al final de la línea no lee fuera del slice" {
+src/out_json.zig-622-    // Match cerca del final: e = min(len, s0 + w) = len. Antes de la
+src/out_json.zig-623-    // corrección, la alineación UTF-8 leía text[len] (panic en Debug).
+src/out_json.zig-624-    var line: [105]u8 = undefined;
+src/out_json.zig-625-    @memset(line[0..100], 'x');
+src/out_json.zig-626-    @memcpy(line[100..103], "HIT");
+src/out_json.zig-627-    @memcpy(line[103..105], "yy");
+src/out_json.zig:628:    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line }, 10).?;
+src/out_json.zig-629-    try std.testing.expectEqual(@as(usize, 95), w.start);
+src/out_json.zig-630-    try std.testing.expectEqualStrings("xxxxxHITyy", w.bytes);
+src/out_json.zig-631-
+src/out_json.zig-632-    // La línea termina en un carácter multibyte completo: la ventana lo
+src/out_json.zig-633-    // conserva entero (el último byte es de continuación, pero e == len).
+src/out_json.zig-634-    var line2: [105]u8 = undefined;
+src/out_json.zig-635-    @memset(line2[0..100], 'x');
+src/out_json.zig-636-    @memcpy(line2[100..103], "HIT");
+src/out_json.zig-637-    @memcpy(line2[103..105], "\xC3\xB1");
+src/out_json.zig:638:    const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line2 }, 10).?;
+src/out_json.zig-639-    try std.testing.expectEqual(@as(usize, 95), w2.start);
+src/out_json.zig-640-    try std.testing.expectEqualStrings("xxxxxHITñ", w2.bytes);
+src/out_json.zig-641-    try std.testing.expect(std.unicode.utf8ValidateSlice(w2.bytes));
+src/out_json.zig-642-}

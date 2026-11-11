@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists all five null cases from the reference (w==0, no span, text fits, span past text, text != line_bytes), with --replace as an example; the extra caller note doesn't contradict the reference.",
+ "cost_usd": 0.006028
+}

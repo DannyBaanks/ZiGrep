@@ -1,0 +1,84 @@
+M11 mechanical scores, reader=sonnet
+
+question             A             B            P1            P2            P3    (fact score of the ANSWER / facts AVAILABLE in the context)
+D1  dev      0.00/0.00     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+D2  dev      0.67/0.33     0.67/0.67     1.00/1.00     1.00/1.00     1.00/1.00 
+D3  dev      0.60/0.20     0.80/1.00     0.80/1.00     1.00/1.00     1.00/1.00 
+D4  dev      1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+D5  dev      0.33/0.33     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+D6  dev      0.00/0.00     0.00/0.00     0.33/1.00     0.33/1.00     0.33/1.00 
+D7  dev      0.33/0.33     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+H1  heldout  1.00/0.75     1.00/1.00     1.00/0.75     1.00/0.75     1.00/0.75 
+H2  heldout  0.25/0.25     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+H3  heldout  1.00/0.50     0.75/0.75     0.75/0.75     0.75/0.75     0.75/1.00 
+H4  heldout  0.00/0.00     0.50/0.50     0.50/0.50     0.50/0.50     1.00/1.00 
+H5  heldout  1.00/0.00     1.00/0.00     1.00/0.00     1.00/0.00     1.00/0.00 
+
+'!' = a forbidden (known-wrong) pattern matched;  'E' = reader error or missing answer
+
+[dev]  mean fact score / mean availability / forbidden hits / mean cites / abstentions
+  A   0.419 / 0.314 / 0 / 4.6 / 3
+  B   0.781 / 0.810 / 0 / 5.0 / 3
+  P1  0.876 / 1.000 / 0 / 6.7 / 2
+  P2  0.905 / 1.000 / 0 / 5.9 / 2
+  P3  0.905 / 1.000 / 0 / 6.0 / 2
+[heldout]  mean fact score / mean availability / forbidden hits / mean cites / abstentions
+  A   0.650 / 0.300 / 0 / 4.6 / 4
+  B   0.850 / 0.650 / 0 / 5.6 / 3
+  P1  0.850 / 0.600 / 0 / 5.2 / 3
+  P2  0.850 / 0.600 / 0 / 5.8 / 2
+  P3  0.950 / 0.750 / 0 / 5.2 / 4
+[all]  mean fact score / mean availability / forbidden hits / mean cites / abstentions
+  A   0.515 / 0.308 / 0 / 4.6 / 7
+  B   0.810 / 0.743 / 0 / 5.2 / 6
+  P1  0.865 / 0.833 / 0 / 6.1 / 5
+  P2  0.882 / 0.833 / 0 / 5.8 / 4
+  P3  0.924 / 0.896 / 0 / 5.7 / 6
+
+paired by question (fact score), all questions: wins/ties/losses, two-sided sign test p
+  P1 vs A: 8/3/1  p=0.039
+  P1 vs B: 2/10/0  p=0.500
+  P2 vs A: 8/3/1  p=0.039
+  P2 vs B: 3/9/0  p=0.250
+  P3 vs A: 8/3/1  p=0.039
+  P3 vs B: 4/8/0  p=0.125
+
+blinded judge (0 wrong / 1 partial / 2 correct): per question, then mean grade / grade-0 count / wrong claims
+question     A     B    P1    P2    P3
+D1  dev       0     2     2     2     2
+D2  dev       2     2     2     2     2
+D3  dev       1     2     2     2     2
+D4  dev       1     2     2     2     2
+D5  dev       1     2     2     2     2
+D6  dev       0     0     1     2     2
+D7  dev       1     1     1     1     1
+H1  heldout   1     2     1     1     1
+H2  heldout   1     2     2     2     2
+H3  heldout   2     2     2     2     2
+H4  heldout   0     1     1     1     2
+H5  heldout   2     2     2     2     2
+[dev]
+  A   0.86 / 2 / 5
+  B   1.57 / 1 / 0
+  P1  1.71 / 0 / 1
+  P2  1.86 / 0 / 0
+  P3  1.86 / 0 / 0
+[heldout]
+  A   1.20 / 1 / 3
+  B   1.80 / 0 / 0
+  P1  1.60 / 0 / 2
+  P2  1.60 / 0 / 2
+  P3  1.80 / 0 / 1
+[all]
+  A   1.00 / 3 / 8
+  B   1.67 / 1 / 0
+  P1  1.67 / 0 / 3
+  P2  1.75 / 0 / 2
+  P3  1.83 / 0 / 1
+paired by question (judge grade), all questions: wins/ties/losses, two-sided sign test p
+  P1 vs A: 7/5/0  p=0.016
+  P1 vs B: 1/10/1  p=1.000
+  P2 vs A: 7/5/0  p=0.016
+  P2 vs B: 1/10/1  p=1.000
+  P3 vs A: 7/5/0  p=0.016
+  P3 vs B: 2/9/1  p=1.000

@@ -1,0 +1,18 @@
+{
+ "qid": "D3",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "c5f0116e028a33c4c33bf884c07d8dcc558753ab5e6121f90dbcc958d4cf6af5",
+ "answer": "`windowOf` (src/out_json.zig:89-121) returns null in five cases, checked in this order (src/out_json.zig:85-88):\n\n1. **`w == 0`**: the window budget is zero (src/out_json.zig:90).\n2. **No span**: `ev.span` is null (src/out_json.zig:91).\n3. **Line already short enough**: `ev.text.len <= w` (src/out_json.zig:92).\n4. **Span outside the text**: `sp.end > ev.text.len` (src/out_json.zig:93).\n5. **Text is not the line**: `ev.text` differs from `ev.line_bytes` (src/out_json.zig:94). The doc comment says this rules out `--replace` and `-o` (src/out_json.zig:87-88). A test confirms that `--replace` returns null (src/out_json.zig:578-583).\n\nIn `emitLineEvent`, the caller also skips `windowOf` when `max_columns` is 0, so `win` is null (src/out_json.zig:154). Whenever `win` is null, the full `ev.text` is emitted (src/out_json.zig:183).",
+ "usage": {
+  "cost_usd": 0.028720000000000002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.05,
+ "headers": {}
+}

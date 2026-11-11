@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: it is rejected as a usage error with the same message, 0 is not a CLI way to disable the window, and only the internal out_json.max_columns uses 0 as off (the default when the flag is absent).",
+ "cost_usd": 0.00657
+}

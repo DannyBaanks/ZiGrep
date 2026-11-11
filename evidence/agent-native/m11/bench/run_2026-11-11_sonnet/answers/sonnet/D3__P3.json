@@ -1,0 +1,18 @@
+{
+ "qid": "D3",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "b95fd1d4461a36b4d999158a7b4f502fb86e28da88aadfebd517f7c6ada7584b",
+ "answer": "`windowOf` (src/out_json.zig:89-121) returns null in five cases, checked in this order:\n\n1. **Window size is zero**: `w == 0` (src/out_json.zig:90).\n2. **No span**: `ev.span` is null, so there is no match to centre on (src/out_json.zig:91; test at :526-540 is named for this).\n3. **Line already fits**: `ev.text.len <= w` (src/out_json.zig:92).\n4. **Span outside the text**: `sp.end > ev.text.len` (src/out_json.zig:93).\n5. **Text is not the line**: `ev.text` differs from `ev.line_bytes` (src/out_json.zig:94). The doc comment says this rules out `--replace` and `-o` (src/out_json.zig:87-88). The replace test confirms it (src/out_json.zig:578-583).\n\nThe caller also skips the call when `max_columns` is 0 and uses null, so the row goes out whole (src/out_json.zig:154).",
+ "usage": {
+  "cost_usd": 0.031646,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.89,
+ "headers": {}
+}

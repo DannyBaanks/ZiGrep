@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: the fields appear only on windowed rows (line longer than N with a match span), win_start is the window's byte offset in the line, line_len is the full line length, and non-windowed rows are byte-identical to pre-M9 output without the fields.",
+ "cost_usd": 0.006404
+}

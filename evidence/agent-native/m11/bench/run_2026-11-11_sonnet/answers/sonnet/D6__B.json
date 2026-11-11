@@ -1,0 +1,18 @@
+{
+ "qid": "D6",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "82add16aaf087ecf1889953fc0820dd5adc3fa123aa998ff33a7d9d5ae73a43f",
+ "answer": "The context doesn't show how a windowed row differs from a normal row in the compact dialect, so I can't answer fully.\n\nWhat it does show:\n\n- `emitLineEvent` computes `win` once per event. It is `null` when the row goes out whole, and otherwise comes from `windowOf(&ev, max_columns)` when `max_columns > 0` (src/out_json.zig:153-154).\n- In compact mode it delegates to `emitLineRow(out, gpa, ev, win)` (src/out_json.zig:155).\n- `emitLineRow` begins the row with `[\"` plus a kind letter: `m`, `c`, `p` or `o`. It appends `v` if the event is inverted (src/out_json.zig:233-241).\n\nMissing: the rest of `emitLineRow` after line 241, where `win` is used. Also missing are the `Window` struct and `windowOf`, and any README.md or GUIA.md text describing the compact format. Those would show which fields a windowed row adds or changes.",
+ "usage": {
+  "cost_usd": 0.01071,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.93,
+ "headers": {}
+}

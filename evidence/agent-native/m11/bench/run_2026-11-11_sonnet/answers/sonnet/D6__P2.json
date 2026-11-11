@@ -1,0 +1,18 @@
+{
+ "qid": "D6",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "cdd1074da97bb9e2b575b1fd608bd8d154a02466efb5adda75e55ed289d148aa",
+ "answer": "In the compact dialect, a windowed row differs from a normal row in three ways (all in `src/out_json.zig`, `emitLineRow`):\n\n1. **Kind tag suffix:** the tag gets a `w` appended (after the optional `v` for inverted), e.g. `\"mw\"` rather than `\"m\"` (lines 241-245).\n2. **Text:** the emitted text is the window bytes (`w.bytes`) rather than the full `ev.text` (line 256, for rows with a span).\n3. **Two extra trailing elements:** the window start offset (`w.start`) and the full line length (`ev.text.len`) (lines 268-273). Comment at 242-243 says the row \"carries two extra elements after the text.\"\n\nAlso, the match's shift within the text is adjusted by the window start when checking whether the match string can be derived from the text (lines 258-263). The separate match string is appended only if it isn't derivable.\n\nNote: the extra elements are written only inside the `if (ev.span)` branch (lines 247-273). Rows without a span (line 274-277) don't emit them in this code, and the context doesn't show whether such rows can be windowed.",
+ "usage": {
+  "cost_usd": 0.018282,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.93,
+ "headers": {}
+}

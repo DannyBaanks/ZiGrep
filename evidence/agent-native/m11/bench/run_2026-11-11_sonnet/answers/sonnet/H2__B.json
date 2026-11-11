@@ -1,0 +1,18 @@
+{
+ "qid": "H2",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5306f5dca527d75d96ad4e765c301fc3a089cbea1470f67d917aa391e3c1e6b2",
+ "answer": "**Directory:** With `--spill` and no directory, `configureSpill` uses `$XDG_CACHE_HOME/zgrep/spill` if that variable is set and non-empty. Otherwise it uses `~/.cache/zgrep/spill`, built from `$HOME` and falling back to `.` if `HOME` is unset (src/main.zig:1809-1818).\n\n**File name:** `spill-{ns}-{pid}.jsonl`, where `ns` is the wall-clock time in nanoseconds and `pid` is the process id (0 on non-Linux) (src/main.zig:1819-1822). The comment says the file is created exclusive with mode 0600 (src/main.zig:1811). The creation code itself isn't in the context.\n\n**Struct holding the final directory:** `batch.Emitter`. `configureSpill` sets `em.spill_dir = dir` (src/main.zig:1821), and the field is declared at src/batch.zig:127. `spillOpen` creates that directory and joins it with `spill_name` to build the path (src/batch.zig:170-177).\n\nThe CLI `Options` struct also has a `spill_dir` field, but it only holds the user-supplied `--spill=DIR` value, which may be null (src/main.zig:344).",
+ "usage": {
+  "cost_usd": 0.021682,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.99,
+ "headers": {}
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "H4",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f3b05fd4bf17d9db0ec57a3ca7b5320b4f0964a8f5aaca3b3d71a284e57c66b1",
+ "answer": "The context doesn't identify a commit. It contains only source and test code from a `zgrep` over files, with no git history, commit hashes, or messages, so I can't say which commit made the fix.\n\nIt does show what the bug was. A test comment says the window could reach the end of the line, where `e = min(len, s0 + w) = len`. Before the fix, the UTF-8 alignment read `text[len]`, which panics in Debug builds (src/out_json.zig:621-627). The test \"ventana que llega al final de la línea no lee fuera del slice\" covers this (src/out_json.zig:621).\n\nTo find the commit, you'd need `git log` or `git blame` output for that test, for example `git log -S\"no lee fuera del slice\" -- src/out_json.zig`.",
+ "usage": {
+  "cost_usd": 0.02084,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.98,
+ "headers": {}
+}

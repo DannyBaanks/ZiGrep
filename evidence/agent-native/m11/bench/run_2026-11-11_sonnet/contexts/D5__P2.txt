@@ -1,0 +1,82 @@
+CONTEXT PACK `batch_running`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 1 file(s); by role: code 6
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] const/var `batch_running` in file top level
+  src/main.zig:1868-1870  sha256:81a06c8bfb794f72  relation: declaration (pattern match, heuristic)
+  1868 | /// Set while runBatch drives its queries: the compact stream header is the
+  1869 | /// batch's, written once, not each query's.
+> 1870 | var batch_running: bool = false;
+
+REFERENCES
+src/main.zig in fn:runBatch
+  [h2] line 1961 `batch_running`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:1870, no local shadow found)
+  [h3] line 1962 `batch_running`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:1870, no local shadow found)
+  src/main.zig:1897-1897  sha256:909e882932b2919f
+  1897 | fn runBatch(
+  src/main.zig:1955-1968  sha256:136937448cd415cf
+  1955 |     };
+  1956 |     defer em.deinit();
+  1957 |     try configureSpill(init, arena, gopts, &em);
+  1958 |     if (gopts.json_compact) _ = platform.writeStdoutRaw(io, out_json.compact_stream_header);
+  1959 |     em.install();
+  1960 |     defer em.uninstall();
+> 1961 |     batch_running = true;
+> 1962 |     defer batch_running = false;
+  1963 |     // M9: the column budget is per CALL (a query cannot set it in "flags"),
+  1964 |     // and it is not copied into each query's argv, so the batch installs it
+  1965 |     // here for the whole stream. `runSearch` only clears it outside a batch.
+  1966 |     out_json.max_columns = gopts.max_columns orelse 0;
+  1967 | 
+  1968 |     var any_error = false;
+src/main.zig in fn:runSearch
+  [h4] line 2038 `batch_running`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:1870, no local shadow found)
+  [h5] line 2120 `batch_running`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:1870, no local shadow found)
+  [h6] line 2122 `batch_running`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:1870, no local shadow found)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2032-2044  sha256:50f9ff53997236b2
+  2032 |     // M9 is the exception on purpose: the column budget is per CALL, the batch
+  2033 |     // installs it once for the whole stream and no query can change it, so it
+  2034 |     // is only cleared when this search is not running inside a batch.
+  2035 |     scan.out_sep = '\n';
+  2036 |     scan.heading_mode = false;
+  2037 |     out_json.compact = false;
+> 2038 |     if (!batch_running) out_json.max_columns = 0;
+  2039 | 
+  2040 |     var opts: Options = .{};
+  2041 |     const parsed = parseArgs(arena, args, &opts) catch {
+  2042 |         if (opts.fail) |f| {
+  2043 |             if (f.arg.len > 0) {
+  2044 |                 std.debug.print("zgrep: {s}: '{s}'\n", .{ f.what, f.arg });
+  src/main.zig:2114-2128  sha256:ba55a41f9cbfeb88
+  2114 |     // compact mode open the stream with its schema header (a batch writes it
+  2115 |     // once for the whole call).
+  2116 |     out_json.compact = opts.json and opts.json_compact;
+  2117 |     // M9: the column budget comes from this command line, EXCEPT inside a
+  2118 |     // batch: there it is per CALL (the batch installed it before the queries
+  2119 |     // and no query's argv carries it), so the batch value stands.
+> 2120 |     out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
+  2121 |     platform.stdout_prefix_pending.store(false, .release);
+> 2122 |     if (out_json.compact and !batch_running) {
+  2123 |         // Lazily: written before the first output line, never on an empty run.
+  2124 |         platform.stdout_prefix = out_json.compact_stream_header;
+  2125 |         platform.stdout_prefix_pending.store(true, .release);
+  2126 |     }
+  2127 | 
+  2128 |     if (opts.threads == 0) {
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.batch_running), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 400 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 7

@@ -1,0 +1,8 @@
+src/out_json.zig:89:fn windowOf(ev: *const LineEvent, w: usize) ?Window {
+src/out_json.zig:154:    const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+src/out_json.zig:547:    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = line }, 3).?;
+src/out_json.zig:561:    const w1 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 16, .end = 19 }, .kind = .match, .text = &line }, 9).?;
+src/out_json.zig:572:    const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 10, .end = 13 }, .kind = .match, .text = &line2 }, 8).?;
+src/out_json.zig:582:    try std.testing.expect(windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = replaced }, 8) == null);
+src/out_json.zig:628:    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line }, 10).?;
+src/out_json.zig:638:    const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line2 }, 10).?;

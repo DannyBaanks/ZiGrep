@@ -1,0 +1,6 @@
+{
+ "grade": 0,
+ "wrong_claims": [],
+ "reason": "The answer says the information is unavailable, but the reference gives a definite answer (a 'w' tag suffix, win_start and line_len extras, and a conditional match element), so it is not answerable-as-unknown and provides none of the key points.",
+ "cost_usd": 0.0060160000000000005
+}

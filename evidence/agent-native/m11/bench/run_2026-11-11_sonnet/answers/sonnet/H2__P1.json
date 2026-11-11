@@ -1,0 +1,18 @@
+{
+ "qid": "H2",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "cc7d0f595bcb754d8fac0de5d1ff2e1030bd5b93d2aca0f8782c9f26f63f18b9",
+ "answer": "**Directory:** With `--spill` and no `=DIR`, `configureSpill` uses `$XDG_CACHE_HOME/zgrep/spill` if that variable is set and non-empty. Otherwise it uses `$HOME/.cache/zgrep/spill`, falling back to `./.cache/zgrep/spill` if HOME is unset (src/main.zig:1814-1818).\n\n**File name:** `spill-<nanoseconds>-<pid>.jsonl`. The nanoseconds come from the real clock, and the pid is only set on Linux (0 elsewhere) (src/main.zig:1819-1822).\n\n**Struct holding the final directory:** `batch.Emitter`, in its `spill_dir: ?[]const u8` field. `configureSpill` assigns `em.spill_dir = dir` (src/main.zig:1821; src/batch.zig:127). `spillOpen` then creates the directory, builds `{dir}/{spill_name}` and opens it exclusively with mode 0600 (src/batch.zig:172-185).\n\nNote that `Options.spill_dir` (src/main.zig:344) only holds the user-supplied value. It stays `null` when no directory is given.",
+ "usage": {
+  "cost_usd": 0.024254,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.55,
+ "headers": {}
+}

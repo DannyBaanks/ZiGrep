@@ -1,0 +1,18 @@
+{
+ "qid": "H3",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6f494ed6163796c655ae9f9db5367c51b6772f3ac0c16563ba3909760d3b2a02",
+ "answer": "The skipping happens in `FilterEngine` in `src/filter.zig`, and it covers both directories and files.\n\n- `--no-hidden` is parsed in `src/main.zig:1418-1419` and sets `opts.skip_hidden = true`.\n- That value is copied into the filter engine at `src/main.zig:2385` and `src/main.zig:2505` (`filter_engine.skip_hidden = opts.skip_hidden`).\n- **Directories:** `isDirExcluded` returns true when `skip_hidden` is set and the name starts with `.` (`src/filter.zig:244-246`).\n- **Files:** `isFileExcluded` has the same check on the file name (`src/filter.zig:268-270`).\n\nBoth checks sit after an early `return false` when `no_ignore` is set (`src/filter.zig:242`, `266`). So `--no-ignore` disables hidden skipping too.\n\nThe context doesn't show the walker that calls `isDirExcluded` and `isFileExcluded`. I can't confirm from it that the walk prunes excluded directories before descending into them.",
+ "usage": {
+  "cost_usd": 0.021466,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.92,
+ "headers": {}
+}

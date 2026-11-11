@@ -1,0 +1,196 @@
+src/main.zig-99-    \\                    character class, calibrated against a real BPE so
+src/main.zig-100-    \\                    it does not underestimate); never cuts an event.
+src/main.zig-101-    \\                    The final summary says truncated, reason,
+src/main.zig-102-    \\                    returned, omitted, output_tokens_est
+src/main.zig-103-    \\      --max-columns N
+src/main.zig-104-    \\                    with --json: a line longer than N bytes is emitted
+src/main.zig-105-    \\                    as a window of at most N bytes around the match
+src/main.zig-106-    \\                    (the match is never cut, nor is a UTF-8 character),
+src/main.zig:107:    \\                    plus win_start and line_len, so the whole line is
+src/main.zig-108-    \\                    read back from the file; rows with no match are
+src/main.zig-109-    \\                    never cut. Measured: ~58 % fewer real tokens on a
+src/main.zig-110-    \\                    tree with long lines (evidence/agent-native/m9)
+src/main.zig-111-    \\  -c, --count       print only a count of matching lines per file
+src/main.zig-112-    \\  -l, --files-with-matches
+src/main.zig-113-    \\                    print only the names of files with matches
+src/main.zig-114-    \\  -L, --files-without-match
+src/main.zig-115-    \\                    print only the names of files without matches
+--
+src/main.zig-1741-        return error.Usage;
+src/main.zig-1742-    }
+src/main.zig-1743-    if (opts.max_columns) |mc| {
+src/main.zig-1744-        // A window of 0 bytes carries nothing: it would silently drop lines.
+src/main.zig-1745-        if (mc == 0) {
+src/main.zig-1746-            opts.fail = .{ .what = "--max-columns needs a positive number of bytes (a 0-byte window carries nothing)", .arg = "" };
+src/main.zig-1747-            return error.Usage;
+src/main.zig-1748-        }
+src/main.zig:1749:        // The window travels in the JSON fields (`text`, `win_start`,
+src/main.zig-1750-        // `line_len`); text output would print a line cut with no way to say
+src/main.zig-1751-        // where the rest is.
+src/main.zig-1752-        if (!opts.json and opts.queries_file == null) {
+src/main.zig:1753:            opts.fail = .{ .what = "--max-columns needs --json (or --queries-file): the window travels in the text, win_start and line_len fields", .arg = "" };
+src/main.zig-1754-            return error.Usage;
+src/main.zig-1755-        }
+src/main.zig-1756-    }
+src/main.zig-1757-    if (opts.queries_file != null) {
+src/main.zig-1758-        if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
+src/main.zig-1759-            opts.fail = .{ .what = "--queries-file takes the patterns from the file; drop -e / -f", .arg = "" };
+src/main.zig-1760-            return error.Usage;
+src/main.zig-1761-        }
+--
+src/out_json.zig-63-///     emitted WHOLE;
+src/out_json.zig-64-///   * the match is never cut: the window always contains it, and if the match
+src/out_json.zig-65-///     alone does not fit in N bytes the window IS the match;
+src/out_json.zig-66-///   * a UTF-8 character is never split (the window is aligned to codepoint
+src/out_json.zig-67-///     boundaries), so every windowed `text` decodes;
+src/out_json.zig-68-///   * `col`, `byte_start` and `len` keep their whole-line meaning, so nothing
+src/out_json.zig-69-///     is lost: `line_start = byte_start - (col - 1)`, the whole line is
+src/out_json.zig-70-///     `file[line_start .. line_start + line_len]` and the window starts at
+src/out_json.zig:71:///     `line_start + win_start` (with `--provenance`, verifiable by hash).
+src/out_json.zig-72-///
+src/out_json.zig-73-/// Where the extra information travels (additive, and ONLY when a row is
+src/out_json.zig:74:/// windowed): `zgrep/1` gains `win_start` + `line_len` next to `text`;
+src/out_json.zig-75-/// `zgrep/1c` gains the `w` suffix on the row tag and two positional elements,
+src/out_json.zig:76:/// `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (+ `match` when
+src/out_json.zig-77-/// it is not derivable inside the window). An unwindowed row is byte-identical
+src/out_json.zig-78-/// to pre-M9 output, so a reader that does not know the flag sees nothing new.
+src/out_json.zig-79-pub var max_columns: usize = 0;
+src/out_json.zig-80-
+src/out_json.zig-81-/// A window over a row's own text: `bytes` = `text[start ..]`, at most the
+src/out_json.zig-82-/// budget long, never cutting the match and never splitting a character.
+src/out_json.zig-83-const Window = struct { start: usize, bytes: []const u8 };
+src/out_json.zig-84-
+--
+src/out_json.zig-179-    } else {
+src/out_json.zig-180-        try out.appendSlice(gpa, ",\"column\":null,\"byte_start\":null,\"byte_end\":null,\"match\":null");
+src/out_json.zig-181-    }
+src/out_json.zig-182-    try out.appendSlice(gpa, ",\"text\":");
+src/out_json.zig-183-    try appendJsonString(out, gpa, if (win) |w| w.bytes else ev.text);
+src/out_json.zig-184-    // M9: the two fields travel ONLY on a windowed row, so a row that fits is
+src/out_json.zig-185-    // byte-identical to the pre-M9 event (the additive rule costs nothing in
+src/out_json.zig-186-    // the common case). Their presence is the signal: this `text` is a window,
+src/out_json.zig:187:    // it starts `win_start` bytes into the line and the line is `line_len` long.
+src/out_json.zig-188-    if (win) |w| {
+src/out_json.zig:189:        try out.appendSlice(gpa, ",\"win_start\":");
+src/out_json.zig-190-        try appendInt(out, gpa, w.start);
+src/out_json.zig-191-        try out.appendSlice(gpa, ",\"line_len\":");
+src/out_json.zig-192-        try appendInt(out, gpa, ev.text.len);
+src/out_json.zig-193-    }
+src/out_json.zig-194-    try out.appendSlice(gpa, ",\"inverted\":");
+src/out_json.zig-195-    try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+src/out_json.zig-196-    try out.appendSlice(gpa, "}\n");
+src/out_json.zig-197-}
+--
+src/out_json.zig-486-/// que un off-by-one sea visible en la aserción de cadena.
+src/out_json.zig-487-fn longLine(buf: []u8, m0: usize) []const u8 {
+src/out_json.zig-488-    @memset(buf[0..m0], 'x');
+src/out_json.zig-489-    @memcpy(buf[m0 .. m0 + 3], "HIT");
+src/out_json.zig-490-    @memset(buf[m0 + 3 ..], 'y');
+src/out_json.zig-491-    return buf;
+src/out_json.zig-492-}
+src/out_json.zig-493-
+src/out_json.zig:494:test "M9: ventana zgrep/1: text recorta, win_start/line_len dicen dónde está" {
+src/out_json.zig-495-    const gpa = std.testing.allocator;
+src/out_json.zig-496-    max_columns = 20;
+src/out_json.zig-497-    defer max_columns = 0;
+src/out_json.zig-498-    var buf: [60]u8 = undefined;
+src/out_json.zig-499-    const line = longLine(&buf, 28); // 28 x + HIT + 29 y
+src/out_json.zig-500-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-501-    defer out.deinit(gpa);
+src/out_json.zig-502-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-503-        .path = "a.txt", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+src/out_json.zig-504-    });
+src/out_json.zig-505-    // 28 bytes de margen a cada lado del recorte; col y byte_start siguen
+src/out_json.zig-506-    // contando la línea ENTERA (col 29, byte_start 1028, byte_end 1031).
+src/out_json.zig-507-    try std.testing.expectEqualStrings(
+src/out_json.zig:508:        \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":1,"column":29,"byte_start":1028,"byte_end":1031,"match":"HIT","text":"xxxxxxxxHITyyyyyyyyy","win_start":20,"line_len":60,"inverted":false}
+src/out_json.zig-509-        \\
+src/out_json.zig-510-    , out.items);
+src/out_json.zig-511-}
+src/out_json.zig-512-
+src/out_json.zig-513-test "M9: sin ventana cuando la línea cabe: bytes idénticos a los de antes" {
+src/out_json.zig-514-    const gpa = std.testing.allocator;
+src/out_json.zig-515-    max_columns = 400;
+src/out_json.zig-516-    defer max_columns = 0;
+src/out_json.zig-517-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-518-    defer out.deinit(gpa);
+src/out_json.zig-519-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-520-        .path = "a.txt", .line_no = 1, .line_start = 0, .line_bytes = "short HIT line", .span = .{ .start = 6, .end = 9 }, .kind = .match, .text = "short HIT line",
+src/out_json.zig-521-    });
+src/out_json.zig:522:    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig-523-    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"text\":\"short HIT line\"") != null);
+src/out_json.zig-524-}
+src/out_json.zig-525-
+src/out_json.zig-526-test "M9: fila sin span no se recorta NUNCA (no hay match que centrar)" {
+src/out_json.zig-527-    const gpa = std.testing.allocator;
+src/out_json.zig-528-    max_columns = 8;
+src/out_json.zig-529-    defer max_columns = 0;
+src/out_json.zig-530-    var buf: [300]u8 = undefined;
+src/out_json.zig-531-    const line = longLine(&buf, 100);
+src/out_json.zig-532-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-533-    defer out.deinit(gpa);
+src/out_json.zig-534-    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 7, .line_start = 0, .line_bytes = line, .span = null, .kind = .context, .text = line });
+src/out_json.zig-535-    // El text del evento es la línea ENTERA: se localiza el campo y se compara.
+src/out_json.zig-536-    const marker = ",\"text\":\"";
+src/out_json.zig-537-    const at = std.mem.indexOf(u8, out.items, marker).? + marker.len;
+src/out_json.zig-538-    try std.testing.expectEqualStrings(line, out.items[at .. at + line.len]);
+src/out_json.zig:539:    try std.testing.expect(std.mem.indexOf(u8, out.items, "win_start") == null);
+src/out_json.zig-540-}
+src/out_json.zig-541-
+src/out_json.zig-542-test "M9: si el match solo no cabe en N, la ventana ES el match" {
+src/out_json.zig-543-    max_columns = 3;
+src/out_json.zig-544-    defer max_columns = 0;
+src/out_json.zig-545-    var buf: [200]u8 = undefined;
+src/out_json.zig-546-    const line = longLine(&buf, 50);
+src/out_json.zig-547-    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = line, .span = .{ .start = 50, .end = 53 }, .kind = .match, .text = line }, 3).?;
+--
+src/out_json.zig-590-    defer max_columns = 0;
+src/out_json.zig-591-    var buf: [60]u8 = undefined;
+src/out_json.zig-592-    const line = longLine(&buf, 28);
+src/out_json.zig-593-    var out: std.ArrayList(u8) = .empty;
+src/out_json.zig-594-    defer out.deinit(gpa);
+src/out_json.zig-595-    try emitLineEvent(&out, gpa, .{
+src/out_json.zig-596-        .path = "a", .line_no = 1, .line_start = 1000, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line,
+src/out_json.zig-597-    });
+src/out_json.zig:598:    // [t=w, line, col, byte_start, len, ventana, win_start, line_len]
+src/out_json.zig-599-    try std.testing.expectEqualStrings(
+src/out_json.zig-600-        \\["mw",1,29,1028,3,"xxxxxxxxHITyyyyyyyyy",20,60]
+src/out_json.zig-601-        \\
+src/out_json.zig-602-    , out.items);
+src/out_json.zig-603-}
+src/out_json.zig-604-
+src/out_json.zig-605-test "M9: fila compacta windowed en contexto invertido (-v) lleva mvW" {
+src/out_json.zig-606-    const gpa = std.testing.allocator;
+--
+GUIA.md-1001-
+GUIA.md-1002-*(Salida real del fixture versionado: `evidence/agent-native/m9/fix`, W=40. Las
+GUIA.md-1003-tres líneas largas se recortan; la que cabe (`["m",5,...]`) sale entera.)*
+GUIA.md-1004-
+GUIA.md-1005-Fila recortada en `zgrep/1c`: el tag lleva el sufijo `w` y dos elementos más.
+GUIA.md-1006-
+GUIA.md-1007-| línea | significado |
+GUIA.md-1008-|---|---|
+GUIA.md:1009:| `[t+"w", line, col, byte_start, len, ventana, win_start, line_len]` | el `text` es una ventana: a lo sumo N bytes alrededor del match |
+GUIA.md-1010-| `[..., match]` | 9º elemento, solo si el match no es derivable dentro de la ventana (con el recorte no ocurre: la ventana siempre lo contiene) |
+GUIA.md-1011-
+GUIA.md-1012-En `zgrep/1` el mismo recorte añade dos campos junto a `text`:
+GUIA.md-1013-
+GUIA.md-1014-```json
+GUIA.md:1015:{"schema":"zgrep/1","type":"match","path":"evidence/agent-native/m9/fix/long.txt","line":1,"column":201,"byte_start":200,"byte_end":203,"match":"HIT","text":"xxxxxxxxxxxxxxxxxxHITyyyyyyyyyyyyyyyyyyy","win_start":182,"line_len":403,"inverted":false}
+GUIA.md-1016-```
+GUIA.md-1017-
+GUIA.md:1018:`win_start` y `line_len` viajan **solo** en la fila recortada: su presencia es la
+GUIA.md-1019-señal, y una fila que cabe es byte a byte la de siempre. Los dos campos son
+GUIA.md-1020-aditivos (el schema no cambia), y se leen así: `col` y `byte_start` siguen
+GUIA.md-1021-contando la línea ENTERA, así que la línea entera se recupera leyendo el
+GUIA.md-1022-fichero —`line_start = byte_start - (col - 1)`, la línea es
+GUIA.md-1023-`fichero[line_start .. line_start + line_len]` y la ventana empieza en
+GUIA.md:1024:`line_start + win_start`—; con `--provenance`, verificable por sha256.
+GUIA.md-1025-
+GUIA.md-1026-Lo que **nunca** hace (contrato verificado en CI con `m9_conformance.py`, 446
+GUIA.md-1027-comprobaciones contra el fichero en disco):
+GUIA.md-1028-
+GUIA.md-1029-* cortar una fila **sin match** (contexto, `-v`, passthru): no hay centro, sale
+GUIA.md-1030-  entera;
+GUIA.md-1031-* cortar el **match**: la ventana siempre lo contiene, y si el match solo ya no
+GUIA.md-1032-  cabe en N, la ventana ES el match;

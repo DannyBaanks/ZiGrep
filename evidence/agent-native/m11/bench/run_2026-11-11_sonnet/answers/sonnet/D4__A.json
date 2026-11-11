@@ -1,0 +1,18 @@
+{
+ "qid": "D4",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "34a2aea966c56d7fed0f8968d542fb21f2c99eb13bc39cfe822b94b6cdc4dcc1",
+ "answer": "**When they appear:** only when the `text` field is a windowed (truncated) excerpt of the line, i.e. when `--max-columns` is used with `--json` (or `--queries-file`). `src/main.zig:1749-1753` says the window travels in `text`, `win_start` and `line_len`. `src/out_json.zig:74` says `zgrep/1` gains `win_start` + `line_len` next to `text` in that case. GUIA.md:1018 says they travel **only** in the trimmed row. Tests confirm that unwindowed output has no `win_start` (`src/out_json.zig:522`, `539`).\n\n**Meaning:** `text` starts `win_start` bytes into the line, and the line is `line_len` bytes long (`src/out_json.zig:187`). The full line start can be recovered as `line_start + win_start` (`src/out_json.zig:71`; GUIA.md:1024), and with `--provenance` this can be verified by hash.\n\nExample: `text` is 20 bytes, `win_start`=20, `line_len`=60 (`src/out_json.zig:508`).",
+ "usage": {
+  "cost_usd": 0.0107,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.25,
+ "headers": {}
+}

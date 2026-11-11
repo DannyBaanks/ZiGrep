@@ -91,6 +91,44 @@ def main() -> int:
             sy = next(r for r in rows if r["qid"] == q["id"] and r["cond"] == y)["fact_score"]
             w, t, l = w + (sx > sy), t + (sx == sy), l + (sx < sy)
         lines.append(f"  {x} vs {y}: {w}/{t}/{l}  p={sign_test(w, l):.3f}")
+    jdir = root / "judge" / a.label
+    if (jdir / "mapping.json").exists():
+        mapping = json.loads((jdir / "mapping.json").read_text())
+        grades = {}
+        for opaque, k in mapping.items():
+            f = jdir / f"{opaque}.json"
+            if f.exists():
+                grades[k] = json.loads(f.read_text())
+        for r in rows:
+            g = grades.get(f"{r['qid']}__{r['cond']}", {})
+            r["judge_grade"] = g.get("grade")
+            r["judge_wrong_claims"] = len(g.get("wrong_claims") or [])
+        lines.append("")
+        lines.append("blinded judge (0 wrong / 1 partial / 2 correct): per question, then mean grade / grade-0 count / wrong claims")
+        lines.append("question  " + "  ".join(f"{c:>4s}" for c in CONDS))
+        for q in qs:
+            cells = []
+            for c in CONDS:
+                r = next(x for x in rows if x["qid"] == q["id"] and x["cond"] == c)
+                cells.append(f"{'-' if r['judge_grade'] is None else r['judge_grade']:>4}")
+            lines.append(f"{q['id']:3s} {q['set']:7s}" + "  ".join(cells))
+        for subset in ("dev", "heldout", "all"):
+            sel = [r for r in rows if (subset == "all" or r["set"] == subset) and r.get("judge_grade") is not None]
+            lines.append(f"[{subset}]")
+            for c in CONDS:
+                rs = [r for r in sel if r["cond"] == c]
+                if rs:
+                    lines.append(f"  {c:3s} {sum(r['judge_grade'] for r in rs) / len(rs):.2f} / {sum(r['judge_grade'] == 0 for r in rs)} / {sum(r['judge_wrong_claims'] for r in rs)}")
+        lines.append("paired by question (judge grade), all questions: wins/ties/losses, two-sided sign test p")
+        for x, y in itertools.product(["P1", "P2", "P3"], ["A", "B"]):
+            w = t = l = 0
+            for q in qs:
+                gx = next(r for r in rows if r["qid"] == q["id"] and r["cond"] == x).get("judge_grade")
+                gy = next(r for r in rows if r["qid"] == q["id"] and r["cond"] == y).get("judge_grade")
+                if gx is None or gy is None:
+                    continue
+                w, t, l = w + (gx > gy), t + (gx == gy), l + (gx < gy)
+            lines.append(f"  {x} vs {y}: {w}/{t}/{l}  p={sign_test(w, l):.3f}")
     text = "\n".join(lines) + "\n"
     sys.stdout.write(text)
     if a.out:

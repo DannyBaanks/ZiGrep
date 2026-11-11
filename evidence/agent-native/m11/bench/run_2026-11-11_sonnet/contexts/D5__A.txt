@@ -1,0 +1,6 @@
+src/main.zig:1870:var batch_running: bool = false;
+src/main.zig:1961:    batch_running = true;
+src/main.zig:1962:    defer batch_running = false;
+src/main.zig:2038:    if (!batch_running) out_json.max_columns = 0;
+src/main.zig:2120:    out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
+src/main.zig:2122:    if (out_json.compact and !batch_running) {

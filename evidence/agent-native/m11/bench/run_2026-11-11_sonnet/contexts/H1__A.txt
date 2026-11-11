@@ -1,0 +1,8 @@
+src/kamikaze.zig:45:pub const max_threads: usize = 1024;
+src/kamikaze.zig:924:    const actual_workers = @min(@max(1, threads_count), max_threads);
+src/main.zig:817:/// Hard limit for the worker pool (mirrors `kamikaze.max_threads`).
+src/main.zig:818:pub const max_threads: usize = kamikaze.max_threads;
+src/main.zig:831:    if (n > max_threads) {
+src/main.zig:833:            .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+src/main.zig:2136:                if (t > max_threads) {
+src/main.zig:2137:                    std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });

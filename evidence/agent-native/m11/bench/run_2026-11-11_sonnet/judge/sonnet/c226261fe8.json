@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "Answer matches the reference: batch per-query \"flags\" can't set --max-columns, rejected at src/main.zig:1887 with the same message, and the value is installed once via out_json.max_columns = gopts.max_columns orelse 0; extra line references are not contradicted.",
+ "cost_usd": 0.006306000000000001
+}

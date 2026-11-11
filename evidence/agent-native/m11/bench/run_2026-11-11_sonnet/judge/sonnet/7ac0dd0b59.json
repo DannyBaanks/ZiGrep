@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The bug and fix description match the reference (text[len] OOB read, panic/UB, added e < ev.text.len), but the answer fails to identify commit 53c34ef, which the question asks for first.",
+ "cost_usd": 0.006392
+}

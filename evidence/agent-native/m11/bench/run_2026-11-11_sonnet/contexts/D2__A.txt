@@ -1,0 +1,27 @@
+src/main.zig:359:    max_columns: ?usize = null,
+src/main.zig:1188:                opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+src/main.zig:1198:                opts.max_columns = parseCount(args[i]) orelse {
+src/main.zig:1743:    if (opts.max_columns) |mc| {
+src/main.zig:1887:    if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
+src/main.zig:1966:    out_json.max_columns = gopts.max_columns orelse 0;
+src/main.zig:2038:    if (!batch_running) out_json.max_columns = 0;
+src/main.zig:2120:    out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
+src/main.zig:3278:        try std.testing.expectEqual(@as(?usize, 400), o.max_columns);
+src/main.zig:3284:        try std.testing.expectEqual(@as(?usize, 40), o.max_columns);
+src/main.zig:3291:        try std.testing.expect(o.max_columns == null);
+src/out_json.zig:79:pub var max_columns: usize = 0;
+src/out_json.zig:154:    const win: ?Window = if (max_columns > 0) windowOf(&ev, max_columns) else null;
+src/out_json.zig:496:    max_columns = 20;
+src/out_json.zig:497:    defer max_columns = 0;
+src/out_json.zig:515:    max_columns = 400;
+src/out_json.zig:516:    defer max_columns = 0;
+src/out_json.zig:528:    max_columns = 8;
+src/out_json.zig:529:    defer max_columns = 0;
+src/out_json.zig:543:    max_columns = 3;
+src/out_json.zig:544:    defer max_columns = 0;
+src/out_json.zig:553:    max_columns = 9;
+src/out_json.zig:554:    defer max_columns = 0;
+src/out_json.zig:588:    max_columns = 20;
+src/out_json.zig:590:    defer max_columns = 0;
+src/out_json.zig:608:    max_columns = 20;
+src/out_json.zig:610:    defer max_columns = 0;

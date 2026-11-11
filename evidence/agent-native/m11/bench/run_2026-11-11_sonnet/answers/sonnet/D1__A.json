@@ -1,0 +1,18 @@
+{
+ "qid": "D1",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9ad6c663a5b214f5006deb4d6c059fdb491b761d5354e4479337d60b20196fe9",
+ "answer": "Based on the context, effectively yes for the JSON output path, but the context is incomplete.\n\n- `--max-columns` is parsed into `opts.max_columns` as `?usize` via `parseCount` (src/main.zig:359, 1188, 1198). Whether `parseCount` accepts 0 isn't shown.\n- The value is copied into the JSON writer: `out_json.max_columns = opts.max_columns orelse 0` (src/main.zig:2120; also 1966). So unset and `0` both become `0`.\n- In the JSON writer, the window is only computed when `max_columns > 0`: `if (max_columns > 0) windowOf(...) else null` (src/out_json.zig:154). With `0`, no window is applied.\n\nSo `--json --max-columns 0` would behave the same as not passing the flag: no windowing in JSON output.\n\nNot shown: `parseCount` behavior, and the non-JSON path's handling of 0 (src/main.zig:1743 uses `opts.max_columns`, but its body isn't in the context). So I can't say whether 0 disables truncation there.",
+ "usage": {
+  "cost_usd": 0.01006,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.96,
+ "headers": {}
+}

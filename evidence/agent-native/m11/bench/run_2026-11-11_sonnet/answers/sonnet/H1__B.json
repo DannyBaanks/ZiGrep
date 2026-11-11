@@ -1,0 +1,18 @@
+{
+ "qid": "H1",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "e638108e568359431259e0c58cb347a69d6395fc5f7ef553bbfd89dd3867483b",
+ "answer": "**Maximum:** 1024 worker threads.\n\n**Where it's defined:** `pub const max_threads: usize = 1024;` in `src/kamikaze.zig:45`. `src/main.zig:817-818` mirrors it as `kamikaze.max_threads`.\n\n**`-j 5000`:** `parseThreadCount` rejects any value above the limit (`src/main.zig:831`). It sets a failure message, \"thread count out of range (max 1024)\", and returns `error.Usage` (`src/main.zig:832-836`). That is a usage error. The context doesn't show the exact exit code or how `-j` calls this function.\n\n**`ZIGREP_THREADS=5000`:** This is also a hard error. It prints `zgrep: 5000: thread count out of range (max 1024)` and returns exit code 2 (`src/main.zig:2136-2138`). The value is not silently ignored (`src/main.zig:2134-2135`).\n\n**Backstop:** `kamikaze.zig:924` clamps the worker count to `max_threads` for other callers. `kamikaze.zig:43` describes this as a second line of defence.",
+ "usage": {
+  "cost_usd": 0.015747999999999998,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.73,
+ "headers": {}
+}

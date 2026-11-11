@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: parseArgs sets skip_hidden, runSearch copies it into FilterEngine, and filter.zig skips both directories (~244) and files (~268); extra details like the no_ignore interaction and the walker caveat don't contradict it.",
+ "cost_usd": 0.006746
+}

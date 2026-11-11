@@ -1,0 +1,202 @@
+CONTEXT PACK `parseCount`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 22a99c140830   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 17 in 1 file(s); by role: code 17
+  declarations found by pattern: 1
+
+BLOCKS
+src/main.zig:594-599  sha256:3fe62bf268afdf72
+   594 | fn parseContextArg(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+>  595 |     return parseCount(value) orelse {
+   596 |         opts.fail = .{ .what = what, .arg = value };
+   597 |         return error.Usage;
+   598 |     };
+   599 | }
+src/main.zig:714-727  sha256:8017e5fbcd801713
+   714 | fn parseSize(value: []const u8) ?usize {
+   715 |     var v = value;
+   716 |     if (v.len > 0 and v[0] == '+') v = v[1..];
+   717 |     if (v.len == 0) return null;
+   718 |     const mult: usize = switch (v[v.len - 1]) {
+   719 |         'k', 'K' => 1024,
+   720 |         'm', 'M' => 1024 * 1024,
+   721 |         'g', 'G' => 1024 * 1024 * 1024,
+   722 |         't', 'T' => 1024 * 1024 * 1024 * 1024,
+   723 |         else => 1,
+   724 |     };
+   725 |     if (mult != 1) v = v[0 .. v.len - 1];
+>  726 |     return (parseCount(v) orelse return null) *| mult;
+   727 | }
+src/main.zig:813-815  sha256:4d55679925203cab
+>  813 | fn parseCount(value: []const u8) ?usize {
+   814 |     return std.fmt.parseInt(usize, value, 10) catch null;
+   815 | }
+src/main.zig:826-839  sha256:c0cd474a38a2525b
+   826 | fn parseThreadCount(opts: *Options, value: []const u8, what: []const u8) usage_error!usize {
+>  827 |     const n = parseCount(value) orelse {
+   828 |         opts.fail = .{ .what = what, .arg = value };
+   829 |         return error.Usage;
+   830 |     };
+   831 |     if (n > max_threads) {
+   832 |         opts.fail = .{
+   833 |             .what = std.fmt.comptimePrint("thread count out of range (max {d})", .{max_threads}),
+   834 |             .arg = value,
+   835 |         };
+   836 |         return error.Usage;
+   837 |     }
+   838 |     return n;
+   839 | }
+src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+src/main.zig:998-1020  sha256:eeddab7e271c3095
+   998 |             } else if (std.mem.eql(u8, body, "count")) {
+   999 |                 opts.mode = .count;
+  1000 |             } else if (std.mem.eql(u8, body, "quiet") or std.mem.eql(u8, body, "silent")) {
+  1001 |                 opts.mode = .quiet;
+  1002 |             } else if (std.mem.startsWith(u8, body, "max-count=")) {
+  1003 |                 const v = body["max-count=".len..];
+> 1004 |                 opts.max_count = parseCount(v) orelse {
+  1005 |                     opts.fail = .{ .what = "bad value for --max-count", .arg = v };
+  1006 |                     return error.Usage;
+  1007 |                 };
+  1008 |             } else if (std.mem.eql(u8, body, "max-count")) {
+  1009 |                 i += 1;
+  1010 |                 if (i >= args.len) {
+  1011 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1012 |                     return error.Usage;
+  1013 |                 }
+> 1014 |                 opts.max_count = parseCount(args[i]) orelse {
+  1015 |                     opts.fail = .{ .what = "bad value for --max-count", .arg = args[i] };
+  1016 |                     return error.Usage;
+  1017 |                 };
+  1018 |             } else if (std.mem.eql(u8, body, "word-regexp")) {
+  1019 |                 opts.word = true;
+  1020 |             } else if (std.mem.eql(u8, body, "basic-regexp")) {
+src/main.zig:1117-1139  sha256:23b33baf232775c1
+  1117 |                     opts.fail = .{ .what = "too many --exclude-from files (max 8)", .arg = a };
+  1118 |                     return error.Usage;
+  1119 |                 }
+  1120 |                 opts.exclude_from[opts.exclude_from_count] = args[i];
+  1121 |                 opts.exclude_from_count += 1;
+  1122 |             } else if (std.mem.startsWith(u8, body, "max-depth=")) {
+> 1123 |                 opts.max_depth = parseCount(body["max-depth=".len..]) orelse {
+  1124 |                     opts.fail = .{ .what = "bad value for --max-depth", .arg = body["max-depth=".len..] };
+  1125 |                     return error.Usage;
+  1126 |                 };
+  1127 |             } else if (std.mem.eql(u8, body, "max-depth")) {
+  1128 |                 i += 1;
+  1129 |                 if (i >= args.len) {
+  1130 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1131 |                     return error.Usage;
+  1132 |                 }
+> 1133 |                 opts.max_depth = parseCount(args[i]) orelse {
+  1134 |                     opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
+  1135 |                     return error.Usage;
+  1136 |                 };
+  1137 |             } else if (std.mem.eql(u8, body, "spill")) {
+  1138 |                 opts.spill = true;
+  1139 |             } else if (std.mem.startsWith(u8, body, "spill=")) {
+src/main.zig:1152-1204  sha256:9821aa03efc68b46
+  1152 |                 if (i >= args.len) {
+  1153 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1154 |                     return error.Usage;
+  1155 |                 }
+  1156 |                 opts.queries_file = args[i];
+  1157 |             } else if (std.mem.startsWith(u8, body, "max-results=")) {
+> 1158 |                 opts.max_results = parseCount(body["max-results=".len..]) orelse {
+  1159 |                     opts.fail = .{ .what = "bad value for --max-results", .arg = body["max-results=".len..] };
+  1160 |                     return error.Usage;
+  1161 |                 };
+  1162 |             } else if (std.mem.eql(u8, body, "max-results")) {
+  1163 |                 i += 1;
+  1164 |                 if (i >= args.len) {
+  1165 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1166 |                     return error.Usage;
+  1167 |                 }
+> 1168 |                 opts.max_results = parseCount(args[i]) orelse {
+  1169 |                     opts.fail = .{ .what = "bad value for --max-results", .arg = args[i] };
+  1170 |                     return error.Usage;
+  1171 |                 };
+  1172 |             } else if (std.mem.startsWith(u8, body, "max-output-tokens=")) {
+> 1173 |                 opts.max_output_tokens = parseCount(body["max-output-tokens=".len..]) orelse {
+  1174 |                     opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = body["max-output-tokens=".len..] };
+  1175 |                     return error.Usage;
+  1176 |                 };
+  1177 |             } else if (std.mem.eql(u8, body, "max-output-tokens")) {
+  1178 |                 i += 1;
+  1179 |                 if (i >= args.len) {
+  1180 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1181 |                     return error.Usage;
+  1182 |                 }
+> 1183 |                 opts.max_output_tokens = parseCount(args[i]) orelse {
+  1184 |                     opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = args[i] };
+  1185 |                     return error.Usage;
+  1186 |                 };
+  1187 |             } else if (std.mem.startsWith(u8, body, "max-columns=")) {
+> 1188 |                 opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+  1189 |                     opts.fail = .{ .what = "bad value for --max-columns", .arg = body["max-columns=".len..] };
+  1190 |                     return error.Usage;
+  1191 |                 };
+  1192 |             } else if (std.mem.eql(u8, body, "max-columns")) {
+  1193 |                 i += 1;
+  1194 |                 if (i >= args.len) {
+  1195 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1196 |                     return error.Usage;
+  1197 |                 }
+> 1198 |                 opts.max_columns = parseCount(args[i]) orelse {
+  1199 |                     opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+  1200 |                     return error.Usage;
+  1201 |                 };
+  1202 |             } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+  1203 |                 opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+  1204 |                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+src/main.zig:1302-1314  sha256:b296d133723c4e42
+  1302 |                 if (i >= args.len) {
+  1303 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1304 |                     return error.Usage;
+  1305 |                 }
+  1306 |                 add_cache_root(opts, args[i]) catch return error.Usage;
+  1307 |             } else if (std.mem.startsWith(u8, body, "cache-depth=")) {
+> 1308 |                 opts.cache_depth = parseCount(body["cache-depth=".len..]) orelse {
+  1309 |                     opts.fail = .{ .what = "bad value for --cache-depth", .arg = body["cache-depth=".len..] };
+  1310 |                     return error.Usage;
+  1311 |                 };
+  1312 |             } else if (std.mem.eql(u8, body, "cache-include-out")) {
+  1313 |                 opts.cache = true;
+  1314 |                 opts.cache_include_out = true;
+src/main.zig:1574-1586  sha256:e08f04c1a1691649
+  1574 |                         if (i >= args.len) {
+  1575 |                             opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1576 |                             return error.Usage;
+  1577 |                         }
+  1578 |                         break :blk args[i];
+  1579 |                     };
+> 1580 |                     if (parseCount(value)) |mc| {
+  1581 |                         opts.max_count = mc;
+  1582 |                     } else {
+  1583 |                         opts.nav_plan = nav.NavPlan.parse(value) catch {
+  1584 |                             opts.fail = .{ .what = "invalid Befunge navigation spec or max-count number", .arg = value };
+  1585 |                             return error.Usage;
+  1586 |                         };
+src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+src/main.zig:2127-2139  sha256:71cb496c24251ade
+  2127 | 
+  2128 |     if (opts.threads == 0) {
+  2129 |         if (init.environ_map.get("ZIGREP_THREADS") orelse
+  2130 |             init.environ_map.get("ZGREP_THREADS") orelse
+  2131 |             init.environ_map.get("THREADS")) |val|
+  2132 |         {
+> 2133 |             if (parseCount(val)) |t| {
+  2134 |                 // An out-of-range value is a hard error, not something to
+  2135 |                 // silently ignore: it would explode the worker pool.
+  2136 |                 if (t > max_threads) {
+  2137 |                     std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
+  2138 |                     return 2;
+  2139 |                 }
+
+TRUNCATION
+  truncated: false   items: 12

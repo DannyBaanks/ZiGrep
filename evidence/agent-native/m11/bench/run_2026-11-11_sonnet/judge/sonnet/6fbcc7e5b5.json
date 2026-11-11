@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the parsing, the wiring in runSearch, and the FilterEngine checks for both directories and files; the extra no_ignore detail doesn't contradict it.",
+ "cost_usd": 0.0063219999999999995
+}

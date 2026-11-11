@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states that no latency measurement for --max-columns exists, matching the reference; the extra implementation details do not contradict it.",
+ "cost_usd": 0.005568
+}

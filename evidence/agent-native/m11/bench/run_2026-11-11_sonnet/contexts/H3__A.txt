@@ -1,0 +1,8 @@
+src/filter.zig:98:    skip_hidden: bool = false,
+src/filter.zig:244:        if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+src/filter.zig:268:        if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+src/main.zig:280:    skip_hidden: bool = false,
+src/main.zig:1419:                opts.skip_hidden = true;
+src/main.zig:2385:        filter_engine.skip_hidden = opts.skip_hidden;
+src/main.zig:2505:    filter_engine.skip_hidden = opts.skip_hidden;
+src/main.zig:2971:        try std.testing.expect(o.skip_hidden);

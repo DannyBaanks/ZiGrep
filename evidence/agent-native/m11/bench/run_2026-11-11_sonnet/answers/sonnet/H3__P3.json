@@ -1,0 +1,18 @@
+{
+ "qid": "H3",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "051a29268493fa7875809e6f93e34b4058eb3e43f78054162fde1aa1f6ea7196",
+ "answer": "The skipping happens in `FilterEngine`, in `src/filter.zig`, and it covers both directories and files.\n\n- **Flag parsing:** `--no-hidden` sets `opts.skip_hidden = true` (src/main.zig:1418-1419).\n- **Wiring:** `runSearch` copies it into the engine with `filter_engine.skip_hidden = opts.skip_hidden` (src/main.zig:2385 and src/main.zig:2505).\n- **Directories:** `isDirExcluded` returns true when `skip_hidden` is set and the name starts with `.` (src/filter.zig:244-246).\n- **Files:** `isFileExcluded` has the same check (src/filter.zig:268-270).\n\nBoth checks sit after `if (self.no_ignore) return false`, so `--no-ignore` disables the hidden-skipping too (src/filter.zig:242, 266).\n\nCaveat: the context doesn't show the directory walker that calls `isDirExcluded` and `isFileExcluded`. I can't confirm from it that hidden directories are actually pruned during traversal. The pack also marks these references as lexical-only matches (the `skip_hidden` name is shared by two declarations).",
+ "usage": {
+  "cost_usd": 0.031526,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.6,
+ "headers": {}
+}

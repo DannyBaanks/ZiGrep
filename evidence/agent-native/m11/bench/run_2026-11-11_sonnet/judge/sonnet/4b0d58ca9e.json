@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: --max-columns 0 is a usage error with the same message, 0 does not disable the window from the CLI, and only the internal out_json.max_columns uses 0 as off; omitting the exit code (rc 2) is a minor gap it flags itself.",
+ "cost_usd": 0.0065699999999999995
+}

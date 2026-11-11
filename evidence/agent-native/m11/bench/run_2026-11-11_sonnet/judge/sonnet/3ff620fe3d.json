@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: the budget is per call, installed once by runBatch and not carried in per-query argv, and runSearch resets it only when !batch_running to avoid wiping it.",
+ "cost_usd": 0.005812
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "D7",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "51e2d2eb17dcc9e3c0c8d7884699005094ffc13a94eba839445b1e41fff89deb",
+ "answer": "The context only partly answers this.\n\n**What it shows:** `--max-columns=abc` is handled in `src/main.zig:1188`. The text after `max-columns=` is passed to `parseCount(...)`, which is defined at `src/main.zig:813` as `fn parseCount(value: []const u8) ?usize`. It returns an optional `usize`, so a non-numeric value like `abc` presumably yields `null`. The call site then takes the `orelse {` branch (`src/main.zig:1188`). The space-separated form `--max-columns abc` goes through `parseCount(args[i])` at `src/main.zig:1198`.\n\n**What is missing:** The body of `parseCount` (line 813 onward) and the contents of the `orelse { ... }` block at line 1188. Because of that, I can't say how the digits are parsed (for example, whether suffixes or underscores are allowed). I also can't say what the user actually sees, whether that's an error message, an exit code, or a fallback to a default.",
+ "usage": {
+  "cost_usd": 0.008838,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.66,
+ "headers": {}
+}

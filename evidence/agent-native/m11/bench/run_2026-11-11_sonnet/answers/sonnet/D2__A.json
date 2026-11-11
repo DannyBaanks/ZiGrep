@@ -1,0 +1,18 @@
+{
+ "qid": "D2",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9ad6c663a5b214f5006deb4d6c059fdb491b761d5354e4479337d60b20196fe9",
+ "answer": "No. A query's own `\"flags\"` cannot set `--max-columns`. The check is in `src/main.zig:1887`, which returns the error message: `--max-columns is per call: put it on the command line, not in \"flags\"`. That fires when the per-query parsed options have `max_columns != null` (`vo.max_columns != null`).\n\nWhere the value comes from instead:\n- It is parsed as a command-line option at `src/main.zig:1188` and `src/main.zig:1198`.\n- The global option is applied to the JSON output at `src/main.zig:1966` (`out_json.max_columns = gopts.max_columns orelse 0`).\n- `src/main.zig:2038` and `src/main.zig:2120` keep the batch-wide value while a batch is running (`batch_running`).\n\nThe context doesn't show the code around line 1887, so I can't say exactly how \"flags\" are parsed into `vo`.",
+ "usage": {
+  "cost_usd": 0.009428,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.27,
+ "headers": {}
+}

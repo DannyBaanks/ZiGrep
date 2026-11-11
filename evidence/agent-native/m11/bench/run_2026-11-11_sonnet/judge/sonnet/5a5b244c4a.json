@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the directory (XDG_CACHE_HOME or ~/.cache/zgrep/spill), the file name spill-<ns>-<pid>.jsonl, and batch.Emitter.spill_dir as the struct used for writing, and it notes Options.spill_dir only holds the --spill=DIR value. It omits the empty-value usage error, but the question does not ask for it.",
+ "cost_usd": 0.00753
+}
