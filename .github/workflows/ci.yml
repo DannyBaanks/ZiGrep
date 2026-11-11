@@ -42,7 +42,7 @@ jobs:
       - name: Run unit tests
         run: zig build test --summary all
 
-      - name: Run pure Zig differential oracle (26/26 tests vs GNU grep & ripgrep)
+      - name: Run pure Zig differential oracle vs GNU grep & ripgrep
 
         run: zig build oracle
 
