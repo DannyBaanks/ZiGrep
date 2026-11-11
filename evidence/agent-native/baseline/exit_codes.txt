@@ -1,0 +1,45 @@
+== matriz de salida (zgrep | grep | rg sobre el mismo caso) ==
+--- zgrep
+  match                            rc=0  out=[1:alpha|] err=[|]
+  no-match                         rc=1  out=[|] err=[|]
+  fichero inexistente              rc=2  out=[|] err=[zgrep: /tmp/opencode/contract_fixture/no.txt: FileNotFound|]
+  inexistente con -s               rc=2  out=[|] err=[|]
+  directorio sin -r                rc=0  out=[/tmp/opencode/contract_fixture/x.txt:1:alpha|] err=[|]
+  flag invalido                    rc=2  out=[|] err=[zgrep: unrecognized option: '--no-existe'|try 'zgrep --help' for usage|]
+  -f patron vacio                  rc=1  out=[|] err=[|]
+  stdin match                      rc=0  out=[1:alpha|] err=[|]
+  stdin no-match                   rc=1  out=[|] err=[|]
+--- grep
+  match                            rc=0  out=[alpha|] err=[|]
+  no-match                         rc=1  out=[|] err=[|]
+  fichero inexistente              rc=2  out=[|] err=[grep: /tmp/opencode/contract_fixture/no.txt: No existe el archivo o el directorio|]
+  inexistente con -s               rc=2  out=[|] err=[|]
+  directorio sin -r                rc=2  out=[|] err=[grep: /tmp/opencode/contract_fixture: Es un directorio|]
+  flag invalido                    rc=2  out=[|] err=[grep: unrecognized option '--no-existe'|Modo de empleo: grep [OPCIÓN]... PATRONES [FICHERO]...|]
+  -f patron vacio                  rc=1  out=[|] err=[|]
+  stdin match                      rc=0  out=[alpha|] err=[|]
+  stdin no-match                   rc=1  out=[|] err=[|]
+--- rg
+  match                            rc=0  out=[alpha|] err=[|]
+  no-match                         rc=1  out=[|] err=[|]
+  fichero inexistente              rc=2  out=[|] err=[rg: /tmp/opencode/contract_fixture/no.txt: No such file or directory (os error 2)|]
+  inexistente con -s               rc=2  out=[|] err=[rg: /tmp/opencode/contract_fixture/no.txt: No such file or directory (os error 2)|]
+  directorio sin -r                rc=0  out=[/tmp/opencode/contract_fixture/x.txt:alpha|] err=[|]
+  flag invalido                    rc=2  out=[|] err=[rg: unrecognized flag --no-existe|]
+  -f patron vacio                  rc=1  out=[|] err=[|]
+  stdin match                      rc=0  out=[alpha|] err=[|]
+  stdin no-match                   rc=1  out=[|] err=[|]
+
+== comportamiento en pipe (numeracion por defecto) ==
+--- grep (pipe)
+beta
+--- rg (pipe)
+beta
+--- zgrep (pipe)
+2:beta
+--- zgrep -n
+2:beta
+
+== operaciones interactivas con EOF en stdin (no-tty) ==
+--cache (dry-run) con EOF: rc=0 -> |  --dry-run: no se borró nada|
+--cache --force con EOF: rc=0 ->   liberado: 819K|
