@@ -50,8 +50,9 @@ pub const compact_stream_header = "{\"schema\":\"zgrep/1c\"}\n";
 /// for byte pre-M9 behaviour).
 ///
 /// Why: on a real tree with `node_modules` (minified and generated lines),
-/// cutting long lines to a window around the match saves ~65 % of the compact
-/// output's REAL tokens with the match intact in every row — measured against a
+/// cutting long lines to a window around the match saves ~58 % of the compact
+/// output's REAL tokens (58.4 % at N=400 with the real implementation; the
+/// pre-implementation simulation said 64.9 %) with the match intact in every row — measured against a
 /// real BPE, register in `evidence/agent-native/m9/`. The rule fixed before the
 /// run (>= 20 % saving, match never cut) says IMPLEMENT.
 ///
@@ -109,7 +110,10 @@ fn windowOf(ev: *const LineEvent, w: usize) ?Window {
         s = if (e > w) e - w else 0;
         // Align to codepoint boundaries without ever entering the match.
         while (s < m0 and (ev.text[s] & 0xC0) == 0x80) s += 1;
-        while (e > m1 and (ev.text[e] & 0xC0) == 0x80) e -= 1;
+        // `e` is an exclusive end: at `e == text.len` the window already ends
+        // on the line's last byte, and `text[e]` would read past the slice
+        // (panic in Debug/ReleaseSafe, undefined behaviour in ReleaseFast).
+        while (e > m1 and e < ev.text.len and (ev.text[e] & 0xC0) == 0x80) e -= 1;
         start = s;
         end = e;
     }
@@ -612,4 +616,27 @@ test "M9: fila compacta windowed en contexto invertido (-v) lleva mvW" {
         .path = "a", .line_no = 3, .line_start = 0, .line_bytes = line, .span = .{ .start = 28, .end = 31 }, .kind = .match, .text = line, .inverted = true,
     });
     try std.testing.expect(std.mem.startsWith(u8, out.items, "[\"mvw\",3,29,28,3,"));
+}
+
+test "M9: ventana que llega al final de la línea no lee fuera del slice" {
+    // Match cerca del final: e = min(len, s0 + w) = len. Antes de la
+    // corrección, la alineación UTF-8 leía text[len] (panic en Debug).
+    var line: [105]u8 = undefined;
+    @memset(line[0..100], 'x');
+    @memcpy(line[100..103], "HIT");
+    @memcpy(line[103..105], "yy");
+    const w = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line }, 10).?;
+    try std.testing.expectEqual(@as(usize, 95), w.start);
+    try std.testing.expectEqualStrings("xxxxxHITyy", w.bytes);
+
+    // La línea termina en un carácter multibyte completo: la ventana lo
+    // conserva entero (el último byte es de continuación, pero e == len).
+    var line2: [105]u8 = undefined;
+    @memset(line2[0..100], 'x');
+    @memcpy(line2[100..103], "HIT");
+    @memcpy(line2[103..105], "\xC3\xB1");
+    const w2 = windowOf(&.{ .path = "a", .line_no = 1, .line_start = 0, .line_bytes = &line2, .span = .{ .start = 100, .end = 103 }, .kind = .match, .text = &line2 }, 10).?;
+    try std.testing.expectEqual(@as(usize, 95), w2.start);
+    try std.testing.expectEqualStrings("xxxxxHITñ", w2.bytes);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(w2.bytes));
 }

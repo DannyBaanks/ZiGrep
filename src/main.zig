@@ -106,8 +106,8 @@ const usage =
     \\                    (the match is never cut, nor is a UTF-8 character),
     \\                    plus win_start and line_len, so the whole line is
     \\                    read back from the file; rows with no match are
-    \\                    never cut. Measured: ~65 % fewer tokens on long
-    \\                    lines (evidence/agent-native/m9)
+    \\                    never cut. Measured: ~58 % fewer real tokens on a
+    \\                    tree with long lines (evidence/agent-native/m9)
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches

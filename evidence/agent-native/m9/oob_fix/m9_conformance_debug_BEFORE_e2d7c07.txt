@@ -1,0 +1,327 @@
+PASS json ventana 40: rc 0
+PASS json ventana 40 línea 1: line_start reconstruye la línea en el fichero
+PASS json ventana 40 línea 1: line_len es la longitud real
+PASS json ventana 40 línea 1: el match intacto en la línea entera
+PASS json ventana 40 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 40 línea 1: la ventana son bytes reales de la línea
+PASS json ventana 40 línea 1: el match está dentro de la ventana
+PASS json ventana 40 línea 1: solo se recorta lo que no cabe
+PASS json ventana 40 línea 1: la ventana decodifica como UTF-8
+PASS json ventana 40 línea 2: line_start reconstruye la línea en el fichero
+PASS json ventana 40 línea 2: line_len es la longitud real
+PASS json ventana 40 línea 2: el match intacto en la línea entera
+PASS json ventana 40 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 40 línea 2: la ventana son bytes reales de la línea
+PASS json ventana 40 línea 2: el match está dentro de la ventana
+PASS json ventana 40 línea 2: solo se recorta lo que no cabe
+PASS json ventana 40 línea 2: la ventana decodifica como UTF-8
+PASS json ventana 40 línea 4: line_start reconstruye la línea en el fichero
+PASS json ventana 40 línea 4: line_len es la longitud real
+PASS json ventana 40 línea 4: el match intacto en la línea entera
+PASS json ventana 40 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 40 línea 4: la ventana son bytes reales de la línea
+PASS json ventana 40 línea 4: el match está dentro de la ventana
+PASS json ventana 40 línea 4: solo se recorta lo que no cabe
+PASS json ventana 40 línea 4: la ventana decodifica como UTF-8
+PASS json ventana 40 línea 5: line_start reconstruye la línea en el fichero
+PASS json ventana 40 línea 5: line_len es la longitud real
+PASS json ventana 40 línea 5: el match intacto en la línea entera
+PASS json ventana 40 línea 5: fila entera
+PASS json ventana 40: hay filas recortadas (no es vacuo)
+PASS 1c ventana 40: rc 0
+PASS 1c ventana 40 línea 1: line_start reconstruye la línea en el fichero
+PASS 1c ventana 40 línea 1: line_len es la longitud real
+PASS 1c ventana 40 línea 1: el match intacto en la línea entera
+PASS 1c ventana 40 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 40 línea 1: la ventana son bytes reales de la línea
+PASS 1c ventana 40 línea 1: el match está dentro de la ventana
+PASS 1c ventana 40 línea 1: solo se recorta lo que no cabe
+PASS 1c ventana 40 línea 1: la ventana decodifica como UTF-8
+PASS 1c ventana 40 línea 2: line_start reconstruye la línea en el fichero
+PASS 1c ventana 40 línea 2: line_len es la longitud real
+PASS 1c ventana 40 línea 2: el match intacto en la línea entera
+PASS 1c ventana 40 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 40 línea 2: la ventana son bytes reales de la línea
+PASS 1c ventana 40 línea 2: el match está dentro de la ventana
+PASS 1c ventana 40 línea 2: solo se recorta lo que no cabe
+PASS 1c ventana 40 línea 2: la ventana decodifica como UTF-8
+PASS 1c ventana 40 línea 4: line_start reconstruye la línea en el fichero
+PASS 1c ventana 40 línea 4: line_len es la longitud real
+PASS 1c ventana 40 línea 4: el match intacto en la línea entera
+PASS 1c ventana 40 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 40 línea 4: la ventana son bytes reales de la línea
+PASS 1c ventana 40 línea 4: el match está dentro de la ventana
+PASS 1c ventana 40 línea 4: solo se recorta lo que no cabe
+PASS 1c ventana 40 línea 4: la ventana decodifica como UTF-8
+PASS 1c ventana 40 línea 5: line_start reconstruye la línea en el fichero
+PASS 1c ventana 40 línea 5: line_len es la longitud real
+PASS 1c ventana 40 línea 5: el match intacto en la línea entera
+PASS 1c ventana 40 línea 5: fila entera
+PASS 1c ventana 40: hay filas recortadas (no es vacuo)
+PASS json ventana 200: rc 0
+PASS json ventana 200 línea 1: line_start reconstruye la línea en el fichero
+PASS json ventana 200 línea 1: line_len es la longitud real
+PASS json ventana 200 línea 1: el match intacto en la línea entera
+PASS json ventana 200 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 200 línea 1: la ventana son bytes reales de la línea
+PASS json ventana 200 línea 1: el match está dentro de la ventana
+PASS json ventana 200 línea 1: solo se recorta lo que no cabe
+PASS json ventana 200 línea 1: la ventana decodifica como UTF-8
+PASS json ventana 200 línea 2: line_start reconstruye la línea en el fichero
+PASS json ventana 200 línea 2: line_len es la longitud real
+PASS json ventana 200 línea 2: el match intacto en la línea entera
+PASS json ventana 200 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 200 línea 2: la ventana son bytes reales de la línea
+PASS json ventana 200 línea 2: el match está dentro de la ventana
+PASS json ventana 200 línea 2: solo se recorta lo que no cabe
+PASS json ventana 200 línea 2: la ventana decodifica como UTF-8
+PASS json ventana 200 línea 4: line_start reconstruye la línea en el fichero
+PASS json ventana 200 línea 4: line_len es la longitud real
+PASS json ventana 200 línea 4: el match intacto en la línea entera
+PASS json ventana 200 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 200 línea 4: la ventana son bytes reales de la línea
+PASS json ventana 200 línea 4: el match está dentro de la ventana
+PASS json ventana 200 línea 4: solo se recorta lo que no cabe
+PASS json ventana 200 línea 4: la ventana decodifica como UTF-8
+PASS json ventana 200 línea 5: line_start reconstruye la línea en el fichero
+PASS json ventana 200 línea 5: line_len es la longitud real
+PASS json ventana 200 línea 5: el match intacto en la línea entera
+PASS json ventana 200 línea 5: fila entera
+PASS json ventana 200: hay filas recortadas (no es vacuo)
+PASS 1c ventana 200: rc 0
+PASS 1c ventana 200 línea 1: line_start reconstruye la línea en el fichero
+PASS 1c ventana 200 línea 1: line_len es la longitud real
+PASS 1c ventana 200 línea 1: el match intacto en la línea entera
+PASS 1c ventana 200 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 200 línea 1: la ventana son bytes reales de la línea
+PASS 1c ventana 200 línea 1: el match está dentro de la ventana
+PASS 1c ventana 200 línea 1: solo se recorta lo que no cabe
+PASS 1c ventana 200 línea 1: la ventana decodifica como UTF-8
+PASS 1c ventana 200 línea 2: line_start reconstruye la línea en el fichero
+PASS 1c ventana 200 línea 2: line_len es la longitud real
+PASS 1c ventana 200 línea 2: el match intacto en la línea entera
+PASS 1c ventana 200 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 200 línea 2: la ventana son bytes reales de la línea
+PASS 1c ventana 200 línea 2: el match está dentro de la ventana
+PASS 1c ventana 200 línea 2: solo se recorta lo que no cabe
+PASS 1c ventana 200 línea 2: la ventana decodifica como UTF-8
+PASS 1c ventana 200 línea 4: line_start reconstruye la línea en el fichero
+PASS 1c ventana 200 línea 4: line_len es la longitud real
+PASS 1c ventana 200 línea 4: el match intacto en la línea entera
+PASS 1c ventana 200 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 200 línea 4: la ventana son bytes reales de la línea
+PASS 1c ventana 200 línea 4: el match está dentro de la ventana
+PASS 1c ventana 200 línea 4: solo se recorta lo que no cabe
+PASS 1c ventana 200 línea 4: la ventana decodifica como UTF-8
+PASS 1c ventana 200 línea 5: line_start reconstruye la línea en el fichero
+PASS 1c ventana 200 línea 5: line_len es la longitud real
+PASS 1c ventana 200 línea 5: el match intacto en la línea entera
+PASS 1c ventana 200 línea 5: fila entera
+PASS 1c ventana 200: hay filas recortadas (no es vacuo)
+PASS json ventana 400: rc 0
+PASS json ventana 400 línea 1: line_start reconstruye la línea en el fichero
+PASS json ventana 400 línea 1: line_len es la longitud real
+PASS json ventana 400 línea 1: el match intacto en la línea entera
+PASS json ventana 400 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 400 línea 1: la ventana son bytes reales de la línea
+PASS json ventana 400 línea 1: el match está dentro de la ventana
+PASS json ventana 400 línea 1: solo se recorta lo que no cabe
+PASS json ventana 400 línea 1: la ventana decodifica como UTF-8
+PASS json ventana 400 línea 2: line_start reconstruye la línea en el fichero
+PASS json ventana 400 línea 2: line_len es la longitud real
+PASS json ventana 400 línea 2: el match intacto en la línea entera
+PASS json ventana 400 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 400 línea 2: la ventana son bytes reales de la línea
+PASS json ventana 400 línea 2: el match está dentro de la ventana
+PASS json ventana 400 línea 2: solo se recorta lo que no cabe
+PASS json ventana 400 línea 2: la ventana decodifica como UTF-8
+PASS json ventana 400 línea 4: line_start reconstruye la línea en el fichero
+PASS json ventana 400 línea 4: line_len es la longitud real
+PASS json ventana 400 línea 4: el match intacto en la línea entera
+PASS json ventana 400 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana 400 línea 4: la ventana son bytes reales de la línea
+PASS json ventana 400 línea 4: el match está dentro de la ventana
+PASS json ventana 400 línea 4: solo se recorta lo que no cabe
+PASS json ventana 400 línea 4: la ventana decodifica como UTF-8
+PASS json ventana 400 línea 5: line_start reconstruye la línea en el fichero
+PASS json ventana 400 línea 5: line_len es la longitud real
+PASS json ventana 400 línea 5: el match intacto en la línea entera
+PASS json ventana 400 línea 5: fila entera
+PASS json ventana 400: hay filas recortadas (no es vacuo)
+PASS 1c ventana 400: rc 0
+PASS 1c ventana 400 línea 1: line_start reconstruye la línea en el fichero
+PASS 1c ventana 400 línea 1: line_len es la longitud real
+PASS 1c ventana 400 línea 1: el match intacto en la línea entera
+PASS 1c ventana 400 línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 400 línea 1: la ventana son bytes reales de la línea
+PASS 1c ventana 400 línea 1: el match está dentro de la ventana
+PASS 1c ventana 400 línea 1: solo se recorta lo que no cabe
+PASS 1c ventana 400 línea 1: la ventana decodifica como UTF-8
+PASS 1c ventana 400 línea 2: line_start reconstruye la línea en el fichero
+PASS 1c ventana 400 línea 2: line_len es la longitud real
+PASS 1c ventana 400 línea 2: el match intacto en la línea entera
+PASS 1c ventana 400 línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 400 línea 2: la ventana son bytes reales de la línea
+PASS 1c ventana 400 línea 2: el match está dentro de la ventana
+PASS 1c ventana 400 línea 2: solo se recorta lo que no cabe
+PASS 1c ventana 400 línea 2: la ventana decodifica como UTF-8
+PASS 1c ventana 400 línea 4: line_start reconstruye la línea en el fichero
+PASS 1c ventana 400 línea 4: line_len es la longitud real
+PASS 1c ventana 400 línea 4: el match intacto en la línea entera
+PASS 1c ventana 400 línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana 400 línea 4: la ventana son bytes reales de la línea
+PASS 1c ventana 400 línea 4: el match está dentro de la ventana
+PASS 1c ventana 400 línea 4: solo se recorta lo que no cabe
+PASS 1c ventana 400 línea 4: la ventana decodifica como UTF-8
+PASS 1c ventana 400 línea 5: line_start reconstruye la línea en el fichero
+PASS 1c ventana 400 línea 5: line_len es la longitud real
+PASS 1c ventana 400 línea 5: el match intacto en la línea entera
+PASS 1c ventana 400 línea 5: fila entera
+PASS 1c ventana 400: hay filas recortadas (no es vacuo)
+FAIL json ventana + contexto: rc -6
+FAIL json ventana + contexto: hay filas recortadas (no es vacuo): 0 de 0
+FAIL 1c ventana + contexto: rc -6
+FAIL 1c ventana + contexto: hay filas recortadas (no es vacuo): 0 de 0
+FAIL json ventana + passthru: rc -6
+FAIL json ventana + passthru: hay filas recortadas (no es vacuo): 0 de 0
+FAIL 1c ventana + passthru: rc -6
+FAIL 1c ventana + passthru: hay filas recortadas (no es vacuo): 0 de 0
+PASS json ventana + replace: rc 0
+PASS json ventana + replace línea 2: line_start reconstruye la línea en el fichero
+PASS json ventana + replace línea 2: line_len es la longitud real
+PASS json ventana + replace línea 2: el match intacto en la línea entera
+PASS json ventana + replace línea 4: line_start reconstruye la línea en el fichero
+PASS json ventana + replace línea 4: line_len es la longitud real
+PASS json ventana + replace línea 4: el match intacto en la línea entera
+PASS json ventana + replace línea 5: line_start reconstruye la línea en el fichero
+PASS json ventana + replace línea 5: line_len es la longitud real
+PASS json ventana + replace línea 5: el match intacto en la línea entera
+PASS json ventana + replace línea 6: line_start reconstruye la línea en el fichero
+PASS json ventana + replace línea 6: line_len es la longitud real
+PASS json ventana + replace línea 6: el match intacto en la línea entera
+PASS 1c ventana + replace: rc 0
+PASS 1c ventana + replace línea 2: line_start reconstruye la línea en el fichero
+PASS 1c ventana + replace línea 2: line_len es la longitud real
+PASS 1c ventana + replace línea 2: el match intacto en la línea entera
+PASS 1c ventana + replace línea 4: line_start reconstruye la línea en el fichero
+PASS 1c ventana + replace línea 4: line_len es la longitud real
+PASS 1c ventana + replace línea 4: el match intacto en la línea entera
+PASS 1c ventana + replace línea 5: line_start reconstruye la línea en el fichero
+PASS 1c ventana + replace línea 5: line_len es la longitud real
+PASS 1c ventana + replace línea 5: el match intacto en la línea entera
+PASS 1c ventana + replace línea 6: line_start reconstruye la línea en el fichero
+PASS 1c ventana + replace línea 6: line_len es la longitud real
+PASS 1c ventana + replace línea 6: el match intacto en la línea entera
+PASS json ventana + provenance: rc 0
+PASS json ventana + provenance línea 1: line_start reconstruye la línea en el fichero
+PASS json ventana + provenance línea 1: line_len es la longitud real
+PASS json ventana + provenance línea 1: el match intacto en la línea entera
+PASS json ventana + provenance línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana + provenance línea 1: la ventana son bytes reales de la línea
+PASS json ventana + provenance línea 1: el match está dentro de la ventana
+PASS json ventana + provenance línea 1: solo se recorta lo que no cabe
+PASS json ventana + provenance línea 1: la ventana decodifica como UTF-8
+PASS json ventana + provenance línea 2: line_start reconstruye la línea en el fichero
+PASS json ventana + provenance línea 2: line_len es la longitud real
+PASS json ventana + provenance línea 2: el match intacto en la línea entera
+PASS json ventana + provenance línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana + provenance línea 2: la ventana son bytes reales de la línea
+PASS json ventana + provenance línea 2: el match está dentro de la ventana
+PASS json ventana + provenance línea 2: solo se recorta lo que no cabe
+PASS json ventana + provenance línea 2: la ventana decodifica como UTF-8
+PASS json ventana + provenance línea 4: line_start reconstruye la línea en el fichero
+PASS json ventana + provenance línea 4: line_len es la longitud real
+PASS json ventana + provenance línea 4: el match intacto en la línea entera
+PASS json ventana + provenance línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS json ventana + provenance línea 4: la ventana son bytes reales de la línea
+PASS json ventana + provenance línea 4: el match está dentro de la ventana
+PASS json ventana + provenance línea 4: solo se recorta lo que no cabe
+PASS json ventana + provenance línea 4: la ventana decodifica como UTF-8
+PASS json ventana + provenance línea 5: line_start reconstruye la línea en el fichero
+PASS json ventana + provenance línea 5: line_len es la longitud real
+PASS json ventana + provenance línea 5: el match intacto en la línea entera
+PASS json ventana + provenance línea 5: fila entera
+PASS json ventana + provenance: hay filas recortadas (no es vacuo)
+PASS 1c ventana + provenance: rc 0
+PASS 1c ventana + provenance línea 1: line_start reconstruye la línea en el fichero
+PASS 1c ventana + provenance línea 1: line_len es la longitud real
+PASS 1c ventana + provenance línea 1: el match intacto en la línea entera
+PASS 1c ventana + provenance línea 1: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana + provenance línea 1: la ventana son bytes reales de la línea
+PASS 1c ventana + provenance línea 1: el match está dentro de la ventana
+PASS 1c ventana + provenance línea 1: solo se recorta lo que no cabe
+PASS 1c ventana + provenance línea 1: la ventana decodifica como UTF-8
+PASS 1c ventana + provenance línea 2: line_start reconstruye la línea en el fichero
+PASS 1c ventana + provenance línea 2: line_len es la longitud real
+PASS 1c ventana + provenance línea 2: el match intacto en la línea entera
+PASS 1c ventana + provenance línea 2: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana + provenance línea 2: la ventana son bytes reales de la línea
+PASS 1c ventana + provenance línea 2: el match está dentro de la ventana
+PASS 1c ventana + provenance línea 2: solo se recorta lo que no cabe
+PASS 1c ventana + provenance línea 2: la ventana decodifica como UTF-8
+PASS 1c ventana + provenance línea 4: line_start reconstruye la línea en el fichero
+PASS 1c ventana + provenance línea 4: line_len es la longitud real
+PASS 1c ventana + provenance línea 4: el match intacto en la línea entera
+PASS 1c ventana + provenance línea 4: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c ventana + provenance línea 4: la ventana son bytes reales de la línea
+PASS 1c ventana + provenance línea 4: el match está dentro de la ventana
+PASS 1c ventana + provenance línea 4: solo se recorta lo que no cabe
+PASS 1c ventana + provenance línea 4: la ventana decodifica como UTF-8
+PASS 1c ventana + provenance línea 5: line_start reconstruye la línea en el fichero
+PASS 1c ventana + provenance línea 5: line_len es la longitud real
+PASS 1c ventana + provenance línea 5: el match intacto en la línea entera
+PASS 1c ventana + provenance línea 5: fila entera
+PASS 1c ventana + provenance: hay filas recortadas (no es vacuo)
+PASS json match solo no cabe: rc 0
+PASS json match solo no cabe línea 7: line_start reconstruye la línea en el fichero
+PASS json match solo no cabe línea 7: line_len es la longitud real
+PASS json match solo no cabe línea 7: el match intacto en la línea entera
+PASS json match solo no cabe línea 7: 0 < ventana <= N (o la ventana ES el match)
+PASS json match solo no cabe línea 7: la ventana son bytes reales de la línea
+PASS json match solo no cabe línea 7: el match está dentro de la ventana
+PASS json match solo no cabe línea 7: solo se recorta lo que no cabe
+PASS json match solo no cabe línea 7: la ventana decodifica como UTF-8
+PASS json match solo no cabe: hay filas recortadas (no es vacuo)
+PASS 1c match solo no cabe: rc 0
+PASS 1c match solo no cabe línea 7: line_start reconstruye la línea en el fichero
+PASS 1c match solo no cabe línea 7: line_len es la longitud real
+PASS 1c match solo no cabe línea 7: el match intacto en la línea entera
+PASS 1c match solo no cabe línea 7: 0 < ventana <= N (o la ventana ES el match)
+PASS 1c match solo no cabe línea 7: la ventana son bytes reales de la línea
+PASS 1c match solo no cabe línea 7: el match está dentro de la ventana
+PASS 1c match solo no cabe línea 7: solo se recorta lo que no cabe
+PASS 1c match solo no cabe línea 7: la ventana decodifica como UTF-8
+PASS 1c match solo no cabe: hay filas recortadas (no es vacuo)
+PASS json líneas que caben: rc 0
+PASS json líneas que caben línea 1: line_start reconstruye la línea en el fichero
+PASS json líneas que caben línea 1: line_len es la longitud real
+PASS json líneas que caben línea 1: el match intacto en la línea entera
+PASS json líneas que caben línea 1: fila entera
+PASS json líneas que caben línea 3: line_start reconstruye la línea en el fichero
+PASS json líneas que caben línea 3: line_len es la longitud real
+PASS json líneas que caben línea 3: el match intacto en la línea entera
+PASS json líneas que caben línea 3: fila entera
+PASS 1c líneas que caben: rc 0
+PASS 1c líneas que caben línea 1: line_start reconstruye la línea en el fichero
+PASS 1c líneas que caben línea 1: line_len es la longitud real
+PASS 1c líneas que caben línea 1: el match intacto en la línea entera
+PASS 1c líneas que caben línea 1: fila entera
+PASS 1c líneas que caben línea 3: line_start reconstruye la línea en el fichero
+PASS 1c líneas que caben línea 3: line_len es la longitud real
+PASS 1c líneas que caben línea 3: el match intacto en la línea entera
+PASS 1c líneas que caben línea 3: fila entera
+PASS provenance: el sha256 de la cabecera es el del fichero real
+PASS W descomunal == sin bandera (evidence/agent-native/m9/fix/long.txt)
+PASS sin bandera no aparece win_start (evidence/agent-native/m9/fix/long.txt)
+PASS W descomunal == sin bandera (evidence/agent-native/m9/fix/multi.txt)
+PASS sin bandera no aparece win_start (evidence/agent-native/m9/fix/multi.txt)
+PASS uso: --max-columns sin --json es error rc 2
+PASS uso: --max-columns='0' es error rc 2
+PASS uso: --max-columns='xx' es error rc 2
+PASS uso: --max-columns='-1' es error rc 2
+PASS uso: --max-columns='' es error rc 2
+PASS uso: --max-columns=40 con --json funciona
+PASS lote: la ventana de la llamada se aplica a las consultas
+PASS lote: una consulta no puede pedir la ventana en flags
+PASS recorte: la salida pesa menos (1581 -> 311 bytes)
+TOTAL 318 pass / 8 fail

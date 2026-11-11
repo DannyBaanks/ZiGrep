@@ -73,7 +73,9 @@ def main() -> int:
 
     sums = []
     for p in sorted(FIX.glob("*")):
-        if p.is_file():
+        # The manifest cannot list itself: its own hash changes as soon as
+        # it is written, so `sha256sum -c` would always fail on that line.
+        if p.is_file() and p.name != "SHA256SUMS.txt":
             sums.append(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}")
     (FIX / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n")
     print("\n".join(sums))
