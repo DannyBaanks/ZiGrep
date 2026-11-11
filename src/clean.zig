@@ -9,7 +9,7 @@
 //!   zgrep --cache --dry-run       # solo el análisis
 //!   zgrep --cache --force         # sin pregunta (para scripts)
 //!
-//! Reglas de seguridad (son las que hacen que sea "0 riesgoso"):
+//! Reglas de seguridad (son las que hacen que sea "0 riesgo"):
 //!   * una `.zig-cache` es siempre segura: se regenera al compilar;
 //!   * un `zig-out` NO se toca por defecto (puede contener un binario
 //!     instalado), y aun con --include-out se protege si algo apunta a él;
@@ -107,7 +107,7 @@ fn dirSize(io: std.Io, path: []const u8) u64 {
     return total;
 }
 
-/// �Queda algún fichero de bloqueo dentro? Zig no crea locks (verificado),
+/// �Queda algún fichero de bloqueo dentro? Zig no crea locks (verificado),
 /// pero otros sistemas de build sí, así que se comprueba por si acaso.
 fn hasLockFile(io: std.Io, path: []const u8) bool {
     var stream = vfs.DirStream.open(io, z(path)) catch return false;
@@ -129,7 +129,7 @@ fn hasLockFile(io: std.Io, path: []const u8) bool {
     return false;
 }
 
-/// �Hay un compilador vivo sobre este árbol?
+/// �Hay un compilador vivo sobre este árbol?
 ///
 /// Medido: Zig no deja ficheros de bloqueo; lo que sí queda es el proceso. Dos
 /// señales, ambas por /proc (solo en Linux; en otros sistemas se omite y se
@@ -157,18 +157,33 @@ fn procsHomeActive(io: std.Io, gpa: Allocator, path: []const u8, kind: Kind) boo
         if (!digits) continue;
         const exe = std.fmt.bufPrint(&buf, "/proc/{s}/exe", .{e.name}) catch continue;
         const exen = std.Io.Dir.cwd().readLink(io, exe, &exebuf) catch continue;
-        const exe_target = exebuf[0..exen];
+        var exe_target = exebuf[0..exen];
+        // El kernel añade " (deleted)" cuando el binario se reemplazó en
+        // caliente, que es justo lo que hace `zig build` sobre su caché.
+        if (std.mem.endsWith(u8, exe_target, " (deleted)"))
+            exe_target = exe_target[0 .. exe_target.len - " (deleted)".len];
+        // SOLO cuenta un compilador de Zig. Medido el falso positivo: con
+        // `indexOf(exe, "/zig")` bastaba ejecutar este programa —su ruta pasa
+        // por `/zig-out/bin/zigrep`— para marcarse a sí mismo; y en la rama
+        // local no se miraba el exe en absoluto, así que cualquier shell con
+        // cwd en el repo también activaba la caché. Ahora: basename exacto.
+        const base = std.fs.path.basename(exe_target);
+        const is_zig = std.mem.eql(u8, base, "zig") or std.mem.eql(u8, base, "zig.exe");
+        if (!is_zig) continue;
         if (kind == .global_cache) {
             // Cualquier compilador vivo usa la caché global compartida.
-            if (std.mem.indexOf(u8, exe_target, "/zig") != null) return true;
-            continue;
+            return true;
         }
         const cwdpath = std.fmt.bufPrint(&buf, "/proc/{s}/cwd", .{e.name}) catch continue;
         const cwdn = std.Io.Dir.cwd().readLink(io, cwdpath, &cwdbuf) catch continue;
         const cwd = cwdbuf[0..cwdn];
-        // El compilador arranca con cwd = el repo, no dentro de la caché.
+        // El compilador arranca con cwd = el repo (o un subdirectorio suyo),
+        // no dentro de la caché.
         if (std.mem.eql(u8, cwd, parent)) return true;
-        if (std.mem.startsWith(u8, cwd, path)) return true;
+        var pbuf: [4096]u8 = undefined;
+        if (std.fmt.bufPrint(&pbuf, "{s}/", .{parent})) |pref| {
+            if (std.mem.startsWith(u8, cwd, pref)) return true;
+        } else |_| {}
         if (std.mem.startsWith(u8, exe_target, path)) return true;
         _ = gpa;
     }
@@ -478,7 +493,7 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
     var total: u64 = 0;
     var skipped: u64 = 0;
     W.s(io, "\n== caches de Zig encontradas ==\n\n");
-    W.s(io, "   #  tamanyo  estado      ruta\n");
+    W.s(io, "   #  tamaño  estado      ruta\n");
     var row: usize = 0;
     while (row < list.items.len) : (row += 1) {
         const t = list.items[row];
@@ -495,12 +510,12 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
     if (skipped > 0) W.f(io, "   (activas, se omiten: {s})", .{humanSize(&buf, skipped)});
     W.s(io, "\n\n  segura      = se regenera al compilar\n");
     W.s(io, "  peligrosa   = zig-out: puede tener un binario instalado\n");
-    W.s(io, "  ACTIVA      = hay una compilacion en marcha: no se toca\n");
+    W.s(io, "  ACTIVA      = hay una compilación en marcha: no se toca\n");
     W.s(io, "  PROTEGIDA   = algo apunta a ella (instalada)\n");
-    W.s(io, "\n  que borrar?  1,3-5 | all | safe | nada  (vacio = nada)\n");
+    W.s(io, "\n  ¿qué borrar?  1,3-5 | all | safe | nada  (vacío = nada)\n");
 
     if (opts.dry_run) {
-        W.s(io, "\n  --dry-run: no se borro nada\n");
+        W.s(io, "\n  --dry-run: no se borró nada\n");
         return 0;
     }
 
@@ -519,7 +534,7 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
         var buf2: [128]u8 = undefined;
         const chosen = parseSelection(readLine(io, &buf2), flags.len, flags);
         if (chosen.len == 0) {
-            W.s(io, "\n  cancelado: no se borro nada\n");
+            W.s(io, "\n  cancelado: no se borró nada\n");
             return 1;
         }
         const own = gpa.dupe(usize, chosen.slice()) catch return 2;
@@ -527,7 +542,7 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
     }
 
     // --- confirmacion final, con la seleccion ya hecha ---
-    W.s(io, "\n  se borrara:\n");
+    W.s(io, "\n  se borrará:\n");
     var confirm_total: u64 = 0;
     for (selection) |idx| confirm_total += list.items[idx].size;
     for (selection) |idx| {
@@ -537,7 +552,7 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
     if (opts.force) {
         W.s(io, "\n  --force: sin preguntar\n");
     } else if (!prompt(io, "\n\nconfirmar? [s/N] ")) {
-        W.s(io, "\n  cancelado: no se borro nada\n");
+        W.s(io, "\n  cancelado: no se borró nada\n");
         return 1;
     }
 
