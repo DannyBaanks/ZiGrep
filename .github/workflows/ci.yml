@@ -55,6 +55,12 @@ jobs:
           zig build -Doptimize=ReleaseFast
           python3 evidence/agent-native/batch_conformance.py
 
+      # M4: --provenance aditivo, uno por fichero y antes de sus eventos, y
+      # sha256/size/mtime_ns verificados contra hashlib/os.stat en todos los
+      # caminos de lectura. Usa el corpus_50 del paso anterior.
+      - name: Provenance conformance (M4)
+        run: python3 evidence/agent-native/provenance_conformance.py
+
   windows-native:
     name: Native Windows Build, Tests & Oracle
     runs-on: windows-latest

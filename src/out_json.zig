@@ -86,6 +86,40 @@ pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) All
     try out.appendSlice(gpa, "}\n");
 }
 
+/// M4: procedencia del fichero, UNA vez por fichero y ANTES de sus eventos.
+/// `sha256` y `size` son de los bytes que zgrep leyó y buscó (no de una
+/// relectura): así la afirmación "este match está en este contenido" es
+/// verificable con `sha256sum`. `mtime_ns` sale de `statx` (null si no hay
+/// fichero, p. ej. stdin). `source`: `file`, `file-utf16` (offsets sobre el
+/// texto decodificado, hash del fichero crudo), `pre` (hash de la salida del
+/// preprocesador) o `stdin`.
+pub fn emitProvenanceEvent(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: []const u8,
+    sha256: *const [32]u8,
+    size: usize,
+    mtime_ns: ?i128,
+    source: []const u8,
+) Allocator.Error!void {
+    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"provenance\",\"path\":");
+    try appendJsonString(out, gpa, path);
+    try out.appendSlice(gpa, ",\"sha256\":\"");
+    const hex = std.fmt.bytesToHex(sha256.*, .lower);
+    try out.appendSlice(gpa, &hex);
+    try out.appendSlice(gpa, "\",\"size\":");
+    try appendInt(out, gpa, size);
+    try out.appendSlice(gpa, ",\"mtime_ns\":");
+    if (mtime_ns) |m| {
+        var buf: [48]u8 = undefined;
+        const t = std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable;
+        try out.appendSlice(gpa, t);
+    } else try out.appendSlice(gpa, "null");
+    try out.appendSlice(gpa, ",\"source\":\"");
+    try out.appendSlice(gpa, source);
+    try out.appendSlice(gpa, "\"}\n");
+}
+
 /// `-l` / `-L`.
 pub fn emitFileEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, with_match: bool) Allocator.Error!void {
     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"file\",\"path\":");

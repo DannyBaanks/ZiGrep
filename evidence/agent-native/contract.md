@@ -260,3 +260,48 @@ son de esta ejecución (Xeon E5-2678 v3, árbol en page cache), no constantes.
   usa su propio arena, liberado al terminarla.
 - El caso "40 → 1" que cita el plan era ilustrativo: la tarea medida tiene 16
   consultas.
+
+## 11. M4: procedencia por fichero (2026-11-10, claude_code)
+
+Interfaz nueva (GUIA §4o): `--provenance`, solo con `--json` o en lote. Tipo
+nuevo de evento en `zgrep/1`: `provenance` = `{path, sha256, size, mtime_ns,
+source}`, uno por fichero con salida, antes de sus eventos.
+
+**Desviación del plan, deliberada.** El plan pedía un campo `file` con la
+procedencia dentro de *cada* evento. Se emite en cambio **un evento por fichero**:
+la misma trazabilidad (todo evento tiene `path`, y su fichero tiene exactamente un
+`provenance` antes que él), sin repetir ~150 bytes por coincidencia. M3 midió que
+los bytes son justo lo que el JSON ya encarece. Si un consumidor filtra eventos
+sueltos, une por `path`.
+
+**Contrato que se añade:**
+
+| situación | comportamiento |
+|---|---|
+| `--json --provenance` | eventos de siempre + un `provenance` antes de los de cada fichero con salida |
+| fichero sin eventos | sin `provenance` (no se hashea) |
+| `-c` / `--count-matches` | todos los ficheros llevan procedencia (todos emiten recuento) |
+| stdin | `source:"stdin"`, hash de lo recibido, `mtime_ns:null` |
+| `--provenance` sin `--json` ni lote | rc 2, stdout vacío |
+| en lote | evento con `query_id`; no cuenta como resultado; sí pesa en `--max-output-tokens` |
+
+**Arreglo de paso (bug de M1):** stdin con `--json -c` imprimía `1` en texto, y
+con `--count-matches` nada. Ahora usa el emisor de los ficheros.
+
+**Divergencia documentada, sin cambio:** el rc de `-L` sigue la semántica de rg
+(0 si se listó algún fichero, 1 si no). GNU grep 3.11 hace lo contrario (0 si
+alguna línea coincide). Medido: `-L HIT a.txt` → zgrep 1, grep 0, rg 1.
+
+**Claims (aceptación del plan, M4)** — crudos en `evidence/agent-native/m4/`:
+
+| claim | estado | evidencia |
+|---|---|---|
+| el hash reportado == `sha256sum` del fichero; tamaño y mtime == `stat` | DEMOSTRADO | `provenance_conformance_output.txt`: cada fichero con eventos, en micro path, enjambre, camino ordenado, io_uring, stdin y lote, contra `hashlib`/`os.stat`; tests de `src/scan.zig` (vector FIPS de `"abc"`) |
+| `--provenance` es aditivo | DEMOSTRADO | mismo fichero: sin los eventos `provenance` el stream es el de siempre (agrupado por fichero donde el enjambre no fija el orden entre ficheros) |
+| sin la bandera no hay degradación | DEMOSTRADO (dentro del ruido) | `perf_ab_output.txt`: A/B intercalado contra `32dbbf3`, IQR solapados en los 5 modos |
+| el coste de la bandera es proporcional a lo que se hashea | DEMOSTRADO | mismo fichero: ×~1 con 3 ficheros con salida; del orden de +17 % con los 1000 |
+
+**NOT_DEMONSTRATED:** que el `mtime_ns` siga valiendo si el fichero cambia
+*después* de la búsqueda (es una foto, no un candado); ficheros en un sistema de
+ficheros sin `statx` (`mtime_ns` saldría null); el camino portable (Windows)
+corre en CI solo por los tests unitarios, el diferencial es Linux.

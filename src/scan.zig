@@ -56,6 +56,9 @@ pub const ScanConfig = struct {
     replace: ?[]const u8 = null,
     /// `--passthru` with `-r`: also print the lines that do not match.
     passthru: bool = false,
+    /// M4 `--provenance` (only with `json`): a `provenance` event (sha256,
+    /// size, mtime) before the events of every file that produced any.
+    provenance: bool = false,
     /// `-b`: prefix each line with its byte offset in the file (grep).
     byte_offset: bool = false,
     /// `--crlf`: treat CRLF as the line terminator, dropping the CR (rg).
@@ -867,6 +870,7 @@ fn scanFilePortable(
     // fusionar y el modo `auto` degrada a síncrono sin más.
     _ = probe_state;
     var res: FileScan = .{};
+    const prov_start = out.items.len;
     const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |err| {
         res.err = mapIoError(err);
         return res;
@@ -881,8 +885,9 @@ fn scanFilePortable(
         res.err = .FBIG;
         return res;
     };
+    const mtime_from: MtimeFrom = .{ .value = @intCast(stat.mtime.nanoseconds) };
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
+        if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, "", .file, mtime_from)) |err| res.err = err;
         return res;
     }
 
@@ -897,7 +902,7 @@ fn scanFilePortable(
                 return res;
             }
             processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
+            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
             return res;
         }
     }
@@ -910,7 +915,7 @@ fn scanFilePortable(
             var map = map_value;
             defer map.destroy(io);
             processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
+            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
             return res;
         } else |_| {}
     }
@@ -929,7 +934,7 @@ fn scanFilePortable(
         return res;
     }
     processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
+    if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, provSourceOf(data, config), mtime_from)) |err| res.err = err;
     return res;
 }
 
@@ -1011,6 +1016,7 @@ fn scanFileLinux(
     probe_state: ?*io_engine.State,
 ) FileScan {
     var res: FileScan = .{};
+    const prov_start = out.items.len;
 
     const rc = linux.openat(linux.AT.FDCWD, path, .{ .CLOEXEC = true }, 0);
     const open_err = linux.errno(rc);
@@ -1068,7 +1074,7 @@ fn scanFileLinux(
         // Did the entire file fit in the scratch buffer?
         if (got < sbuf.len) {
             if (got == 0) {
-                if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
+                if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, "", .file, .{ .fd = fd })) |e| res.err = e;
                 return res;
             }
             const data = sbuf[0..got];
@@ -1109,7 +1115,7 @@ fn scanFileLinux(
                     res.bytes = data.len;
                 }
             }
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
+            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, if (utf16_bom != null) .file_utf16 else .file, .{ .fd = fd })) |e| res.err = e;
             return res;
         }
         // File >= sbuf.len: rewind to 0 for mmap/read fallback.
@@ -1125,7 +1131,7 @@ fn scanFileLinux(
     const size: usize = @intCast(@as(isize, @bitCast(szr)));
     _ = linux.lseek(fd, 0, linux.SEEK.SET);
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
+        if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, "", .file, .{ .fd = fd })) |e| res.err = e;
         return res;
     }
 
@@ -1215,8 +1221,103 @@ fn scanFileLinux(
     // --- modes that emit once per file ------------------------------------
     // `-c` reports every scanned file, including binary-skipped ones as 0,
     // which is what `grep -c` does.
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
+    if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, if (utf16_bom != null) .file_utf16 else .file, .{ .fd = fd })) |e| res.err = e;
     return res;
+}
+
+/// The portable path decides UTF-16 inside `processBuffer`; this repeats
+/// that decision so the provenance event can say how the offsets relate.
+fn provSourceOf(data: []const u8, config: ScanConfig) ProvSource {
+    if (config.encoding == .none) return .file;
+    if (forcedBom(config.encoding) != null or config.encoding == .utf16) return .file_utf16;
+    return if (isUtf16Bom(data) != null) .file_utf16 else .file;
+}
+
+pub const ProvSource = enum {
+    file,
+    file_utf16,
+    pre,
+    stdin,
+    fn name(self: ProvSource) []const u8 {
+        return switch (self) {
+            .file => "file",
+            .file_utf16 => "file-utf16",
+            .pre => "pre",
+            .stdin => "stdin",
+        };
+    }
+};
+
+/// Where the mtime of a provenance event comes from.
+pub const MtimeFrom = union(enum) {
+    /// No file behind the bytes (stdin, preprocessor output).
+    none,
+    /// The open descriptor that was read (Linux sync path).
+    fd: i32,
+    /// `statx` by path (io_uring path, where the fd is already closed).
+    path,
+    /// Already known (portable path: the `stat` it did before reading).
+    value: i128,
+};
+
+fn mtimeNs(from: MtimeFrom, path: [:0]const u8) ?i128 {
+    switch (from) {
+        .none => return null,
+        .value => |v| return v,
+        .fd, .path => {
+            if (builtin.os.tag != .linux) return null;
+            var sx: linux.Statx = undefined;
+            const mask: linux.STATX = .{ .MTIME = true };
+            const rc = switch (from) {
+                .fd => |fd| linux.statx(fd, "", 0x1000, mask, &sx), // AT_EMPTY_PATH
+                else => linux.statx(linux.AT.FDCWD, path, 0, mask, &sx),
+            };
+            if (linux.errno(rc) != .SUCCESS) return null;
+            return @as(i128, sx.mtime.sec) * std.time.ns_per_s + sx.mtime.nsec;
+        },
+    }
+}
+
+/// End of one file: the once-per-file events (`-c`/`-l`/`-L`), then, with
+/// `--json --provenance` and only if this file produced output, its
+/// `provenance` event inserted at `start` — before all its events. The hash is
+/// of `data`, the bytes that were actually searched; files with no output are
+/// never hashed (that is what keeps `--provenance` cheap on sparse searches).
+pub fn finishFile(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: [:0]const u8,
+    show_path: bool,
+    mode: Mode,
+    res: FileScan,
+    config: ScanConfig,
+    start: usize,
+    data: []const u8,
+    source: ProvSource,
+    mtime_from: MtimeFrom,
+) ?linux.E {
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| return e;
+    if (config.json and config.provenance and out.items.len > start) {
+        insertProvenance(out, gpa, path, start, data, source, mtimeNs(mtime_from, path)) catch return .NOMEM;
+    }
+    return null;
+}
+
+pub fn insertProvenance(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: []const u8,
+    start: usize,
+    data: []const u8,
+    source: ProvSource,
+    mtime_ns: ?i128,
+) Allocator.Error!void {
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+    var ev: std.ArrayList(u8) = .empty;
+    defer ev.deinit(gpa);
+    try out_json.emitProvenanceEvent(&ev, gpa, path, &digest, data.len, mtime_ns, source.name());
+    try out.insertSlice(gpa, start, ev.items);
 }
 
 /// Emits the once-per-file part of `-c`, `-l`, and `-L`.
@@ -1871,4 +1972,33 @@ test "scanBuffer: --replace substitutes inside the line, the rest of it survives
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("1:X X\n", got);
     }
+}
+
+test "insertProvenance: un evento antes de los del fichero, sha256 de los bytes buscados" {
+    const gpa = std.testing.allocator;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+    try out.appendSlice(gpa, "PREVIO\n");
+    const start = out.items.len;
+    try out.appendSlice(gpa, "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n");
+    try insertProvenance(&out, gpa, "f.txt", start, "abc", .file, 42);
+    // sha256("abc"), el vector de prueba de FIPS 180-2.
+    try std.testing.expectEqualStrings(
+        \\PREVIO
+        \\{"schema":"zgrep/1","type":"provenance","path":"f.txt","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","size":3,"mtime_ns":42,"source":"file"}
+        \\{"schema":"zgrep/1","type":"match"}
+        \\
+    , out.items);
+}
+
+test "finishFile: sin salida del fichero no hay provenance (no se hashea)" {
+    const gpa = std.testing.allocator;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+    const cfg: ScanConfig = .{ .json = true, .provenance = true };
+    try std.testing.expect(finishFile(&out, gpa, "f.txt", false, .lines, .{}, cfg, 0, "abc", .file, .none) == null);
+    try std.testing.expectEqual(@as(usize, 0), out.items.len);
+    // -c emite siempre su evento de recuento, asi que si lleva provenance
+    try std.testing.expect(finishFile(&out, gpa, "f.txt", false, .count, .{}, cfg, 0, "abc", .file, .none) == null);
+    try std.testing.expect(std.mem.startsWith(u8, out.items, "{\"schema\":\"zgrep/1\",\"type\":\"provenance\""));
 }

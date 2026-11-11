@@ -207,7 +207,8 @@ pub const UringScanner = struct {
                         }
                     }
                 }
-                if (scan.emitOncePerFile(out, gpa, path, show_path, mode, fs, config.null_filename, config.json)) |e| fs.err = e;
+                const fdata = self.buffers[slot_idx][0..n];
+                if (scan.finishFile(out, gpa, path, show_path, mode, fs, config, before_len, fdata, if (scan.isUtf16Bom(fdata) != null) .file_utf16 else .file, .path)) |e| fs.err = e;
                 if (context_mode and !config.json) scan.insertGroupSeparator(out, gpa, before_len);
 
                 const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;

@@ -71,6 +71,9 @@ const usage =
     \\                    record): match, context, passthru, occurrence, file
     \\                    or count, with path, line, column, byte_start,
     \\                    byte_end and text. Schema zgrep/1, additive only.
+    \\      --provenance  with --json: before the events of each file with
+    \\                    output, a provenance event with the sha256 and size
+    \\                    of the bytes searched and the file's mtime_ns
     \\      --queries-file FILE|-
     \\                    run every JSONL query {"id","pattern","paths"?,
     \\                    "flags"?} in this one process (JSON, sorted); each
@@ -314,6 +317,9 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// M3: `--queries-file FILE` runs every JSONL query in this one process.
     queries_file: ?[]const u8 = null,
+    /// M4: `--provenance` adds a `provenance` event (sha256, size, mtime) per
+    /// file with output. JSON only.
+    provenance: bool = false,
     /// M3: budget over the whole call, with explicit truncation (`summary`).
     max_results: ?usize = null,
     max_output_tokens: ?usize = null,
@@ -432,6 +438,13 @@ fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
                 slot.ready.store(true, .release);
                 return;
             };
+            if (ctx.scan_config.json and ctx.scan_config.provenance and slot.buf.items.len > 0) {
+                // --pre: what was searched is the command's output, so that is
+                // what the hash covers (source "pre"), not the file on disk.
+                scan.insertProvenance(&slot.buf, ctx.gpa, ctx.files[idx], 0, text, .pre, null) catch {
+                    slot.err = .NOMEM;
+                };
+            }
             slot.done = true;
             slot.matched = br.matched;
             slot.lines = br.lines;
@@ -1080,6 +1093,8 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.eql(u8, body, "provenance")) {
+                opts.provenance = true;
             } else if (std.mem.startsWith(u8, body, "queries-file=")) {
                 opts.queries_file = body["queries-file=".len..];
             } else if (std.mem.eql(u8, body, "queries-file")) {
@@ -1646,6 +1661,10 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         return error.Usage;
     }
 
+    if (opts.provenance and !opts.json and opts.queries_file == null) {
+        opts.fail = .{ .what = "--provenance needs --json (or --queries-file): the hash travels in a provenance event", .arg = "" };
+        return error.Usage;
+    }
     if ((opts.max_results != null or opts.max_output_tokens != null) and !opts.json and opts.queries_file == null) {
         // The truncation marker is a JSON event; text output has no honest
         // place for it, so the budget is a JSON-only contract.
@@ -2122,6 +2141,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
+            .provenance = opts.provenance,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -2153,22 +2173,16 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             return 2;
         };
 
-        if (opts.mode == .count) {
-            if (show_p) {
-                try out.appendSlice(gpa, path_label);
-                try out.append(gpa, if (opts.null_filename) 0 else ':');
-            }
-            var num_buf: [24]u8 = undefined;
-            const s = std.fmt.bufPrint(&num_buf, "{d}\n", .{br.lines}) catch unreachable;
-            try out.appendSlice(gpa, s);
-        } else if (opts.mode == .files and br.matched) {
-            try out.appendSlice(gpa, path_label);
-            try out.append(gpa, if (opts.null_filename) 0 else '\n');
-        } else if (opts.mode == .files_without_match and !br.matched) {
-            try out.appendSlice(gpa, path_label);
-            try out.append(gpa, if (opts.null_filename) 0 else '\n');
-        }
+        // stdin uses the same once-per-file emitter as files: the hand-written
+        // copy printed `-c` as text under --json and nothing for
+        // --count-matches.
+        if (scan.emitOncePerFile(&out, gpa, path_label, show_p, opts.mode, .{ .matched = br.matched, .lines = br.lines, .matches = br.matches }, opts.null_filename, opts.json)) |_| return 2;
 
+        if (opts.json and opts.provenance and out.items.len > 0) {
+            // stdin: the hash is of the bytes read (raw, before any UTF-16
+            // decode); there is no file, so no mtime.
+            try scan.insertProvenance(&out, gpa, path_label, 0, data, .stdin, null);
+        }
         if (out.items.len > 0 and opts.mode != .quiet) {
             _ = platform.writeStdout(init.io, out.items);
         }
@@ -2272,6 +2286,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
+            .provenance = opts.provenance,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -2446,6 +2461,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
+            .provenance = opts.provenance,
         },
         .gpa = gpa,
         .window = window,

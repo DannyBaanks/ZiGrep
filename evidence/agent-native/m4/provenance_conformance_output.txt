@@ -1,0 +1,61 @@
+PASS micro_dir: mismo rc (0)
+PASS micro_dir: aditivo (sin provenance = stream de siempre)
+PASS micro_dir: un provenance por fichero con eventos, antes de ellos (3 ficheros)
+PASS micro_dir: sha256/size/mtime_ns == hashlib/os.stat
+PASS swarm_dir: mismo rc (0)
+PASS swarm_dir: aditivo (sin provenance = stream de siempre)
+PASS swarm_dir: un provenance por fichero con eventos, antes de ellos (3 ficheros)
+PASS swarm_dir: sha256/size/mtime_ns == hashlib/os.stat
+PASS sorted_dir: mismo rc (0)
+PASS sorted_dir: aditivo (sin provenance = stream de siempre)
+PASS sorted_dir: un provenance por fichero con eventos, antes de ellos (50 ficheros)
+PASS sorted_dir: sha256/size/mtime_ns == hashlib/os.stat
+PASS uring_dir: mismo rc (0)
+PASS uring_dir: aditivo (sin provenance = stream de siempre)
+PASS uring_dir: un provenance por fichero con eventos, antes de ellos (3 ficheros)
+PASS uring_dir: sha256/size/mtime_ns == hashlib/os.stat
+PASS files_l: mismo rc (0)
+PASS files_l: aditivo (sin provenance = stream de siempre)
+PASS files_l: un provenance por fichero con eventos, antes de ellos (50 ficheros)
+PASS files_l: sha256/size/mtime_ns == hashlib/os.stat
+PASS count_c: mismo rc (0)
+PASS count_c: aditivo (sin provenance = stream de siempre)
+PASS count_c: un provenance por fichero con eventos, antes de ellos (50 ficheros)
+PASS count_c: sha256/size/mtime_ns == hashlib/os.stat
+PASS without_L: mismo rc (0)
+PASS without_L: aditivo (sin provenance = stream de siempre)
+PASS without_L: un provenance por fichero con eventos, antes de ellos (1 ficheros)
+PASS without_L: sha256/size/mtime_ns == hashlib/os.stat
+PASS only_o: mismo rc (0)
+PASS only_o: aditivo (sin provenance = stream de siempre)
+PASS only_o: un provenance por fichero con eventos, antes de ellos (2 ficheros)
+PASS only_o: sha256/size/mtime_ns == hashlib/os.stat
+PASS context: mismo rc (0)
+PASS context: aditivo (sin provenance = stream de siempre)
+PASS context: un provenance por fichero con eventos, antes de ellos (3 ficheros)
+PASS context: sha256/size/mtime_ns == hashlib/os.stat
+PASS passthru: mismo rc (0)
+PASS passthru: aditivo (sin provenance = stream de siempre)
+PASS passthru: un provenance por fichero con eventos, antes de ellos (1 ficheros)
+PASS passthru: sha256/size/mtime_ns == hashlib/os.stat
+PASS no_match: mismo rc (1)
+PASS no_match: aditivo (sin provenance = stream de siempre)
+PASS no_match: un provenance por fichero con eventos, antes de ellos (0 ficheros)
+PASS no_match: sha256/size/mtime_ns == hashlib/os.stat
+PASS src_tree: mismo rc (0)
+PASS src_tree: aditivo (sin provenance = stream de siempre)
+PASS src_tree: un provenance por fichero con eventos, antes de ellos (6 ficheros)
+PASS src_tree: sha256/size/mtime_ns == hashlib/os.stat
+PASS stdin: mismo rc (0)
+PASS stdin: aditivo (sin provenance = stream de siempre)
+PASS stdin: un provenance por fichero con eventos, antes de ellos (1 ficheros)
+PASS stdin: sha256/size/mtime_ns == hashlib/os.stat
+PASS lote: aditivo salvo output_bytes del summary
+PASS lote: provenance con query_id y sin contar como resultado
+PASS lote: provenance verificado en la consulta a
+PASS lote: provenance verificado en la consulta b
+PASS stdin --json -c: evento count igual al recuento de texto
+PASS stdin --json --count-matches: evento count igual al recuento de texto
+PASS cerrado: --provenance sin --json
+ficheros verificados contra hashlib/os.stat: 177
+TOTAL 59 pass / 0 fail

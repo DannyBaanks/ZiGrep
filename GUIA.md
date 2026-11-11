@@ -789,6 +789,56 @@ zgrep --queries-file q.jsonl --max-results 1 a.txt b.txt
 * No ahorra bytes frente al texto: el JSON con `query_id` pesa más. Lo que ahorra
   es procesos y el trabajo de juntar y atribuir resultados.
 
+## 4o. Procedencia por fichero: `--provenance` (0.4.0-dev, M4)
+
+Un agente que afirma "esto está en `a.txt:3`" puede ahora atarlo al contenido
+exacto que se buscó. Con `--json --provenance`, antes de los eventos de cada
+fichero con salida va un evento `provenance`:
+
+```sh
+zgrep --json --provenance HIT a.txt b.txt
+```
+
+```json
+{"schema":"zgrep/1","type":"provenance","path":"a.txt","sha256":"89f3e85d8bd8b4156bafcd5dbef16db596a610cd9707d2097cfaab9e1aebb07b","size":26,"mtime_ns":1794350072429715620,"source":"file"}
+{"schema":"zgrep/1","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+{"schema":"zgrep/1","type":"provenance","path":"b.txt","sha256":"9e011eb2d04d64c73b63643ac869ebf9c786846c11852a94ec831293db2bdce4","size":25,"mtime_ns":1794350072429715620,"source":"file"}
+{"schema":"zgrep/1","type":"match","path":"b.txt","line":2,"column":1,"byte_start":10,"byte_end":13,"match":"HIT","text":"HIT here","inverted":false}
+```
+
+Y se comprueba con las herramientas de siempre:
+
+```text
+89f3e85d8bd8b4156bafcd5dbef16db596a610cd9707d2097cfaab9e1aebb07b  a.txt
+9e011eb2d04d64c73b63643ac869ebf9c786846c11852a94ec831293db2bdce4  b.txt
+a.txt size=26 mtime=1794350072,429715620
+b.txt size=25 mtime=1794350072,429715620
+```
+
+* `sha256` y `size` son de **los bytes que zgrep leyó y buscó**, no de una
+  relectura: no hay carrera entre buscar y hashear.
+* `mtime_ns` sale de `statx` sobre el descriptor que se leyó.
+* `source`: `file`, `file-utf16` (hash del fichero crudo; los offsets son del
+  texto decodificado), `pre` (hash de la salida de `--pre`) o `stdin` (hash de
+  lo recibido, `mtime_ns` null).
+* Un evento por fichero y **solo** si ese fichero produjo algún evento: los
+  ficheros sin coincidencias no se hashean. `-c` emite un recuento por fichero,
+  así que con `-c` todos llevan procedencia.
+* Aditivo: quitando los eventos `provenance`, el stream es byte a byte el de
+  siempre. Sin `--json` es error de uso.
+* En lote vale como bandera global o por consulta; el evento lleva `query_id` y
+  no cuenta como resultado para `--max-results` (sí pesa en
+  `--max-output-tokens`).
+
+Coste medido (`evidence/agent-native/m4/`): sin la bandera, nada (A/B intercalado
+contra el binario anterior, IQR solapados en texto y JSON). Con la bandera, lo
+que cuesta hashear los ficheros con salida: casi nada si son pocos, y del orden
+de un 17 % de pared cuando coinciden los 1000 ficheros del corpus (SHA-256 por
+hardware en esta máquina).
+
+Arreglo de paso: stdin con `--json -c` imprimía el recuento en texto y con
+`--count-matches` no imprimía nada; ahora usa el mismo emisor que los ficheros.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y

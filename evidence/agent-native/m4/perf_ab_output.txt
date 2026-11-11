@@ -1,0 +1,13 @@
+A=/tmp/claude-1000/-home-danny-Development-ISyCo/58fa83c9-e2ae-45d5-bfd2-0b9c86c0895d/scratchpad/pre_m4/zig-out/bin/zgrep (zgrep 0.4.0-dev)
+B=/home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zgrep (zgrep 0.4.0-dev)
+reps=21, A/B intercalados, 3 de calentamiento
+config                                     A mediana [IQR] ms         B mediana [IQR] ms  B/A   IQR solapan
+texto -l needle                        4.43 [  4.34,  4.61]     4.31 [  4.24,  4.63]  0.97  si
+texto -n rare                          4.37 [  4.27,  4.54]     4.43 [  4.32,  4.51]  1.01  si
+texto -c needle                        5.62 [  5.30,  5.92]     5.45 [  5.33,  5.58]  0.97  si
+json needle (todos los ficheros)      13.37 [ 13.12, 13.82]    13.06 [ 12.60, 13.71]  0.98  si
+json rare (3 ficheros)                 6.88 [  6.68,  7.17]     6.91 [  6.72,  7.04]  1.00  si
+
+coste de --provenance en B (misma busqueda sin la bandera = base):
+json+provenance needle (todos)     sin   13.15 ms  con   15.42 ms  x1.17
+json+provenance rare (3)           sin    7.15 ms  con    7.06 ms  x0.99
