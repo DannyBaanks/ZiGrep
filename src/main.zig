@@ -728,11 +728,18 @@ fn parseSize(value: []const u8) ?usize {
 
 /// `-t`/`--type-not`: the registry's extensions become include/ext filters.
 fn applyTypes(filter_engine: *filter.FilterEngine, opts: *const Options) void {
+    // Entries without a leading '.' (Dockerfile, Makefile) are whole file
+    // names, not extensions: matchesExt needs a '.' before an extension, so
+    // `-t docker` used to miss a file named exactly Dockerfile (M11 R29).
     for (opts.type_include[0..opts.type_include_count]) |t| {
-        for (t.exts) |ext| filter_engine.addIncludedExts(ext) catch {};
+        for (t.exts) |ext| {
+            if (ext.len > 0 and ext[0] != '.') filter_engine.addIncludedName(ext) catch {} else filter_engine.addIncludedExts(ext) catch {};
+        }
     }
     for (opts.type_exclude[0..opts.type_exclude_count]) |t| {
-        for (t.exts) |ext| filter_engine.addExcludedExts(ext) catch {};
+        for (t.exts) |ext| {
+            if (ext.len > 0 and ext[0] != '.') filter_engine.addExcludedName(ext) catch {} else filter_engine.addExcludedExts(ext) catch {};
+        }
     }
 }
 

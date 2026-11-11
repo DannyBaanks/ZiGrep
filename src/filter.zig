@@ -107,6 +107,12 @@ pub const FilterEngine = struct {
     included_exts: std.ArrayList([]const u8),
     excluded_patterns: std.ArrayList([]const u8),
     included_patterns: std.ArrayList([]const u8),
+    /// Exact file names from the type registry (`Dockerfile`, `Makefile`):
+    /// they are not extensions, so `matchesExt` (which needs a '.' before the
+    /// extension) never matched them and `-t docker` missed `Dockerfile`.
+    /// An include name counts as one more alternative of the include-ext set.
+    excluded_names: std.ArrayList([]const u8),
+    included_names: std.ArrayList([]const u8),
     ignore_patterns: std.ArrayList([]const u8),
 
     pub fn init(gpa: Allocator) FilterEngine {
@@ -117,6 +123,8 @@ pub const FilterEngine = struct {
             .included_exts = .empty,
             .excluded_patterns = .empty,
             .included_patterns = .empty,
+            .excluded_names = .empty,
+            .included_names = .empty,
             .ignore_patterns = .empty,
         };
     }
@@ -132,6 +140,10 @@ pub const FilterEngine = struct {
         self.excluded_patterns.deinit(self.gpa);
         for (self.included_patterns.items) |item| self.gpa.free(item);
         self.included_patterns.deinit(self.gpa);
+        for (self.excluded_names.items) |item| self.gpa.free(item);
+        self.excluded_names.deinit(self.gpa);
+        for (self.included_names.items) |item| self.gpa.free(item);
+        self.included_names.deinit(self.gpa);
         for (self.ignore_patterns.items) |item| self.gpa.free(item);
         self.ignore_patterns.deinit(self.gpa);
     }
@@ -167,6 +179,18 @@ pub const FilterEngine = struct {
                 try self.included_exts.append(self.gpa, dup);
             }
         }
+    }
+
+    pub fn addExcludedName(self: *FilterEngine, name: []const u8) !void {
+        const dup = try self.gpa.dupe(u8, name);
+        errdefer self.gpa.free(dup);
+        try self.excluded_names.append(self.gpa, dup);
+    }
+
+    pub fn addIncludedName(self: *FilterEngine, name: []const u8) !void {
+        const dup = try self.gpa.dupe(u8, name);
+        errdefer self.gpa.free(dup);
+        try self.included_names.append(self.gpa, dup);
     }
 
     pub fn addExcludedPattern(self: *FilterEngine, pattern: []const u8) !void {
@@ -282,6 +306,10 @@ pub const FilterEngine = struct {
             if (matchesExt(file_name, ext)) return true;
         }
 
+        for (self.excluded_names.items) |n| {
+            if (std.mem.eql(u8, file_name, n)) return true;
+        }
+
         for (self.excluded_patterns.items) |pat| {
             if (matchPattern(file_name, pat)) return true;
         }
@@ -292,13 +320,16 @@ pub const FilterEngine = struct {
 
         // If specific extensions or patterns were requested via --include,
         // any file not matching at least one is excluded:
-        if (self.included_exts.items.len > 0) {
+        if (self.included_exts.items.len > 0 or self.included_names.items.len > 0) {
             var matched = false;
             for (self.included_exts.items) |ext| {
                 if (matchesExt(file_name, ext)) {
                     matched = true;
                     break;
                 }
+            }
+            for (self.included_names.items) |n| {
+                if (std.mem.eql(u8, file_name, n)) matched = true;
             }
             if (!matched) return true;
         }
@@ -385,5 +416,29 @@ test "--no-ignore keeps the explicit filters and drops ignore files and defaults
     try std.testing.expect(!engine.isDirExcluded("node_modules"));
     try std.testing.expect(!engine.isFileExcluded("bundle.min.js"));
     try std.testing.expect(!engine.isFileExcluded("main.zig"));
+}
+
+test "exact names from the type registry (Dockerfile, Makefile)" {
+    var engine = FilterEngine.init(std.testing.allocator);
+    defer engine.deinit();
+    engine.use_defaults = false;
+    // What applyTypes does for -t docker.
+    try engine.addIncludedName("Dockerfile");
+    try engine.addIncludedExts(".dockerfile");
+    try std.testing.expect(!engine.isFileExcluded("Dockerfile"));
+    try std.testing.expect(!engine.isFileExcluded("app.dockerfile"));
+    try std.testing.expect(engine.isFileExcluded("main.zig"));
+    // An exact name is not a suffix: "MyDockerfile" is not Dockerfile.
+    try std.testing.expect(engine.isFileExcluded("MyDockerfile"));
+
+    var ex = FilterEngine.init(std.testing.allocator);
+    defer ex.deinit();
+    ex.use_defaults = false;
+    // What applyTypes does for --type-not make.
+    try ex.addExcludedName("Makefile");
+    try ex.addExcludedExts(".mk");
+    try std.testing.expect(ex.isFileExcluded("Makefile"));
+    try std.testing.expect(ex.isFileExcluded("rules.mk"));
+    try std.testing.expect(!ex.isFileExcluded("main.zig"));
 }
 
