@@ -18,6 +18,7 @@
 //!     un BPE real, no subestima en la validacion confirmatoria), declarado en
 //!     `summary.token_estimate`; bytes/4 subestimaba en el 100 % de los bloques.
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const out_json = @import("out_json.zig");
 const platform = @import("platform.zig");
@@ -179,7 +180,9 @@ pub const Emitter = struct {
         };
         self.spill_file = std.Io.Dir.cwd().createFile(self.io, path, .{
             .exclusive = true,
-            .permissions = std.Io.File.Permissions.fromMode(0o600),
+            // 0600 es POSIX; en Windows File.Permissions es otro tipo (sin
+            // fromMode) y se usan los permisos por defecto del perfil.
+            .permissions = if (builtin.os.tag == .windows) .default_file else std.Io.File.Permissions.fromMode(0o600),
         }) catch |e| {
             self.spill_err = @errorName(e);
             return false;
