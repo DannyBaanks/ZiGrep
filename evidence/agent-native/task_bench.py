@@ -39,12 +39,20 @@ CONFIGS = {
     "zgrep_nn": lambda c: [ZGREP, "--no-line-number"] + c,
     "grep": lambda c: ["grep"] + c,
     "rg": lambda c: ["rg", "--no-ignore"] + c,
+    # M3: el mismo binario en modo lote. Solo corre las tareas que definen
+    # una variante "zgrep_batch"; las demas no tienen nada que agrupar.
+    "zgrep_batch": lambda c: [ZGREP] + c,
 }
 
 # Cada tarea = lo que un agente escribiria para resolverla. "calls" = numero de
 # comandos que emite (un pipeline cuenta como una linea del agente).
 # ref = ("truth", valor) cuando el .truth lo fija, o ("grep", [comandos])
 # cuando la referencia es la salida de GNU grep.
+# M3: el MISMO fichero que lee `zgrep_batch`, para que las tres herramientas y el
+# lote busquen exactamente las mismas frases.
+SURVEY_FILE = "evidence/agent-native/queries/phrase_survey.jsonl"
+SURVEY = [json.loads(l)["pattern"] for l in (ROOT / SURVEY_FILE).read_text().splitlines() if l.strip()]
+
 TASKS = {
     "files_with_needle": {
         "help": "listar los ficheros que contienen el token plantado",
@@ -110,12 +118,42 @@ TASKS = {
         "ref": ("grep", [["grep", "-roE", r"\b" + NEEDLE + r"\b", CORPUS]]),
         "normalize": "count_lines",
     },
+    # M3: un agente que audita N frases. Sin lote son N llamadas; con
+    # --queries-file es una. La evidencia debe ser la misma: el conjunto de
+    # (consulta, fichero, linea), comparado contra GNU grep.
+    "phrase_survey": {
+        "help": "donde aparece cada una de N frases (N consultas)",
+        "zgrep": [["-n", "-F", p, CORPUS] for p in SURVEY],
+        "zgrep_batch": [["--queries-file", SURVEY_FILE, CORPUS]],
+        "grep": [["-rnF", p, CORPUS] for p in SURVEY],
+        "rg": [["--no-ignore", "-n", "-F", p, CORPUS] for p in SURVEY],
+        "ref": ("grep_calls", [["grep", "-rnF", p, CORPUS] for p in SURVEY]),
+        "normalize": "survey",
+    },
 }
 
 
 def run(cmd: list[str]) -> tuple[bytes, int]:
     p = subprocess.run(cmd, cwd=ROOT, capture_output=True)
     return p.stdout, p.returncode
+
+
+def normalize_calls(outs: list[bytes], how: str) -> object:
+    """Normaliza la salida de TODAS las llamadas de la tarea (antes solo se
+    miraba la ultima, que con tareas de una llamada daba igual)."""
+    if how == "survey":
+        found = set()
+        for i, out in enumerate(outs):
+            for l in out.decode("utf-8", "replace").splitlines():
+                if l.startswith("{"):
+                    e = json.loads(l)
+                    if e["type"] == "match":
+                        found.add((int(e["query_id"]), e["path"], e["line"]))
+                else:
+                    path, num, _ = l.split(":", 2)
+                    found.add((i, path, int(num)))
+        return sorted(found)
+    return normalize(b"".join(outs), how)
 
 
 def normalize(out: bytes, how: str) -> object:
@@ -140,6 +178,8 @@ def reference(task: dict) -> object:
     kind, val = task["ref"]
     if kind == "truth":
         return val
+    if kind == "grep_calls":
+        return normalize_calls([run(c)[0] for c in val], task["normalize"])
     out, _ = run(val[0])
     return normalize(out, task["normalize"])
 
@@ -155,7 +195,7 @@ def metric(ans: object, task: dict) -> object:
 
 
 # "zgrep_nn" no redefine tareas: usa las de "zgrep" y les añade el flag.
-TASK_KEY = {"zgrep": "zgrep", "zgrep_nn": "zgrep", "grep": "grep", "rg": "rg"}
+TASK_KEY = {"zgrep": "zgrep", "zgrep_nn": "zgrep", "grep": "grep", "rg": "rg", "zgrep_batch": "zgrep_batch"}
 
 
 def measure(task: dict, tool: str, reps: int) -> dict:
@@ -164,12 +204,13 @@ def measure(task: dict, tool: str, reps: int) -> dict:
     walls, answers, bytses, rcs = [], [], [], []
     for _ in range(reps):
         t0 = time.perf_counter()
-        got = []
+        outs = []
         for c in cmds:
             out, rc = run(c)
             bytses.append(len(out))
             rcs.append(rc)
-            got = normalize(out, task["normalize"])
+            outs.append(out)
+        got = normalize_calls(outs, task["normalize"])
         walls.append(time.perf_counter() - t0)
         answers.append(got)
     # Ref truth -> se compara la METRICA (un numero). Ref grep -> se compara la
@@ -199,7 +240,7 @@ def main() -> int:
     ap.add_argument("--out", default="evidence/agent-native/baseline")
     args = ap.parse_args()
 
-    tools = ["zgrep", "zgrep_nn", "grep", "rg"] if args.tool == "all" else [args.tool]
+    tools = ["zgrep", "zgrep_nn", "grep", "rg", "zgrep_batch"] if args.tool == "all" else [args.tool]
     results = {}
     for tool in tools:
         probe = CONFIGS[tool](["--version"])
@@ -208,6 +249,8 @@ def main() -> int:
         ).stdout.strip().splitlines()[:1]
         results[tool] = {"version": ver[0] if ver else "?", "tasks": {}}
         for name, task in TASKS.items():
+            if TASK_KEY[tool] not in task:
+                continue
             m = measure(task, tool, args.reps)
             m["ref_kind"] = task["ref"][0]
             results[tool]["tasks"][name] = m
@@ -226,11 +269,13 @@ def main() -> int:
     }
     (outdir / "task_bench.json").write_text(json.dumps(payload, indent=2) + "\n")
 
-    print(f"{'tarea':<28} {'herramienta':<8} {'llam':>4} {'muro s':>8} {'bytes/rep':>9}  ok")
+    print(f"{'tarea':<28} {'herramienta':<11} {'llam':>4} {'muro s':>8} {'bytes/rep':>9}  ok")
     for name in TASKS:
         for tool in tools:
-            t = results[tool]["tasks"][name]
-            print(f"{name:<28} {tool:<8} {t['calls']:>4} {t['wall_s_median']:>8.3f} "
+            t = results[tool]["tasks"].get(name)
+            if t is None:
+                continue
+            print(f"{name:<28} {tool:<11} {t['calls']:>4} {t['wall_s_median']:>8.3f} "
                   f"{t['out_bytes_per_rep']:>9}  {'SI' if t['correct'] else 'NO'}")
     print(f"\ncrudo: {outdir / 'task_bench.json'}")
     return 0

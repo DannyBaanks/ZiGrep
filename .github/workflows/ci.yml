@@ -43,8 +43,17 @@ jobs:
         run: zig build test --summary all
 
       - name: Run pure Zig differential oracle vs GNU grep & ripgrep
-
         run: zig build oracle
+
+      # M3: el lote debe ser byte a byte N procesos separados, y el truncado un
+      # prefijo con `omitted` exacto. El corpus no se versiona: se regenera con
+      # la semilla de su .truth (byte-identico, verificado). El oraculo instala
+      # un Debug en zig-out: recompilar antes de medir nada.
+      - name: Batch & budget conformance (M3)
+        run: |
+          zig run scripts/gen_corpus.zig -- --out=bench-corpus/corpus_50 --files=50 --size=32768 --seed=20261108
+          zig build -Doptimize=ReleaseFast
+          python3 evidence/agent-native/batch_conformance.py
 
   windows-native:
     name: Native Windows Build, Tests & Oracle

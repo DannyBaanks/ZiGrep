@@ -17,6 +17,7 @@ pub const nav = @import("nav.zig");
 pub const io_engine = @import("io_engine.zig");
 pub const clean = @import("clean.zig");
 pub const out_json = @import("out_json.zig");
+pub const batch = @import("batch.zig");
 pub const uring = @import("uring.zig");
 
 test {
@@ -32,5 +33,6 @@ test {
     _ = io_engine;
     _ = clean;
     _ = out_json;
+    _ = batch;
     _ = uring;
 }

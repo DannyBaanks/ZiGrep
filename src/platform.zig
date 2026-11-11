@@ -29,7 +29,22 @@ pub fn sleepBrief(io: std.Io) void {
     }
 }
 
+/// Optional interposer for everything zgrep writes to stdout. `null` (the
+/// default) is the plain write below. The batch / budget layer (M3,
+/// `batch.zig`) installs one to tag, count and truncate JSONL events; it
+/// writes through `writeStdoutRaw`.
+pub const StdoutSink = struct {
+    ctx: *anyopaque,
+    write: *const fn (ctx: *anyopaque, bytes: []const u8) bool,
+};
+pub var stdout_sink: ?StdoutSink = null;
+
 pub fn writeStdout(io: std.Io, bytes: []const u8) bool {
+    if (stdout_sink) |sk| return sk.write(sk.ctx, bytes);
+    return writeStdoutRaw(io, bytes);
+}
+
+pub fn writeStdoutRaw(io: std.Io, bytes: []const u8) bool {
     if (builtin.os.tag == .linux) {
         var offset: usize = 0;
         while (offset < bytes.len) {

@@ -1,0 +1,12 @@
+2026-11-10T23:01:18-06:00
+base: 736810b5972fa14902164b11ec43292b6a9464e6 + arbol de trabajo M3
++- run test 121 pass, 1 skip (122 total) 260ms MaxRSS:16M
+Results: 32 PASSED, 0 FAILED (total 32)
+zgrep 0.4.0-dev
+TOTAL pass=40 fail=0
+TOTAL pass=25 fail=0
+TOTAL 15 pass / 0 fail
+TOTAL 12 pass / 0 fail
+TOTAL 45 pass / 0 fail
+TOTAL pass=17 fail=0
+TOTAL 41 pass / 0 fail

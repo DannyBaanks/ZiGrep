@@ -713,6 +713,82 @@ Sigue igual, y queda documentado en `evidence/agent-native/contract.md`: con
 orden fijo, `--sort`. `-N` es la navegación Befunge, no el `--no-line-number`
 de `rg`.
 
+## 4n. Lote y presupuesto: `--queries-file`, `--max-results`, `--max-output-tokens` (0.4.0-dev, M3)
+
+Para un agente, N preguntas sobre el mismo árbol eran N procesos y N salidas que
+juntar a mano. Ahora es **una llamada**: un fichero JSONL con una consulta por
+línea (o `-` para leerlo de stdin).
+
+```sh
+cat q.jsonl
+```
+
+```json
+{"id":"hit","pattern":"HIT"}
+{"id":"beta","pattern":"beta","paths":["b.txt"]}
+{"id":"nada","pattern":"ZZZ"}
+```
+
+```sh
+zgrep --queries-file q.jsonl a.txt b.txt     # las rutas de la línea son el default
+```
+
+```json
+{"schema":"zgrep/1","query_id":"hit","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+{"schema":"zgrep/1","query_id":"hit","type":"match","path":"b.txt","line":2,"column":1,"byte_start":10,"byte_end":13,"match":"HIT","text":"HIT here","inverted":false}
+{"schema":"zgrep/1","query_id":"hit","type":"query_end","rc":0,"returned":2,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","query_id":"beta","type":"match","path":"b.txt","line":1,"column":1,"byte_start":0,"byte_end":4,"match":"beta","text":"beta line","inverted":false}
+{"schema":"zgrep/1","query_id":"beta","type":"query_end","rc":0,"returned":1,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","query_id":"nada","type":"query_end","rc":1,"returned":0,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","type":"summary","queries":3,"returned":3,"omitted":0,"truncated":false,"reason":null,"output_bytes":496,"max_results":null,"max_output_tokens":null,"token_estimate":"bytes/4","dropped_non_event":0}
+```
+
+* Cada consulta corre como `zgrep --json --sort <flags globales> <"flags"> -e
+  <"pattern"> -- <"paths" o las rutas de la línea>`. Las banderas globales
+  (`-i`, `-w`, `-C2`...) valen para todas; `"flags"` añade por consulta.
+* Cada evento lleva `query_id`; cada consulta cierra con `query_end` (`rc`,
+  `returned`, `omitted`, `truncated`, `error`); el stream cierra con `summary`.
+* Orden determinista (`--sort`): el lote es byte a byte lo mismo que N procesos
+  separados con `--json --sort` (`evidence/agent-native/batch_conformance.py`).
+* Una consulta inválida falla **sola** (`query_end` con `rc` 2 y el motivo); un
+  fichero de consultas inválido (JSON roto, `id` repetido, campo desconocido)
+  falla **entero** antes de ejecutar nada. Un lote nunca lee stdin como ruta.
+* rc del lote: 2 si alguna consulta falló, si no 0 si alguna encontró algo, si no 1.
+
+### Presupuesto con truncado que se hace saber
+
+```sh
+zgrep --queries-file q.jsonl --max-results 1 a.txt b.txt
+```
+
+```json
+{"schema":"zgrep/1","query_id":"hit","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+{"schema":"zgrep/1","query_id":"hit","type":"query_end","rc":0,"returned":1,"omitted":1,"truncated":true,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","query_id":"beta","type":"query_end","rc":0,"returned":0,"omitted":1,"truncated":true,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","query_id":"nada","type":"query_end","rc":1,"returned":0,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+{"schema":"zgrep/1","type":"summary","queries":3,"returned":1,"omitted":2,"truncated":true,"reason":"max-results","output_bytes":161,"max_results":1,"max_output_tokens":null,"token_estimate":"bytes/4","dropped_non_event":0}
+```
+
+* `--max-results N`: cuenta resultados (`match`, `occurrence`, `file`, `count`;
+  el `context` y el `passthru` acompañan y no cuentan) en **toda** la llamada.
+* `--max-output-tokens N`: tamaño de la salida, con tokens ≈ bytes/4 (el
+  `summary` lo declara en `token_estimate`). Nunca se corta un evento por la
+  mitad: el stream sigue siendo JSONL válido.
+* Truncar **no** detiene el escaneo: `omitted` es el número exacto de
+  resultados que no se emitieron. Evidencia incompleta, pero sabida incompleta.
+* Lo emitido es siempre un **prefijo** de lo que saldría sin presupuesto.
+* Sin lote también vale: `zgrep --json --max-results 5 pat dir`. Sin `--json`
+  es error de uso: el marcador de truncado es un evento y el texto no tiene
+  sitio honesto para él.
+
+### Lo que el lote NO hace (medido, `evidence/agent-native/m3/`)
+
+* No lee los ficheros una sola vez para todas las consultas: cada consulta
+  recorre el árbol. Es más rápido que N procesos con la misma salida, pero más
+  lento que N procesos de texto en streaming.
+* No ahorra bytes frente al texto: el JSON con `query_id` pesa más. Lo que ahorra
+  es procesos y el trabajo de juntar y atribuir resultados.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y

@@ -1,0 +1,40 @@
+tarea                        herramienta llam   muro s bytes/rep  ok
+files_with_needle            zgrep          1    0.004     47375  SI
+files_with_needle            zgrep_nn       1    0.004     47375  SI
+files_with_needle            grep           1    0.011     47375  SI
+files_with_needle            rg             1    0.007     47375  SI
+count_matching_lines         zgrep          1    0.006     50375  SI
+count_matching_lines         zgrep_nn       1    0.006     50375  SI
+count_matching_lines         grep           1    0.018     50375  SI
+count_matching_lines         rg             1    0.009     50375  SI
+rare_files                   zgrep          1    0.004       147  SI
+rare_files                   zgrep_nn       1    0.004       147  SI
+rare_files                   grep           1    0.017       147  SI
+rare_files                   rg             1    0.007       147  SI
+rare_call_sites              zgrep          1    0.004       321  SI
+rare_call_sites              zgrep_nn       1    0.005       321  SI
+rare_call_sites              grep           1    0.022       321  SI
+rare_call_sites              rg             1    0.008       321  SI
+absent_token                 zgrep          1    0.004         0  SI
+absent_token                 zgrep_nn       1    0.004         0  SI
+absent_token                 grep           1    0.016         0  SI
+absent_token                 rg             1    0.007         0  SI
+context_audit                zgrep          1    0.007       908  SI
+context_audit                zgrep_nn       1    0.007       908  SI
+context_audit                grep           1    0.023       908  SI
+context_audit                rg             1    0.007       908  SI
+two_patterns                 zgrep          1    0.006     47375  SI
+two_patterns                 zgrep_nn       1    0.005     47375  SI
+two_patterns                 grep           1    0.012     47375  SI
+two_patterns                 rg             1    0.009     47375  SI
+word_boundary_occurrences    zgrep          1    0.075   3295114  SI
+word_boundary_occurrences    zgrep_nn       1    0.074   3295114  SI
+word_boundary_occurrences    grep           1    0.071   3295114  SI
+word_boundary_occurrences    rg             1    0.017   3295114  SI
+phrase_survey                zgrep         16    0.082      4503  SI
+phrase_survey                zgrep_nn      16    0.085      4503  SI
+phrase_survey                grep          16    0.441      4503  SI
+phrase_survey                rg            16    0.123      4503  SI
+phrase_survey                zgrep_batch    1    0.149     14119  SI
+
+crudo: /home/danny/Development/ISyCo Git/ZigGrep/evidence/agent-native/m3/task_bench.json

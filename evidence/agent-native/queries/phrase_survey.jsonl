@@ -1,0 +1,16 @@
+{"id": 0, "pattern": "release protocol allocator", "flags": ["-F"]}
+{"id": 1, "pattern": "socket path matrix", "flags": ["-F"]}
+{"id": 2, "pattern": "vector server word", "flags": ["-F"]}
+{"id": 3, "pattern": "query route service", "flags": ["-F"]}
+{"id": 4, "pattern": "input method pause", "flags": ["-F"]}
+{"id": 5, "pattern": "close system edge", "flags": ["-F"]}
+{"id": 6, "pattern": "task edge count", "flags": ["-F"]}
+{"id": 7, "pattern": "pointer context branch", "flags": ["-F"]}
+{"id": 8, "pattern": "command dir table", "flags": ["-F"]}
+{"id": 9, "pattern": "target test release", "flags": ["-F"]}
+{"id": 10, "pattern": "response filter test", "flags": ["-F"]}
+{"id": 11, "pattern": "const file record", "flags": ["-F"]}
+{"id": 12, "pattern": "lock graph type", "flags": ["-F"]}
+{"id": 13, "pattern": "struct stop info", "flags": ["-F"]}
+{"id": 14, "pattern": "cache info error", "flags": ["-F"]}
+{"id": 15, "pattern": "engine process pattern", "flags": ["-F"]}

@@ -213,3 +213,50 @@ escondía el bug 1. Ahora va sin `-n`, a propósito.
 Versión: este cambio de comportamiento sale como **0.4.0-dev**; el binario
 desplegado decía `zgrep 0.3.2`, y el plan exige 0.4.0 para cualquier cambio de
 comportamiento.
+
+## 10. M3: lote y presupuesto (2026-11-10, claude_code)
+
+Interfaces nuevas (GUIA §4n, `zgrep --help`): `--queries-file FILE|-`,
+`--max-results N`, `--max-output-tokens N`. Eventos nuevos del schema `zgrep/1`
+(solo se añaden campos y tipos): `query_id` en cada evento del lote, `query_end`
+por consulta y `summary` al final.
+
+**Contrato de salida que se añade:**
+
+| situación | stdout | rc |
+|---|---|---|
+| lote correcto | eventos con `query_id`, un `query_end` por consulta, `summary` último | 2 si alguna consulta dio 2; si no, 0 si alguna encontró algo; si no, 1 |
+| una consulta inválida (p. ej. `--exec` en `"flags"`) | su `query_end` con `rc` 2 y `error`; las demás corren | 2 |
+| fichero de consultas inválido (JSON roto, `id` repetido, campo desconocido) | vacío: no se ejecuta nada | 2 |
+| `-e`/`-f` global junto con `--queries-file` | vacío | 2 |
+| `--max-results`/`--max-output-tokens` sin `--json` ni lote | vacío | 2 |
+| presupuesto agotado | prefijo de lo que saldría sin presupuesto + `summary` con `truncated:true`, `reason`, `returned`, `omitted` exacto | el de la búsqueda (truncar no es error) |
+
+El presupuesto cubre los eventos de búsqueda; `query_end` y `summary` se emiten
+siempre. Tokens = bytes/4 (declarado en `summary.token_estimate`).
+
+**Claims (aceptación del plan, M3)**
+
+Evidencia en `evidence/agent-native/m3/` (crudos y `SHA256SUMS.txt`). Las cifras
+son de esta ejecución (Xeon E5-2678 v3, árbol en page cache), no constantes.
+
+| claim | estado | evidencia |
+|---|---|---|
+| N consultas en **1** proceso dan la **misma evidencia** que N procesos | DEMOSTRADO | `batch_conformance_output.txt`: cada consulta byte a byte igual a su proceso separado (`--json --sort`), 16 consultas con todos los modos de salida; `task_bench_output.txt`, `phrase_survey`: 16 llamadas → 1, respuesta igual a GNU grep |
+| el truncado nunca es silencioso | DEMOSTRADO | `batch_conformance_output.txt`: con cada `--max-results` y `--max-output-tokens` probado, lo emitido es prefijo, `returned + omitted` = total, `truncated`/`reason` correctos, nunca un evento partido; tests de `src/batch.zig` |
+| los errores fallan cerrado | DEMOSTRADO | `batch_conformance_output.txt`, sección "cerrado" |
+| el lote es más rápido que N procesos con **la misma salida** | DEMOSTRADO, margen pequeño | `fair_compare_output.txt`: 1 × lote frente a 16 × `--json --sort` |
+| el lote es más rápido que N procesos de **texto** | **FALSO** en esta medida | `fair_compare_output.txt` y `task_bench_output.txt`: 16 × texto en streaming es más rápido. Cada consulta recorre el árbol entero, con `--sort` y emisión JSON |
+| el lote ahorra tokens | **FALSO** frente a texto | mismos ficheros: el JSON con `query_id` pesa ~3× el texto. Lo que ahorra es procesos y el trabajo de juntar y atribuir resultados |
+
+**NOT_DEMONSTRATED / fuera de alcance:**
+
+- Una sola pasada por los ficheros para todas las consultas (sería lo que
+  convierte el lote en más rápido que el texto): toca el motor, que el plan deja
+  fuera ("no reescritura del motor"). Decisión pendiente de Danny.
+- Una salida JSON compacta (menos bytes por evento): es un cambio de schema, no
+  de este milestone.
+- Lotes grandes (cientos de consultas, árboles de GB): no medidos. Cada consulta
+  usa su propio arena, liberado al terminarla.
+- El caso "40 → 1" que cita el plan era ilustrativo: la tarea medida tiene 16
+  consultas.

@@ -25,6 +25,7 @@ const types = @import("types.zig");
 const vfs = @import("vfs.zig");
 const io_engine = @import("io_engine.zig");
 const clean = @import("clean.zig");
+const batch = @import("batch.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -70,6 +71,19 @@ const usage =
     \\                    record): match, context, passthru, occurrence, file
     \\                    or count, with path, line, column, byte_start,
     \\                    byte_end and text. Schema zgrep/1, additive only.
+    \\      --queries-file FILE|-
+    \\                    run every JSONL query {"id","pattern","paths"?,
+    \\                    "flags"?} in this one process (JSON, sorted); each
+    \\                    event carries query_id, each query ends with a
+    \\                    query_end event and the stream with a summary
+    \\      --max-results N
+    \\                    stop emitting results after N (match, occurrence,
+    \\                    file, count) for the whole call; keeps counting
+    \\                    what it omits. Needs --json or --queries-file
+    \\      --max-output-tokens N
+    \\                    same, for output size (tokens estimated as
+    \\                    bytes/4); never cuts an event. The final summary
+    \\                    event says truncated, reason, returned, omitted
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches
@@ -298,6 +312,11 @@ pub const Options = struct {
     max_depth: usize = 0,
     /// `--max-filesize=N[KMGT]` (rg): 0 = unlimited.
     max_filesize: usize = 0,
+    /// M3: `--queries-file FILE` runs every JSONL query in this one process.
+    queries_file: ?[]const u8 = null,
+    /// M3: budget over the whole call, with explicit truncation (`summary`).
+    max_results: ?usize = null,
+    max_output_tokens: ?usize = null,
     /// `-b`: byte offset of the match within the file (grep semantics).
     byte_offset: bool = false,
     /// `--json`: structured JSONL output (schema zgrep/1) instead of text.
@@ -1061,6 +1080,45 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.startsWith(u8, body, "queries-file=")) {
+                opts.queries_file = body["queries-file=".len..];
+            } else if (std.mem.eql(u8, body, "queries-file")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.queries_file = args[i];
+            } else if (std.mem.startsWith(u8, body, "max-results=")) {
+                opts.max_results = parseCount(body["max-results=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-results", .arg = body["max-results=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-results")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_results = parseCount(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-results", .arg = args[i] };
+                    return error.Usage;
+                };
+            } else if (std.mem.startsWith(u8, body, "max-output-tokens=")) {
+                opts.max_output_tokens = parseCount(body["max-output-tokens=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = body["max-output-tokens=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-output-tokens")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_output_tokens = parseCount(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = args[i] };
+                    return error.Usage;
+                };
             } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
                 opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
@@ -1588,6 +1646,21 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         return error.Usage;
     }
 
+    if ((opts.max_results != null or opts.max_output_tokens != null) and !opts.json and opts.queries_file == null) {
+        // The truncation marker is a JSON event; text output has no honest
+        // place for it, so the budget is a JSON-only contract.
+        opts.fail = .{ .what = "--max-results / --max-output-tokens need --json (or --queries-file)", .arg = "" };
+        return error.Usage;
+    }
+    if (opts.queries_file != null) {
+        if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
+            opts.fail = .{ .what = "--queries-file takes the patterns from the file; drop -e / -f", .arg = "" };
+            return error.Usage;
+        }
+        // No PATTERN positional: every positional is a default path.
+        const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
+        return .{ .pattern = "", .operands = ops };
+    }
     if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
         // Patterns came from -e / --regexp / -f: all positionals are operands (paths).
         const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
@@ -1626,9 +1699,196 @@ fn headingOn(heading: bool, show_path: bool) bool {
 }
 
 pub fn main(init: std.process.Init) !void {
-    const gpa = init.gpa;
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
+    std.process.exit(try runCli(init, arena, args));
+}
+
+/// Dispatch: a batch (`--queries-file`), a budgeted single search
+/// (`--max-results` / `--max-output-tokens` with `--json`), or the plain search.
+fn runCli(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+    var opts: Options = .{};
+    // A bad command line is reported by runSearch, with its usual message.
+    const parsed = parseArgs(arena, args, &opts) catch return runSearch(init, arena, args);
+    if (opts.queries_file) |qf| return runBatch(init, arena, args, parsed.operands, qf, &opts);
+    if (opts.max_results != null or opts.max_output_tokens != null) {
+        var em: batch.Emitter = .{
+            .io = init.io,
+            .gpa = init.gpa,
+            .max_results = opts.max_results,
+            .max_output_tokens = opts.max_output_tokens,
+        };
+        defer em.deinit();
+        em.install();
+        defer em.uninstall();
+        const rc = try runSearch(init, arena, args);
+        _ = try em.summary(null);
+        return rc;
+    }
+    return runSearch(init, arena, args);
+}
+
+fn readAllStdin(io: std.Io, arena: Allocator) ![]u8 {
+    var buf: std.ArrayList(u8) = .empty;
+    var chunk: [64 * 1024]u8 = undefined;
+    const f = std.Io.File.stdin();
+    while (true) {
+        const n = f.readStreaming(io, &.{chunk[0..]}) catch break;
+        if (n == 0) break;
+        try buf.appendSlice(arena, chunk[0..n]);
+    }
+    return buf.items;
+}
+
+fn isOperandArg(a: [:0]const u8, operands: []const [:0]const u8) bool {
+    for (operands) |op| if (op.ptr == a.ptr) return true;
+    return false;
+}
+
+/// Why a query's own argv cannot run inside a batch, or null if it can.
+fn batchQueryProblem(vo: *const Options) ?[]const u8 {
+    if (vo.print_help or vo.print_version or vo.print_type_list) return "informational actions (--help, --version, --type-list) are not queries";
+    if (vo.cache) return "--cache is not a query";
+    if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
+    if (vo.pattern_files_count > 0 or vo.patterns_count != 1) return "a query has exactly one pattern: use \"pattern\", not -e / -f in \"flags\"";
+    if (vo.queries_file != null) return "--queries-file cannot nest";
+    if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+    return null;
+}
+
+/// `--queries-file FILE|-`: every JSONL query runs in THIS process, in file
+/// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+/// Each event carries `query_id`; each query ends with `query_end`; the stream
+/// ends with `summary`. Exit status: 2 if any query failed, else 0 if any
+/// matched, else 1. `--sort` makes the batch deterministic, so it is
+/// byte-comparable with N separate invocations (`batch_conformance.py`).
+fn runBatch(
+    init: std.process.Init,
+    arena: Allocator,
+    args: []const [:0]const u8,
+    global_operands: []const [:0]const u8,
+    queries_path: []const u8,
+    gopts: *const Options,
+) !u8 {
+    const io = init.io;
+    const text: []const u8 = if (std.mem.eql(u8, queries_path, "-"))
+        try readAllStdin(io, arena)
+    else
+        std.Io.Dir.cwd().readFileAlloc(io, queries_path, arena, .limited(64 << 20)) catch |e| {
+            std.debug.print("zgrep: {s}: {s}\n", .{ queries_path, @errorName(e) });
+            return 2;
+        };
+    var perr: batch.ParseError = undefined;
+    const queries = batch.parseQueries(arena, text, &perr) catch |e| switch (e) {
+        error.Invalid => {
+            std.debug.print("zgrep: {s}:{d}: {s}\n", .{ queries_path, perr.line_no, perr.what });
+            return 2;
+        },
+        error.OutOfMemory => return e,
+    };
+
+    // The global part of every query's argv: the command line minus
+    // --queries-file, the default paths and a `--` (re-added before the paths).
+    var base: std.ArrayList([:0]const u8) = .empty;
+    try base.appendSlice(arena, &.{ args[0], "--json", "--sort" });
+    {
+        var i: usize = 1;
+        while (i < args.len) : (i += 1) {
+            const a = args[i];
+            // Batch-level options belong to the call, not to each query.
+            var skip_value = false;
+            var skip_self = false;
+            inline for (.{ "--queries-file", "--max-results", "--max-output-tokens" }) |opt| {
+                if (std.mem.eql(u8, a, opt)) skip_value = true;
+                if (std.mem.startsWith(u8, a, opt ++ "=")) skip_self = true;
+            }
+            if (skip_value) {
+                i += 1;
+                continue;
+            }
+            if (skip_self) continue;
+            if (std.mem.eql(u8, a, "--")) continue;
+            if (isOperandArg(a, global_operands)) continue;
+            try base.append(arena, a);
+        }
+    }
+
+    var em: batch.Emitter = .{
+        .io = io,
+        .gpa = init.gpa,
+        .max_results = gopts.max_results,
+        .max_output_tokens = gopts.max_output_tokens,
+    };
+    defer em.deinit();
+    em.install();
+    defer em.uninstall();
+
+    var any_error = false;
+    var any_match = false;
+    for (queries) |q| {
+        var qarena = std.heap.ArenaAllocator.init(init.gpa);
+        defer qarena.deinit();
+        const qa = qarena.allocator();
+
+        var argv: std.ArrayList([:0]const u8) = .empty;
+        try argv.appendSlice(qa, base.items);
+        for (q.flags) |f| try argv.append(qa, try qa.dupeZ(u8, f));
+        try argv.append(qa, "-e");
+        try argv.append(qa, try qa.dupeZ(u8, q.pattern));
+        try argv.append(qa, "--");
+        var npaths: usize = 0;
+        var stdin_path = false;
+        if (q.paths) |ps| {
+            for (ps) |p| {
+                if (std.mem.eql(u8, p, "-")) stdin_path = true;
+                try argv.append(qa, try qa.dupeZ(u8, p));
+                npaths += 1;
+            }
+        } else {
+            for (global_operands) |p| {
+                try argv.append(qa, p);
+                npaths += 1;
+            }
+        }
+
+        em.beginQuery(q.id_json);
+        var problem: ?[]const u8 = null;
+        if (npaths == 0) problem = "no paths: give \"paths\" or default paths on the command line (a batch never reads stdin)";
+        if (stdin_path) problem = "\"-\" (stdin) is not a path in a batch";
+        if (problem == null) {
+            var vo: Options = .{};
+            if (parseArgs(qa, argv.items, &vo)) |_| {
+                problem = batchQueryProblem(&vo);
+            } else |_| {
+                problem = if (vo.fail) |f| f.what else "invalid flags";
+            }
+        }
+        if (problem) |why| {
+            std.debug.print("zgrep: query {s}: {s}\n", .{ q.id_json, why });
+            any_error = true;
+            _ = try em.endQuery(2, why);
+            continue;
+        }
+        const rc = try runSearch(init, qa, argv.items);
+        if (rc == 2) any_error = true;
+        if (rc == 0) any_match = true;
+        _ = try em.endQuery(rc, null);
+    }
+    _ = try em.summary(queries.len);
+    if (any_error) return 2;
+    return if (any_match) 0 else 1;
+}
+
+/// One complete zgrep invocation: parses `args` and runs it, returning the
+/// exit status instead of calling `std.process.exit`, so a batch
+/// (`--queries-file`, M3) can run N searches in one process. Every former
+/// `exit` is a `return` at the same place; all worker threads are joined
+/// before any of them (audited for M3).
+pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+    const gpa = init.gpa;
+    // Per-run globals: a previous run of the same process must not leak them.
+    scan.out_sep = '\n';
+    scan.heading_mode = false;
 
     var opts: Options = .{};
     const parsed = parseArgs(arena, args, &opts) catch {
@@ -1642,7 +1902,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("zgrep: invalid arguments\n", .{});
         }
         std.debug.print("try 'zgrep --help' for usage\n", .{});
-        std.process.exit(2);
+        return 2;
     };
     const pattern = parsed.pattern;
     const operands = parsed.operands;
@@ -1658,7 +1918,7 @@ pub fn main(init: std.process.Init) !void {
         } else {
             _ = platform.writeStdout(init.io, usage);
         }
-        std.process.exit(0);
+        return 0;
     }
 
     // `--cache` is an action, not a search: it answers with the analysis and
@@ -1688,7 +1948,7 @@ pub fn main(init: std.process.Init) !void {
             .dry_run = opts.cache_dry_run,
             .force = opts.cache_force,
         });
-        std.process.exit(code);
+        return code;
     }
 
     // `--type-list` is an answer too: the registry, on stdout, exit 0.
@@ -1697,10 +1957,10 @@ pub fn main(init: std.process.Init) !void {
         defer buf.deinit(gpa);
         types.writeList(&buf, gpa) catch {
             std.debug.print("zgrep: out of memory\n", .{});
-            std.process.exit(2);
+            return 2;
         };
         _ = platform.writeStdout(init.io, buf.items);
-        std.process.exit(0);
+        return 0;
     }
 
     if (opts.threads == 0) {
@@ -1713,7 +1973,7 @@ pub fn main(init: std.process.Init) !void {
                 // silently ignore: it would explode the worker pool.
                 if (t > max_threads) {
                     std.debug.print("zgrep: {s}: thread count out of range (max {d})\n", .{ val, max_threads });
-                    std.process.exit(2);
+                    return 2;
                 }
                 opts.threads = t;
             }
@@ -1732,7 +1992,7 @@ pub fn main(init: std.process.Init) !void {
                 if (!opts.no_messages) {
                     std.debug.print("zgrep: {s}: {s}\n", .{ pf, @errorName(err) });
                 }
-                std.process.exit(2);
+                return 2;
             };
         }
     } else {
@@ -1742,7 +2002,7 @@ pub fn main(init: std.process.Init) !void {
     for (patterns) |pp| {
         if (std.mem.indexOfScalar(u8, pp, '\n') != null) {
             std.debug.print("zgrep: patterns containing a newline are not supported\n", .{});
-            std.process.exit(2);
+            return 2;
         }
     }
     // No path operand means "read standard input" (GNU grep semantics, added
@@ -1752,7 +2012,7 @@ pub fn main(init: std.process.Init) !void {
         const stdin_is_tty = std.Io.File.stdin().isTty(init.io) catch false;
         if (stdin_is_tty) {
             std.debug.print("{s}zgrep: no path\n", .{usage});
-            std.process.exit(2);
+            return 2;
         }
     }
 
@@ -1810,11 +2070,11 @@ pub fn main(init: std.process.Init) !void {
     }) catch |e| switch (e) {
         error.BadRegex => {
             std.debug.print("zgrep: invalid regex: {s}\n", .{@import("regex.zig").last_error});
-            std.process.exit(2);
+            return 2;
         },
         error.OutOfMemory => {
             std.debug.print("zgrep: out of memory\n", .{});
-            std.process.exit(2);
+            return 2;
         },
     };
 
@@ -1835,7 +2095,7 @@ pub fn main(init: std.process.Init) !void {
             // Zero-latency early abort for quiet mode:
             if (opts.mode == .quiet and !opts.invert_match) {
                 if (searcher.find(chunk[0..rr], 0) != null) {
-                    std.process.exit(0);
+                    return 0;
                 }
             }
             try stdin_buf.appendSlice(gpa, chunk[0..rr]);
@@ -1874,7 +2134,7 @@ pub fn main(init: std.process.Init) !void {
             if (opts.mode == .lines) {
                 std.debug.print("Binary file (standard input) matches\n", .{});
             }
-            std.process.exit(0);
+            return 0;
         }
 
         var utf8_data: ?[]u8 = null;
@@ -1890,7 +2150,7 @@ pub fn main(init: std.process.Init) !void {
         defer out.deinit(gpa);
 
         const br = scan.scanBuffer(gpa, search_data, &searcher, path_label, show_p, opts.mode, scan_cfg, &out) catch {
-            std.process.exit(2);
+            return 2;
         };
 
         if (opts.mode == .count) {
@@ -1914,7 +2174,7 @@ pub fn main(init: std.process.Init) !void {
         }
 
         const is_hit = if (opts.mode == .files_without_match) !br.matched else br.matched;
-        std.process.exit(if (is_hit) 0 else 1);
+        return if (is_hit) 0 else 1;
     }
 
     const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);
@@ -1942,7 +2202,7 @@ pub fn main(init: std.process.Init) !void {
     if (valid_operands.items.len > 1 and all_files) opts.sort = true;
 
     if (valid_operands.items.len == 0 and had_error) {
-        std.process.exit(2);
+        return 2;
     }
 
     // rg prints the header only with more than one input: with a single
@@ -2036,7 +2296,7 @@ pub fn main(init: std.process.Init) !void {
             opts.max_filesize,
         ) catch |err| {
             std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
-            std.process.exit(2);
+            return 2;
         };
 
         const t1 = nowMonotonicNs(init.io);
@@ -2069,10 +2329,10 @@ pub fn main(init: std.process.Init) !void {
         // POSIX/GNU grep (and rg): with -q a match wins over an error, so
         // `zgrep -q pat present missing` is 0, not 2. --exec also runs in
         // quiet mode but keeps "any error is 2".
-        if (matched and opts.mode == .quiet and opts.exec_cmd == null) std.process.exit(0);
-        if (had_error) std.process.exit(2);
-        if (matched) std.process.exit(0);
-        std.process.exit(1);
+        if (matched and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+        if (had_error) return 2;
+        if (matched) return 0;
+        return 1;
     }
 
     // --- collect the file list (deterministic sorted walk with filter engine) -
@@ -2232,7 +2492,7 @@ pub fn main(init: std.process.Init) !void {
             var k: usize = 0;
             while (k < probe and !ctx.found.load(.acquire)) : (k += 1) scanOne(&ctx, k, main_scratch);
             ctx.next.store(k, .release);
-            if (ctx.found.load(.acquire)) std.process.exit(0);
+            if (ctx.found.load(.acquire)) return 0;
         }
         var threads: std.ArrayList(std.Thread) = .empty;
         defer threads.deinit(gpa);
@@ -2343,12 +2603,12 @@ pub fn main(init: std.process.Init) !void {
         );
     }
 
-    if (exec_failed) std.process.exit(2);
+    if (exec_failed) return 2;
     // -q: a match wins over an error (GNU grep, rg); see the streaming path.
-    if (stats_matched_files > 0 and opts.mode == .quiet and opts.exec_cmd == null) std.process.exit(0);
-    if (had_error or stats_err > 0) std.process.exit(2);
-    if (stats_matched_files > 0) std.process.exit(0);
-    std.process.exit(1);
+    if (stats_matched_files > 0 and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+    if (had_error or stats_err > 0) return 2;
+    if (stats_matched_files > 0) return 0;
+    return 1;
 }
 
 fn walkErrName(err: walk.Error) []const u8 {

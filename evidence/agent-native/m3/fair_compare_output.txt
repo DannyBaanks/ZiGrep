@@ -1,0 +1,5 @@
+zgrep: zgrep 0.4.0-dev  consultas=16  reps=5
+N x texto streaming (-n -F)              procesos= 16  muro_mediana_s=0.0864  bytes=4503
+N x --json (streaming)                   procesos= 16  muro_mediana_s=0.1220  bytes=11110
+N x --json --sort (= salida del lote)    procesos= 16  muro_mediana_s=0.1626  bytes=11110
+1 x --queries-file                       procesos=  1  muro_mediana_s=0.1455  bytes=14119
