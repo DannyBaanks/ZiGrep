@@ -271,8 +271,8 @@ There are two fuzzers:
   inputs (SIMD boundary sizes, truncated UTF-16, 1 MB lines, NUL floods). It
   checks invariants, for example that the matches of `P` plus the matches of
   `-v P` equal the total line count.
-- `zig build cell-fuzz` enumerates 373,248 deterministic combinations of mode,
-  flags, I/O engine, grammar and input. Each cell can be replayed with
+- `zig build cell-fuzz` enumerates every deterministic combination of mode,
+  flags, I/O engine, grammar and input (the run prints how many cells). Each cell can be replayed with
   `--cell=N`, and any anomaly writes a standalone reproducer to
   `evidence/reproducers/`.
 
