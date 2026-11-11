@@ -59,7 +59,10 @@ INSTRUCTION_LIKE = re.compile(
     r"(run|execute) (this|the following) (command|script)|curl [^|]*\|\s*(ba)?sh|rm -rf /)"
 )
 MAX_BLOCK_LINES = 60
-WINDOW = 6
+# Never narrower than `grep -C 8` (round 1, H1: a +-6 window lost the line
+# that -C 8 delivered).
+WINDOW = 8
+MAX_STMT_LINES = 40
 
 
 # ----------------------------------------------------------------- utilities
@@ -560,6 +563,16 @@ def region_for(fc: FileCtx, lines: list[int]) -> list[tuple[int, int]]:
     spans = []
     for l in sorted(lines):
         a, b = max(1, l - WINDOW), min(len(fc.lines), l + WINDOW)
+        # Statement level: the innermost brace block around the hit (an if,
+        # a loop, a switch arm), whole, when it is small; the +-WINDOW lines
+        # stay as the minimum. Round 2 change.
+        inner = [blk for blk in fc.blocks if blk.start <= l <= blk.end and blk.end - blk.start + 1 <= MAX_STMT_LINES
+                 and not (enc and blk.start == enc[0].start)]
+        if inner:
+            inner.sort(key=lambda blk: blk.end - blk.start)
+            # the outermost small block gives the whole statement around the hit
+            big = max(inner, key=lambda blk: blk.end - blk.start)
+            a, b = min(a, big.start), max(b, big.end)
         if spans and a <= spans[-1][1] + 1:
             spans[-1] = (spans[-1][0], max(spans[-1][1], b))
         else:
