@@ -14,7 +14,9 @@
 //!     (`omitted`), porque evidencia incompleta debe saberse incompleta;
 //!   * el presupuesto cubre los eventos de búsqueda; los eventos de control
 //!     (`query_end`, `summary`) se emiten siempre y no cuentan;
-//!   * tokens = bytes / 4, y el evento `summary` lo declara (`token_estimate`).
+//!   * tokens = el estimador por clases de caracteres de M7 (calibrado contra
+//!     un BPE real, no subestima en la validacion confirmatoria), declarado en
+//!     `summary.token_estimate`; bytes/4 subestimaba en el 100 % de los bloques.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const out_json = @import("out_json.zig");
@@ -29,7 +31,44 @@ fn reasonName(r: Reason) []const u8 {
     };
 }
 
-pub const bytes_per_token = 4;
+/// M7: tokens estimados por clases de caracteres, una pasada por byte. Pesos
+/// ajustados contra un BPE real (Qwen, vocab 151936) en la corrida confirmatoria
+/// de `evidence/agent-native/m7/estimator_study.py` (seed 11, bloques de 30
+/// lineas), escalados para no subestimar en su mitad de ajuste y con +1 % de
+/// margen declarado: 0 bloques subestimados de 245 de validacion, sesgo medio
+/// +10 %. bytes/4 (lo de M3) subestimaba en 245/245, hasta 2,33x.
+pub const token_estimator_name = "zgrep-classes-v1";
+const est_scale: f64 = 1.112 * 1.01;
+const w_bytes: f64 = 0.2413;
+const w_digits: f64 = 1.0526;
+const w_punct: f64 = 0.0954;
+const w_space_runs: f64 = 0.1128;
+const w_nonascii: f64 = 0.4598;
+
+pub fn estimateTokens(b: []const u8) f64 {
+    var digits: usize = 0;
+    var punct: usize = 0;
+    var space_runs: usize = 0;
+    var nonascii: usize = 0;
+    var in_space = false;
+    for (b) |c| {
+        const is_space = c == ' ' or c == '\t' or c == '\n' or c == '\r';
+        if (is_space) {
+            if (!in_space) space_runs += 1;
+        } else if (c >= 0x80) {
+            nonascii += 1;
+        } else if (c >= '0' and c <= '9') {
+            digits += 1;
+        } else if (!((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_')) {
+            punct += 1;
+        }
+        in_space = is_space;
+    }
+    const f = w_bytes * @as(f64, @floatFromInt(b.len)) + w_digits * @as(f64, @floatFromInt(digits)) +
+        w_punct * @as(f64, @floatFromInt(punct)) + w_space_runs * @as(f64, @floatFromInt(space_runs)) +
+        w_nonascii * @as(f64, @floatFromInt(nonascii));
+    return f * est_scale;
+}
 
 const json_prefix = "{\"schema\":\"zgrep/1\",";
 
@@ -76,6 +115,10 @@ pub const Emitter = struct {
     returned: usize = 0,
     omitted: usize = 0,
     output_bytes: usize = 0,
+    /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+    output_tokens_est: f64 = 0,
+    /// Linea de salida armada antes de decidir si cabe en el presupuesto.
+    line_buf: std.ArrayList(u8) = .empty,
     reason: ?Reason = null,
     /// Líneas que no eran eventos zgrep/1 (no deberían existir; se cuentan,
     /// no se cuelan en el stream).
@@ -90,6 +133,7 @@ pub const Emitter = struct {
         self.carry.deinit(self.gpa);
         self.staged.deinit(self.gpa);
         self.pending_header.deinit(self.gpa);
+        self.line_buf.deinit(self.gpa);
     }
 
     pub fn install(self: *Emitter) void {
@@ -126,9 +170,9 @@ pub const Emitter = struct {
         if (rest.len > 0) try self.carry.appendSlice(self.gpa, rest);
     }
 
-    fn budgetBytes(self: *const Emitter) ?usize {
-        const t = self.max_output_tokens orelse return null;
-        return t *| bytes_per_token;
+    fn overTokenBudget(self: *const Emitter, est: f64) bool {
+        const t = self.max_output_tokens orelse return false;
+        return self.output_tokens_est + est > @as(f64, @floatFromInt(t));
     }
 
     fn compactEvent(self: *Emitter, line: []const u8) Allocator.Error!void {
@@ -152,18 +196,20 @@ pub const Emitter = struct {
         const tag_end = std.mem.indexOfScalarPos(u8, line, 2, '"') orelse line.len;
         const tag = line[2..tag_end];
         const result = !(tag.len > 0 and (tag[0] == 'c' or tag[0] == 'p'));
-        const out_len = line.len + 1 + self.pending_header.items.len;
+        self.line_buf.clearRetainingCapacity();
+        try self.line_buf.appendSlice(self.gpa, self.pending_header.items);
+        try self.line_buf.appendSlice(self.gpa, line);
+        try self.line_buf.append(self.gpa, '\n');
+        // Siempre: summary.output_tokens_est es un dato del contrato, no un
+        // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+        const est = estimateTokens(self.line_buf.items);
         if (self.reason == null) {
             if (result) {
                 if (self.max_results) |m| {
                     if (self.returned >= m) self.reason = .max_results;
                 }
             }
-            if (self.reason == null) {
-                if (self.budgetBytes()) |b| {
-                    if (self.output_bytes + out_len > b) self.reason = .max_output_tokens;
-                }
-            }
+            if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
         }
         if (self.reason != null) {
             self.pending_header.clearRetainingCapacity();
@@ -173,11 +219,10 @@ pub const Emitter = struct {
             }
             return;
         }
-        try self.staged.appendSlice(self.gpa, self.pending_header.items);
+        try self.staged.appendSlice(self.gpa, self.line_buf.items);
         self.pending_header.clearRetainingCapacity();
-        try self.staged.appendSlice(self.gpa, line);
-        try self.staged.append(self.gpa, '\n');
-        self.output_bytes += out_len;
+        self.output_bytes += self.line_buf.items.len;
+        self.output_tokens_est += est;
         if (result) {
             self.returned += 1;
             self.q_returned += 1;
@@ -192,8 +237,18 @@ pub const Emitter = struct {
             return;
         }
         const result = isResult(line);
-        const id_extra: usize = if (self.query_id) |id| "\"query_id\":".len + id.len + 1 else 0;
-        const out_len = line.len + id_extra + 1;
+        self.line_buf.clearRetainingCapacity();
+        try self.line_buf.appendSlice(self.gpa, json_prefix);
+        if (self.query_id) |id| {
+            try self.line_buf.appendSlice(self.gpa, "\"query_id\":");
+            try self.line_buf.appendSlice(self.gpa, id);
+            try self.line_buf.append(self.gpa, ',');
+        }
+        try self.line_buf.appendSlice(self.gpa, line[json_prefix.len..]);
+        try self.line_buf.append(self.gpa, '\n');
+        // Siempre: summary.output_tokens_est es un dato del contrato, no un
+        // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+        const est = estimateTokens(self.line_buf.items);
 
         if (self.reason == null) {
             if (result) {
@@ -201,11 +256,7 @@ pub const Emitter = struct {
                     if (self.returned >= m) self.reason = .max_results;
                 }
             }
-            if (self.reason == null) {
-                if (self.budgetBytes()) |b| {
-                    if (self.output_bytes + out_len > b) self.reason = .max_output_tokens;
-                }
-            }
+            if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
         }
         if (self.reason != null) {
             if (result) {
@@ -214,15 +265,9 @@ pub const Emitter = struct {
             }
             return;
         }
-        try self.staged.appendSlice(self.gpa, json_prefix);
-        if (self.query_id) |id| {
-            try self.staged.appendSlice(self.gpa, "\"query_id\":");
-            try self.staged.appendSlice(self.gpa, id);
-            try self.staged.append(self.gpa, ',');
-        }
-        try self.staged.appendSlice(self.gpa, line[json_prefix.len..]);
-        try self.staged.append(self.gpa, '\n');
-        self.output_bytes += out_len;
+        try self.staged.appendSlice(self.gpa, self.line_buf.items);
+        self.output_bytes += self.line_buf.items.len;
+        self.output_tokens_est += est;
         if (result) {
             self.returned += 1;
             self.q_returned += 1;
@@ -314,7 +359,9 @@ pub const Emitter = struct {
         if (self.max_results) |m| try appendInt(&self.staged, g, m) else try self.staged.appendSlice(g, "null");
         try self.staged.appendSlice(g, ",\"max_output_tokens\":");
         if (self.max_output_tokens) |m| try appendInt(&self.staged, g, m) else try self.staged.appendSlice(g, "null");
-        try self.staged.appendSlice(g, ",\"token_estimate\":\"bytes/4\",\"dropped_non_event\":");
+        try self.staged.appendSlice(g, ",\"output_tokens_est\":");
+        try appendInt(&self.staged, g, @intFromFloat(@ceil(self.output_tokens_est)));
+        try self.staged.appendSlice(g, ",\"token_estimate\":\"" ++ token_estimator_name ++ "\",\"dropped_non_event\":");
         try appendInt(&self.staged, g, self.dropped_non_event);
         try self.staged.appendSlice(g, "}\n");
         return self.flushStaged();
@@ -436,14 +483,26 @@ test "Emitter: --max-results corta, sigue contando lo omitido y no cuenta el con
 
 test "Emitter: --max-output-tokens nunca parte un evento" {
     const gpa = std.testing.allocator;
-    const m = "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n"; // 36 bytes
-    // 10 tokens = 40 bytes: cabe uno entero, el segundo no.
-    var e: Emitter = .{ .io = undefined, .gpa = gpa, .max_output_tokens = 10 };
+    const m = "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n";
+    // presupuesto = lo que estima UN evento: cabe uno entero, el segundo no.
+    const one: usize = @intFromFloat(@ceil(estimateTokens(m)));
+    var e: Emitter = .{ .io = undefined, .gpa = gpa, .max_output_tokens = one };
     defer e.deinit();
     try e.feed(m ++ m);
     try std.testing.expectEqualStrings(m, e.staged.items);
     try std.testing.expectEqual(@as(usize, 1), e.omitted);
     try std.testing.expectEqual(Reason.max_output_tokens, e.reason.?);
+}
+
+test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+    try std.testing.expectEqual(@as(f64, 0), estimateTokens(""));
+    const a = estimateTokens("abcdef ");
+    const b = estimateTokens("123456 ");
+    const c = estimateTokens("ñññ ");
+    try std.testing.expect(b > a); // un BPE parte los numeros mucho mas que las palabras
+    try std.testing.expect(c > estimateTokens("nnn "));
+    // aditivo por lineas (lo que usa el presupuesto: suma de eventos)
+    try std.testing.expectApproxEqAbs(estimateTokens("ab 12\n") + estimateTokens("cd 34\n"), estimateTokens("ab 12\ncd 34\n"), 1e-9);
 }
 
 test "Emitter: lo que no es evento zgrep/1 no entra al stream" {

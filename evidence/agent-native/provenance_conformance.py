@@ -149,7 +149,8 @@ def main() -> int:
     strip = [e for e in pe if e["type"] != "provenance"]
     for e in (strip[-1], ple[-1]):
         e.pop("output_bytes", None)
-    check(strip == ple, "lote: aditivo salvo output_bytes del summary")
+        e.pop("output_tokens_est", None)  # M7: depende del tamano, como output_bytes
+    check(strip == ple, "lote: aditivo salvo los campos de tamano del summary")
     check(all("query_id" in e for e in pe if e["type"] == "provenance") and
           strip[-1]["returned"] == ple[-1]["returned"], "lote: provenance con query_id y sin contar como resultado")
     for qid in ("a", "b"):

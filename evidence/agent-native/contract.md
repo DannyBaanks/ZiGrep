@@ -340,3 +340,41 @@ campos; un cambio de forma es `zgrep/2c`.
 `prompt` sin escapar dentro de su JSON de salida (no es JSON válido si el texto
 trae comillas o saltos de línea). `tokcount.py` lo esquiva leyendo solo
 `status` y `n_tokens`.
+
+## 13. M7: el presupuesto en tokens reales (2026-11-11, claude_code)
+
+`summary.token_estimate` pasa de `"bytes/4"` a `"zgrep-classes-v1"` y el
+`summary` añade `output_tokens_est` (siempre, haya o no tope). El estimador es
+lineal en clases de caracteres contadas en una pasada por byte
+(`src/batch.zig: estimateTokens`, port exacto en
+`evidence/agent-native/zgrep_estimate.py`).
+
+**Protocolo** (`m7/estimator_study.py`): bloques de salida real de zgrep en todos
+los dialectos y modos, tokenizados con un BPE real; mitad ajuste, mitad
+validación. Regla fijada antes: adoptar el candidato que no subestime ningún
+bloque de validación, con el menor sesgo.
+
+**Corrección honesta del propio estudio:** la primera corrida (seed 7,
+`estimator_study_output_seed7.txt`, conservada) evaluaba el bytes/4 actual
+ESCALADO, así que esa fila no medía el actual. Además, ahí el estimador por
+clases subestimaba 5 de 184 bloques (≤0,2 %). En vez de cambiar la regla después
+de ver los datos, se escribió una regla nueva ANTES de una corrida confirmatoria
+con datos nuevos (seed 11, bloques de 30): "clases + margen 1 % se adopta solo
+si no subestima ningún bloque de validación". Lo cumplió; bytes/k, que había
+ganado en la primera, falló en la confirmatoria. Crudo:
+`estimator_study_output_seed11.txt`.
+
+**Claims** (crudos en `evidence/agent-native/m7/`):
+
+| claim | estado | evidencia |
+|---|---|---|
+| bytes/4 subestima los tokens reales | DEMOSTRADO | confirmatoria: subestima en todos los bloques de validación |
+| el estimador nuevo no subestima | DEMOSTRADO en el corpus medido | confirmatoria: 0 bloques subestimados |
+| con `--max-output-tokens T`, tokens reales emitidos ≤ T | DEMOSTRADO | `budget_real_tokens_output.txt`: lote y suelta, `--json` y `--json=compact`, 5 valores de T |
+| el binario anterior se pasaba de T | DEMOSTRADO (control negativo) | `budget_real_tokens_control_pre_m7.txt` |
+| no desperdicia presupuesto | PARCIAL | cuando trunca, el aprovechamiento real/T está por debajo de 1 pero no en 1: lo da el margen y que los eventos no se parten |
+
+**NOT_DEMONSTRATED:** otros tokenizadores (el de Claude incluido); idiomas y
+alfabetos fuera del corpus (la GUIA aporta español y algunos símbolos).
+`batch_conformance.py` (CI) comprueba el presupuesto con el estimador, no con
+tokens reales: la cota real necesita el tokenizador y corre en local.

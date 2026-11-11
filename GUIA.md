@@ -771,9 +771,11 @@ zgrep --queries-file q.jsonl --max-results 1 a.txt b.txt
 
 * `--max-results N`: cuenta resultados (`match`, `occurrence`, `file`, `count`;
   el `context` y el `passthru` acompañan y no cuentan) en **toda** la llamada.
-* `--max-output-tokens N`: tamaño de la salida, con tokens ≈ bytes/4 (el
-  `summary` lo declara en `token_estimate`). Nunca se corta un evento por la
-  mitad: el stream sigue siendo JSONL válido.
+* `--max-output-tokens N`: tamaño de la salida en tokens **estimados por clases
+  de caracteres** (`token_estimate: "zgrep-classes-v1"`, desde M7), calibrado
+  contra un BPE real para no subestimar; el `summary` informa
+  `output_tokens_est`. Nunca se corta un evento por la mitad: el stream sigue
+  siendo JSONL válido. *(Hasta M7 era bytes/4, que subestimaba: ver §4q.)*
 * Truncar **no** detiene el escaneo: `omitted` es el número exacto de
   resultados que no se emitieron. Evidencia incompleta, pero sabida incompleta.
 * Lo emitido es siempre un **prefijo** de lo que saldría sin presupuesto.
@@ -908,6 +910,28 @@ dialecto es de la llamada: una consulta no puede cambiarlo en `"flags"`.
 Verificado sin pérdida (`compact_conformance.py`, en CI): cada caso decodifica a
 exactamente los registros de `--json`, en todos los modos y caminos de lectura,
 con procedencia, stdin y lote.
+
+## 4q. `--max-output-tokens` ya cuenta tokens de verdad (0.4.0-dev, M7)
+
+Hasta M7, el presupuesto estimaba tokens como bytes/4 (igual que RTK). Medido
+contra un BPE real sobre salida de zgrep en los tres dialectos: bytes/4
+**subestimaba en todos los bloques**, hasta 2,3x, así que `--max-output-tokens
+1000` podía dejar pasar más de 2000 tokens reales.
+
+Ahora el estimador cuenta bytes, dígitos, puntuación, tramos de espacio y bytes
+no-ASCII (un BPE parte mucho más los números y lo no-ASCII que las palabras), con
+pesos ajustados contra el tokenizador real y un margen declarado. Se eligió por
+una regla escrita antes de la corrida confirmatoria (datos nuevos): no
+subestimar en ningún bloque de validación. Cifras y crudo:
+`evidence/agent-native/m7/`.
+
+Lo que significa para quien lo usa: con `--max-output-tokens T`, lo emitido
+queda por debajo de T tokens reales (verificado en lote y en búsqueda suelta, en
+los dos dialectos), y cuando corta aprovecha la mayor parte del presupuesto.
+El `summary` dice cuánto estimó (`output_tokens_est`).
+
+Límite honesto: está calibrado con UN tokenizador (BPE de Qwen). Otro modelo
+tokeniza distinto; el margen cubre la diferencia que se midió, no cualquiera.
 
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 

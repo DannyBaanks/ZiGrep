@@ -1,0 +1,27 @@
+tokenizador: BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo; bloques=367 de 40 lineas; semilla 7
+pesos del estimador por clases: bytes=0.2494, alpha_runs=0.0000, digits=1.0138, punct=0.0882, space_runs=0.0749, nonascii=0.3964, letter_digit=0.0000
+
+estimador                         escala  peor real/est  sesgo est/real  MAE rel  subestima
+bytes/4 (M3, actual)               2.327          0.998           1.301    0.301    0/184
+bytes/k ajustado                   0.582          0.998           1.301    0.301    0/184
+clases de caracteres (lineal)      1.110          1.002           1.083    0.083    5/184
+
+ELEGIDO: bytes/4 (M3, actual) (no subestima en validacion: True)
+peor real/est por origen (elegido):
+  compact -l     0.875
+  compact -n     0.720
+  compact -o     0.858
+  compact GUIA   0.744
+  compact prov   0.998
+  compact src    0.789
+  json -l        0.685
+  json -n        0.606
+  json -o        0.680
+  json prov      0.950
+  json src       0.609
+  texto -c       0.970
+  texto -l       0.912
+  texto -n       0.631
+  texto -o       0.821
+  texto GUIA     0.594
+  texto src      0.637

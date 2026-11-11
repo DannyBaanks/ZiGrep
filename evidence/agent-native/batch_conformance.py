@@ -27,6 +27,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import zgrep_estimate  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = "bench-corpus/corpus_50"
 FIX = "evidence/feature-corpus"
@@ -160,7 +163,11 @@ def main() -> int:
             return
         res = [l for l, e in zip(ls, es) if e["type"] in RESULT_TYPES]
         summ = es[-1] if es else {}
-        search_bytes = sum(len(l) + 1 for l, e in zip(ls, es) if e["type"] not in ("query_end", "summary"))
+        search_lines = [l for l, e in zip(ls, es) if e["type"] not in ("query_end", "summary")]
+        # M7: el presupuesto se mide con el estimador de zgrep (port exacto en
+        # zgrep_estimate.py), no con bytes/4; la cota con tokens REALES esta en
+        # m7/budget_real_tokens.py (necesita el tokenizador, no corre en CI).
+        search_est = sum(zgrep_estimate.estimate((l + "\n").encode()) for l in search_lines)
         limit_hit = (max_results is not None and max_results < len(full_results)) or (
             max_tokens is not None and len(res) < len(full_results))
         ok = (
@@ -171,11 +178,13 @@ def main() -> int:
             and summ["truncated"] == (summ["omitted"] > 0)
             and summ["truncated"] == limit_hit
             and (max_results is None or len(res) <= max_results)
-            and (max_tokens is None or search_bytes <= max_tokens * 4)
+            and (max_tokens is None or search_est <= max_tokens + 1e-6)
+            and summ.get("token_estimate") == "zgrep-classes-v1"
+            and abs(summ.get("output_tokens_est", 0) - search_est) <= 1.0
             and sum(e["omitted"] for e in es if e["type"] == "query_end") == summ["omitted"]
         )
         check(ok, f"{name}: returned={summ.get('returned')} omitted={summ.get('omitted')} reason={summ.get('reason')}",
-              f"res={len(res)} full={len(full_results)} bytes={search_bytes} summary={summ}")
+              f"res={len(res)} full={len(full_results)} est={search_est:.1f} summary={summ}")
 
     n = len(full_results)
     for k in sorted({0, 1, 7, n // 2, n - 1, n, n + 10}):

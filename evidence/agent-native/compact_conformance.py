@@ -173,7 +173,8 @@ def main() -> int:
         fq = [e for e in fe if e["type"] in ("query_end", "summary")]
         for e in fq + ctrl:
             e.pop("output_bytes", None)
-        check(fq == ctrl, f"lote {' '.join(extra)}: query_end y summary identicos (salvo output_bytes)")
+            e.pop("output_tokens_est", None)  # M7: depende del tamano, como output_bytes
+        check(fq == ctrl, f"lote {' '.join(extra)}: query_end y summary identicos (salvo campos de tamano)")
 
     # Presupuesto por resultados: los mismos resultados en los dos dialectos.
     for k in (0, 1, 4):

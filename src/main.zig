@@ -90,9 +90,11 @@ const usage =
     \\                    file, count) for the whole call; keeps counting
     \\                    what it omits. Needs --json or --queries-file
     \\      --max-output-tokens N
-    \\                    same, for output size (tokens estimated as
-    \\                    bytes/4); never cuts an event. The final summary
-    \\                    event says truncated, reason, returned, omitted
+    \\                    same, for output size (tokens estimated per
+    \\                    character class, calibrated against a real BPE so
+    \\                    it does not underestimate); never cuts an event.
+    \\                    The final summary says truncated, reason,
+    \\                    returned, omitted, output_tokens_est
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches

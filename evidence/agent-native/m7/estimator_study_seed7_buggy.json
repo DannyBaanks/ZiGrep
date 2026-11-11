@@ -1,0 +1,116 @@
+{
+  "seed": 7,
+  "block": 40,
+  "features": [
+    "bytes",
+    "alpha_runs",
+    "digits",
+    "punct",
+    "space_runs",
+    "nonascii",
+    "letter_digit"
+  ],
+  "weights": [
+    0.24939358428211006,
+    0.0,
+    1.013822039960574,
+    0.08819031705435301,
+    0.07489726666356263,
+    0.39644748999501517,
+    0.0
+  ],
+  "results": [
+    {
+      "name": "bytes/4 (M3, actual)",
+      "scale": 2.3265592151366503,
+      "worst_real_over_est": 0.9976678852363409,
+      "mean_est_over_real": 1.3013013315628785,
+      "mae_rel": 0.3013013315628786,
+      "underestimated_blocks": 0,
+      "val_blocks": 184,
+      "worst_by_source": {
+        "texto src": 0.6370925325668154,
+        "compact -l": 0.8747199323610231,
+        "texto -c": 0.969848625270312,
+        "json prov": 0.9502494042743028,
+        "compact src": 0.7885917063049696,
+        "json -o": 0.6801779282076761,
+        "texto -o": 0.8212786772547395,
+        "texto -l": 0.912269486107696,
+        "compact prov": 0.9976678852363409,
+        "compact -o": 0.8576774016216959,
+        "json -l": 0.6846678750399829,
+        "compact -n": 0.7198726950182902,
+        "json src": 0.6093615478163512,
+        "json -n": 0.606350699780622,
+        "texto GUIA": 0.5938781030859188,
+        "texto -n": 0.63140195139769,
+        "compact GUIA": 0.7440319900290818
+      }
+    },
+    {
+      "name": "bytes/k ajustado",
+      "scale": 0.5816398037841626,
+      "worst_real_over_est": 0.9976678852363409,
+      "mean_est_over_real": 1.3013013315628785,
+      "mae_rel": 0.3013013315628786,
+      "underestimated_blocks": 0,
+      "val_blocks": 184,
+      "worst_by_source": {
+        "texto src": 0.6370925325668154,
+        "compact -l": 0.8747199323610231,
+        "texto -c": 0.969848625270312,
+        "json prov": 0.9502494042743028,
+        "compact src": 0.7885917063049696,
+        "json -o": 0.6801779282076761,
+        "texto -o": 0.8212786772547395,
+        "texto -l": 0.912269486107696,
+        "compact prov": 0.9976678852363409,
+        "compact -o": 0.8576774016216959,
+        "json -l": 0.6846678750399829,
+        "compact -n": 0.7198726950182902,
+        "json src": 0.6093615478163512,
+        "json -n": 0.606350699780622,
+        "texto GUIA": 0.5938781030859188,
+        "texto -n": 0.63140195139769,
+        "compact GUIA": 0.7440319900290818
+      }
+    },
+    {
+      "name": "clases de caracteres (lineal)",
+      "scale": 1.110101007119003,
+      "worst_real_over_est": 1.0021177136062511,
+      "mean_est_over_real": 1.082694471265849,
+      "mae_rel": 0.08276866171780548,
+      "underestimated_blocks": 5,
+      "val_blocks": 184,
+      "worst_by_source": {
+        "texto src": 1.0021177136062511,
+        "compact -l": 0.9373452793112098,
+        "texto -c": 0.9263248160587659,
+        "json prov": 0.8831084027143229,
+        "compact src": 0.9668606162875805,
+        "json -o": 0.9048167065363629,
+        "texto -o": 0.9636776324659223,
+        "texto -l": 0.9236562852220962,
+        "compact prov": 0.970861617319327,
+        "compact -o": 1.0018732014867553,
+        "json -l": 0.9035205521015558,
+        "compact -n": 0.8371513008329416,
+        "json src": 0.9057489345128215,
+        "json -n": 0.8332609224340575,
+        "texto GUIA": 0.9168343263848692,
+        "texto -n": 0.811024960170226,
+        "compact GUIA": 0.9396731515948603
+      }
+    }
+  ],
+  "choice": "bytes/4 (M3, actual)",
+  "tokenizer": {
+    "bin": "isyinfer-zig",
+    "model": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+    "model_sha256": "f3bdf9cf31dee4b57ae4e455a1cb0d01b5c2c1b50d72d3112141c195506c2840",
+    "model_bytes": 1117321312,
+    "note": "BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo"
+  }
+}

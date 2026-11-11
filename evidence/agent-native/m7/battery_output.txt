@@ -1,0 +1,17 @@
+2026-11-11T00:45:49-06:00
+base: e23d47f097fadb45ff5a846a9840120a9c931f61 + arbol de trabajo M7
++- run test 125 pass, 1 skip (126 total) 250ms MaxRSS:16M
+Results: 32 PASSED, 0 FAILED (total 32)
+zgrep 0.4.0-dev
+TOTAL pass=40 fail=0
+TOTAL pass=25 fail=0
+TOTAL 15 pass / 0 fail
+TOTAL 12 pass / 0 fail
+TOTAL 45 pass / 0 fail
+TOTAL pass=17 fail=0
+TOTAL 41 pass / 0 fail
+TOTAL 70 pass / 1 fail  (antes del ajuste del arnes)
+TOTAL 35 pass / 2 fail
+--- tras excluir output_tokens_est (campo de tamano) en los dos diferenciales:
+TOTAL 71 pass / 0 fail
+TOTAL 37 pass / 0 fail
