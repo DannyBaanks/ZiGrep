@@ -18,3 +18,12 @@ Tokens: `evidence/agent-native/tokcount.py` (BPE Qwen vía `isyinfer-zig tokeniz
 GGUF `DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf`, sha256
 `f3bdf9cf31dee4b57ae4e455a1cb0d01b5c2c1b50d72d3112141c195506c2840`).
 Reproducir necesita ese binario y ese modelo (configurables por entorno).
+
+**Redacción (2026-11-11):** en `task_bench.json`, el campo `tokenizer.bin` llevaba
+la ruta local absoluta del binario (nombraba un repo privado) y
+`tokenizer.model` la ruta del GGUF. Se sustituyeron por el nombre del binario
+con la marca `<ruta local redactada 2026-11-11>` y el nombre del fichero del
+modelo. Ningún dato medido cambió (`claims.md` se regeneró idéntico); el
+`SHA256SUMS.txt` se recalculó por esa edición. El original sigue en el historial
+de git (commit `404fd0d`). Para reproducir: `ZGREP_TOKENIZER_BIN=<ruta a
+isyinfer-zig>` (o tenerlo en el PATH).

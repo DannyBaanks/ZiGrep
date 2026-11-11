@@ -1,7 +1,7 @@
 """Tokens REALES (no bytes/4) con un tokenizador BPE de verdad.
 
-Usa el subcomando `tokenize` de isyinfer-zig (repo ISyCo-IA-Lab-Research) con el
-GGUF de un modelo Qwen; el texto entra por argv, que admite como mucho 128 KiB
+Usa el subcomando `tokenize` de isyinfer-zig (el motor de inferencia de ISyCo) con
+el GGUF de un modelo Qwen; el texto entra por argv, que admite como mucho 128 KiB
 por argumento (MAX_ARG_STRLEN), así que se trocea en límites de línea por
 debajo de ese tope. Cada llamada añade un BOS: se descuenta.
 
@@ -10,20 +10,23 @@ la salida: es UN BPE real, el mismo para todas las herramientas, que es lo que
 hace justa la comparación. El evento resultado declara qué tokenizador se usó.
 
 Configuración por entorno:
-  ZGREP_TOKENIZER_BIN    (default: ~/Development/ISyCo Git/ISyCo-IA-Lab-Research/zig-out/bin/isyinfer-zig)
+  ZGREP_TOKENIZER_BIN    (default: `isyinfer-zig` en el PATH)
   ZGREP_TOKENIZER_MODEL  (default: ~/models/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf)
+
+La evidencia guarda solo el NOMBRE del binario y el sha256 del modelo, nunca
+rutas locales (el repo es publico).
 """
 from __future__ import annotations
 
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 HOME = Path.home()
-BIN = os.environ.get("ZGREP_TOKENIZER_BIN",
-                     str(HOME / "Development/ISyCo Git/ISyCo-IA-Lab-Research/zig-out/bin/isyinfer-zig"))
+BIN = os.environ.get("ZGREP_TOKENIZER_BIN") or shutil.which("isyinfer-zig") or "isyinfer-zig"
 MODEL = os.environ.get("ZGREP_TOKENIZER_MODEL", str(HOME / "models/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf"))
 CHUNK = 100_000  # < 131072 (MAX_ARG_STRLEN), con margen
 
@@ -32,8 +35,19 @@ def available() -> bool:
     return Path(BIN).is_file() and Path(MODEL).is_file()
 
 
+_model_sha: str | None = None
+
+
 def describe() -> dict:
-    return {"bin": BIN, "model": MODEL, "model_bytes": Path(MODEL).stat().st_size if available() else None,
+    global _model_sha
+    if _model_sha is None and Path(MODEL).is_file():
+        h = hashlib.sha256()
+        with open(MODEL, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 22), b""):
+                h.update(chunk)
+        _model_sha = h.hexdigest()
+    return {"bin": Path(BIN).name, "model": Path(MODEL).name, "model_sha256": _model_sha,
+            "model_bytes": Path(MODEL).stat().st_size if available() else None,
             "note": "BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo"}
 
 

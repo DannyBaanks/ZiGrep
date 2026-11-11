@@ -24,8 +24,8 @@
   ],
   "reps": 5,
   "tokenizer": {
-    "bin": "/home/danny/Development/ISyCo Git/ISyCo-IA-Lab-Research/zig-out/bin/isyinfer-zig",
-    "model": "/home/danny/models/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+    "bin": "isyinfer-zig <ruta local redactada 2026-11-11>",
+    "model": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
     "model_bytes": 1117321312,
     "note": "BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo"
   },
