@@ -975,6 +975,70 @@ no cuesta nada, pero con un truncado fuerte escribe todo lo omitido (megabytes)
 y encarece la llamada en proporción. **zgrep no borra los spills**: quien los
 pide los limpia, p. ej. `find ~/.cache/zgrep/spill -mtime +1 -delete`.
 
+## 4s. `--max-columns`: la línea larga, recortada sin perder nada (0.4.0-dev, M9)
+
+Un `node_modules` con código minificado tiene líneas de miles de bytes y un
+match de tres. Eso es lo que un agente se encuentra cuando busca, y es donde un
+resultado se come el contexto. El estudio (`evidence/agent-native/m9/`, árbol
+real, tokens de verdad con un BPE) midió que recortar el `text` a una ventana
+alrededor del match ahorra el **58-59 %** de los tokens reales dejando el match
+intacto en todas las filas; la regla fijada antes de correr (>= 20 % con el
+match intacto) decía IMPLEMENTAR, y la confirmación con la implementación real
+reproduce la cifra.
+
+```sh
+zgrep --json=compact --max-columns 400 -E 'require\(' node_modules
+```
+
+```json
+{"schema":"zgrep/1c"}
+{"path":"node_modules/body-parser/lib/read.js"}
+["mw",12,7,812,8,"const bodyParser = require('body-parser')",3,410]
+{"path":"node_modules/ajv/lib/compile/index.js"}
+["m",4,1,0,7,"module.exports"]
+["mw",88,31,4412,7,"...ajv.validate = require('./validate').default",28,512]
+```
+
+Fila recortada en `zgrep/1c`: el tag lleva el sufijo `w` y dos elementos más.
+
+| línea | significado |
+|---|---|
+| `[t+"w", line, col, byte_start, len, ventana, win_start, line_len]` | el `text` es una ventana: a lo sumo N bytes alrededor del match |
+| `[..., match]` | 9º elemento, solo si el match no es derivable dentro de la ventana (nunca ocurre con el recorte: la ventana siempre lo contiene) |
+
+En `zgrep/1` el mismo recorte añade dos campos junto a `text`:
+
+```json
+{"schema":"zgrep/1","type":"match","path":"node_modules/body-parser/lib/read.js","line":12,"column":7,"byte_start":812,"byte_end":820,"match":"require(","text":"const bodyParser = require('body-parser')","win_start":3,"line_len":410,"inverted":false}
+```
+
+`win_start` y `line_len` viajan **solo** en la fila recortada: su presencia es la
+señal, y una fila que cabe es byte a byte la de siempre. Los dos campos son
+aditivos (el schema no cambia), y se leen así: `col` y `byte_start` siguen
+contando la línea ENTERA, así que la línea entera se recupera leyendo el
+fichero —`line_start = byte_start - (col - 1)`, la línea es
+`fichero[line_start .. line_start + line_len]` y la ventana empieza en
+`line_start + win_start`—; con `--provenance`, verificable por sha256.
+
+Lo que **nunca** hace (contrato verificado en CI con `m9_conformance.py`, 446
+comprobaciones contra el fichero en disco):
+
+* cortar una fila **sin match** (contexto, `-v`, passthru): no hay centro, sale
+  entera;
+* cortar el **match**: la ventana siempre lo contiene, y si el match solo ya no
+  cabe en N, la ventana ES el match;
+* **partir un carácter** UTF-8: la ventana se alinea a límites de código;
+* recortar con `--replace`: la fila lleva la línea sustituida, donde el match ya
+  no marca una posición, así que sale entera;
+* recortar líneas que caben en N.
+
+El límite honesto, medido también: en una línea que **apenas** pasa de N el
+recorte puede costar un par de bytes más de lo que ahorra (las dos cifras
+extra), y el ahorro real depende de cuántas líneas largas tenga el árbol. Con
+`--max-columns` enorme (o sin la bandera) la salida es la de siempre, byte a
+byte. Es de la llamada también en lote: una consulta no puede pedirla en
+`"flags"`.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y

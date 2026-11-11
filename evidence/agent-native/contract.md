@@ -399,3 +399,33 @@ la salida exacta.
 documenta la GUIA); búsquedas en streaming de directorios sin `--sort` (su orden
 entre ficheros no es fijo, así que la reconstrucción se verifica con `--sort` y
 en lote); Windows (el diferencial es Linux).
+
+## 15. M9: `--max-columns`, la línea larga recortada (2026-11-11)
+
+Interfaz nueva (GUIA §4s): `--max-columns N` / `--max-columns=N`, con `--json` o
+`--queries-file`, de la llamada. Cuando la línea de una fila pasa de N bytes, el
+`text` emitido es una ventana de a lo sumo N bytes alrededor del match:
+
+| dialecto | fila recortada |
+|---|---|
+| `zgrep/1` | los mismos campos + `win_start` (byte de la línea donde empieza la ventana) y `line_len` (bytes de la línea entera); los dos viajan SOLO en la fila recortada |
+| `zgrep/1c` | `[t+"w",line,col,byte_start,len,ventana,win_start,line_len]` (8 elementos; el match NO se re-emite porque la ventana siempre lo contiene) |
+
+`col`, `byte_start` y `len` siguen contando la línea ENTERA: nada se pierde,
+`line_start = byte_start - (col - 1)` y la línea se re-lee del fichero (con
+`--provenance`, verificable por sha256).
+
+| claim | estado | evidencia |
+|---|---|---|
+| recortar líneas largas ahorra tokens reales con el match intacto | DEMOSTRADO | `m9/long_lines_study_output.txt` (estudio preregistrado, árbol real, BPE): -64,9 % con W=400; la implementación real lo reproduce: `m9/real_tree_tokens_output.txt` = -58,4 %, match intacto en todas las filas |
+| la ventana son bytes reales de la línea y el match nunca se corta | DEMOSTRADO | `m9_conformance.py` (CI): 446 comprobaciones por corrida contra el fichero en disco, dos dialectos, 4 valores de W, contexto, passthru, `--replace`, lote y procedencia |
+| sin la bandera no cambia ni un byte | DEMOSTRADO | `m9_conformance.py`: `--max-columns 100000` == salida sin bandera, byte a byte |
+| fila sin span (contexto/`-v`/passthru) y `--replace` salen enteras | DEMOSTRADO | mismo diferencial |
+| nunca parte un carácter UTF-8 | DEMOSTRADO | mismo diferencial (casos con padding multibyte alrededor del match) |
+| el compacto windowed decodifica igual que el completo | DEMOSTRADO | `compact_conformance.py` (CI): 8 casos nuevos M9, 45/45 |
+
+**NOT_DEMONSTRATED:** el ahorro con OTRO tokenizador (medido con UN BPE real, el
+de Qwen, igual que todo el resto de las cifras de tokens del repo); Windows (el
+diferencial es Linux, como el de M3-M8); líneas apenas por encima de N, donde las
+dos cifras extra pueden costar un par de bytes más de lo que ahorran (medido y
+documentado en GUIA §4s).

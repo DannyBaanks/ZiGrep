@@ -71,6 +71,16 @@ jobs:
       - name: Spill conformance (M8)
         run: python3 evidence/agent-native/spill_conformance.py
 
+      # M9: --max-columns recorta la linea larga a una ventana alrededor del
+      # match sin perder nada. El diferencial lo comprueba contra el FICHERO en
+      # disco (la ventana son bytes reales de la linea), exige que el match
+      # nunca se corte, que una fila sin match (contexto/-v/passthru) y una de
+      # --replace salgan enteras, que ningun caracter UTF-8 se parta y que sin
+      # la bandera no cambie ni un byte. Corre sobre el fixture determinista de
+      # evidence/agent-native/m9/fix (make_fixture.py + SHA256SUMS.txt).
+      - name: Long-line windows conformance (M9)
+        run: python3 evidence/agent-native/m9_conformance.py
+
   windows-native:
     name: Native Windows Build, Tests & Oracle
     runs-on: windows-latest

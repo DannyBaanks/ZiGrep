@@ -310,6 +310,13 @@ options:
       --max-depth=N  do not descend below N levels (rg; long only)
       --max-filesize=N[KMGT]
                     skip files larger than N (rg)
+      --max-columns N
+                    with --json: a line longer than N bytes is emitted as a
+                    window of at most N bytes around the match, plus win_start
+                    and line_len, so the whole line is read back from the file;
+                    the match is never cut, nor is a UTF-8 character. Rows with
+                    no match (context, -v, passthru) are never cut. Measured:
+                    ~58 % fewer real tokens on long lines (M9)
   -b, --byte-offset print the byte offset of each match in the file
       --crlf        treat CRLF as the line terminator, not just \n
   -z, --null-data  NUL separates records instead of \n (grep -z)
@@ -421,6 +428,7 @@ Every commit is tested via GitHub Actions CI in pure Zig:
 * **Sixth bug found while verifying the installer end to end (in `install.ps1`, not in `zigrep`)**: the one-liner **aborted without installing anything** in a session that already had a variable named `$InstallDir` (or `$Version`, ...) in an enclosing scope, with `Cannot overwrite the variable InstallDir because it is optimized`. `irm ... | iex` evaluates the script in the **caller's** scope, where PowerShell turns the script's `param()` variables into constants; the installer then assigned to `$InstallDir` to compute its default path, and that assignment is forbidden on a constant. Two things changed: the parameters are no longer assigned to (the work happens on `$targetDir`, `$versionToUse`, ...), and the parameter **variables** are prefixed (`-Version` still works as an alias) so the installer no longer overwrites the user's own `$Version` / `$InstallDir`. Verified on Windows PowerShell 5.1 in four scenarios: clean session, pre-existing `$InstallDir`, pre-existing `$Version`, and `install.ps1 -Version 0.3.1`.
 * **Exit Codes**: Grep-compliant `0` (match found), `1` (no match), `2` (error).
 * **Deterministic Output**: `--sort` / `--deterministic` mode preserves exact directory-entry emission order identical to GNU grep; default streaming mode provides high-throughput concurrent emission.
+* **Machine-output differentials in CI (M3-M9)**: every agent-facing contract has its own Python differential, byte-comparable against the real files on disk — batch (`batch_conformance.py`), provenance (`provenance_conformance.py`, sha256/size/mtime verified against `sha256sum`/`stat`), compact `zgrep/1c` (`compact_conformance.py`, decodes to exactly the `zgrep/1` records), spill (`spill_conformance.py`, emitted + spill reconstructs the unbudgeted output) and long-line windows (`m9_conformance.py`, `--max-columns`: the window is real file bytes, the match is never cut, a row without a match is never cut and no UTF-8 character is ever split). Counts come from the run, not from these documents.
 
 ---
 

@@ -1,0 +1,19 @@
+arbol: chatgpt-http-mcp commit=3a25b3aec02d bun.lock sha256=55be6e8497a244212905b9ec1eebc128be2c6cd617f7eeba50c22c3c34796389
+tokenizador: BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo
+filas por consulta: las primeras 2000 (--max-results, mismas filas en ambas salidas)
+consulta       W recortadas  tokens sin recorte   tokens recortado  ahorro  match intacto
+function     200          9               69235              69238   -0.0%  si
+function     400          0               69235              69235    0.0%  si
+export       200         32               68040              66487    2.3%  si
+export       400         14               68040              67201    1.2%  si
+require\(    200         16              207748              68468   67.0%  si
+require\(    400         10              207748              69132   66.7%  si
+fetch        200        143              426661              68057   84.0%  si
+fetch        400         61              426661              72444   83.0%  si
+Error        200         34               73870              73292    0.8%  si
+Error        400          6               73870              73533    0.5%  si
+
+TOTAL W=200: 845554 -> 345542 tokens, ahorro 59.1%, match intacto en todas: True
+TOTAL W=400: 845554 -> 351545 tokens, ahorro 58.4%, match intacto en todas: True
+
+VEREDICTO (regla >= 20 % con match intacto, implementacion real): CONFIRMADO para W=200, 400

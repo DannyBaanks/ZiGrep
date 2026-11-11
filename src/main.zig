@@ -100,6 +100,14 @@ const usage =
     \\                    it does not underestimate); never cuts an event.
     \\                    The final summary says truncated, reason,
     \\                    returned, omitted, output_tokens_est
+    \\      --max-columns N
+    \\                    with --json: a line longer than N bytes is emitted
+    \\                    as a window of at most N bytes around the match
+    \\                    (the match is never cut, nor is a UTF-8 character),
+    \\                    plus win_start and line_len, so the whole line is
+    \\                    read back from the file; rows with no match are
+    \\                    never cut. Measured: ~65 % fewer tokens on long
+    \\                    lines (evidence/agent-native/m9)
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches
@@ -344,6 +352,11 @@ pub const Options = struct {
     /// M3: budget over the whole call, with explicit truncation (`summary`).
     max_results: ?usize = null,
     max_output_tokens: ?usize = null,
+    /// M9: `--max-columns N` (JSON only): a row whose LINE is longer than N
+    /// bytes emits a window of at most N bytes around the match instead of the
+    /// whole line, plus where it starts and how long the line is (GUIA §4s).
+    /// Null = off: byte for byte the pre-M9 output.
+    max_columns: ?usize = null,
     /// `-b`: byte offset of the match within the file (grep semantics).
     byte_offset: bool = false,
     /// `--json`: structured JSONL output (schema zgrep/1) instead of text.
@@ -1171,6 +1184,21 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-output-tokens", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.startsWith(u8, body, "max-columns=")) {
+                opts.max_columns = parseCount(body["max-columns=".len..]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-columns", .arg = body["max-columns=".len..] };
+                    return error.Usage;
+                };
+            } else if (std.mem.eql(u8, body, "max-columns")) {
+                i += 1;
+                if (i >= args.len) {
+                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+                    return error.Usage;
+                }
+                opts.max_columns = parseCount(args[i]) orelse {
+                    opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+                    return error.Usage;
+                };
             } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
                 opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
@@ -1712,6 +1740,20 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         opts.fail = .{ .what = "--max-results / --max-output-tokens need --json (or --queries-file)", .arg = "" };
         return error.Usage;
     }
+    if (opts.max_columns) |mc| {
+        // A window of 0 bytes carries nothing: it would silently drop lines.
+        if (mc == 0) {
+            opts.fail = .{ .what = "--max-columns needs a positive number of bytes (a 0-byte window carries nothing)", .arg = "" };
+            return error.Usage;
+        }
+        // The window travels in the JSON fields (`text`, `win_start`,
+        // `line_len`); text output would print a line cut with no way to say
+        // where the rest is.
+        if (!opts.json and opts.queries_file == null) {
+            opts.fail = .{ .what = "--max-columns needs --json (or --queries-file): the window travels in the text, win_start and line_len fields", .arg = "" };
+            return error.Usage;
+        }
+    }
     if (opts.queries_file != null) {
         if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
             opts.fail = .{ .what = "--queries-file takes the patterns from the file; drop -e / -f", .arg = "" };
@@ -1842,6 +1884,7 @@ fn batchQueryProblem(vo: *const Options, gopts: *const Options) ?[]const u8 {
     if (vo.queries_file != null) return "--queries-file cannot nest";
     if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
     if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+    if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
     return null;
 }
 
@@ -1888,7 +1931,7 @@ fn runBatch(
             var skip_value = false;
             var skip_self = false;
             if (std.mem.eql(u8, a, "--spill") or std.mem.startsWith(u8, a, "--spill=")) continue;
-            inline for (.{ "--queries-file", "--max-results", "--max-output-tokens" }) |opt| {
+            inline for (.{ "--queries-file", "--max-results", "--max-output-tokens", "--max-columns" }) |opt| {
                 if (std.mem.eql(u8, a, opt)) skip_value = true;
                 if (std.mem.startsWith(u8, a, opt ++ "=")) skip_self = true;
             }
@@ -1917,6 +1960,10 @@ fn runBatch(
     defer em.uninstall();
     batch_running = true;
     defer batch_running = false;
+    // M9: the column budget is per CALL (a query cannot set it in "flags"),
+    // and it is not copied into each query's argv, so the batch installs it
+    // here for the whole stream. `runSearch` only clears it outside a batch.
+    out_json.max_columns = gopts.max_columns orelse 0;
 
     var any_error = false;
     var any_match = false;
@@ -1982,9 +2029,13 @@ fn runBatch(
 pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
     const gpa = init.gpa;
     // Per-run globals: a previous run of the same process must not leak them.
+    // M9 is the exception on purpose: the column budget is per CALL, the batch
+    // installs it once for the whole stream and no query can change it, so it
+    // is only cleared when this search is not running inside a batch.
     scan.out_sep = '\n';
     scan.heading_mode = false;
     out_json.compact = false;
+    if (!batch_running) out_json.max_columns = 0;
 
     var opts: Options = .{};
     const parsed = parseArgs(arena, args, &opts) catch {
@@ -2063,6 +2114,10 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     // compact mode open the stream with its schema header (a batch writes it
     // once for the whole call).
     out_json.compact = opts.json and opts.json_compact;
+    // M9: the column budget comes from this command line, EXCEPT inside a
+    // batch: there it is per CALL (the batch installed it before the queries
+    // and no query's argv carries it), so the batch value stands.
+    out_json.max_columns = if (batch_running) out_json.max_columns else (opts.max_columns orelse 0);
     platform.stdout_prefix_pending.store(false, .release);
     if (out_json.compact and !batch_running) {
         // Lazily: written before the first output line, never on an empty run.
@@ -3210,6 +3265,74 @@ test "parseArgs: --json con --exec es error de uso (stdout solo lleva eventos)" 
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep", "--json", "--exec", "echo", "pat", "f.txt" };
     try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
+}
+
+test "parseArgs: --max-columns (M9), valor y errores de uso" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns=400", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(?usize, 400), o.max_columns);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json=compact", "--max-columns", "40", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(@as(?usize, 40), o.max_columns);
+    }
+    // Por defecto no está: la salida es la de antes, byte a byte.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.max_columns == null);
+    }
+    // Sin --json la ventana no tiene dónde viajar.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--max-columns", "40", "pat", "f.txt" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    // 0 bytes no es una ventana: borraría líneas sin decirlo.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns=0", "pat", "f.txt" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    // Valor no numérico y argumento que falta.
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns=muchos", "pat", "f.txt" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns" };
+        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+    }
+    // En lote es de la llamada: una consulta no puede pedirla en "flags".
+    // (El argv de una consulta es el de la llamada + "-e PATTERN" + "--" rutas.)
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "--max-columns=40", "-e", "pat", "--", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        var go: Options = .{};
+        const ga = [_][:0]const u8{ "zgrep", "--json", "pat" };
+        _ = try parseArgs(alloc, &ga, &go);
+        try std.testing.expect(batchQueryProblem(&o, &go) != null);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "-e", "pat", "--", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        var go: Options = .{};
+        const ga = [_][:0]const u8{ "zgrep", "--json", "pat" };
+        _ = try parseArgs(alloc, &ga, &go);
+        try std.testing.expect(batchQueryProblem(&o, &go) == null);
+    }
 }
 
 test "parseArgs: la numeracion arranca APAGADA (0.4.0) y -n la enciende" {

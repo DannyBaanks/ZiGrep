@@ -28,7 +28,9 @@ CORPUS = "bench-corpus/corpus_50"
 FIX = "evidence/feature-corpus"
 
 FIELDS = ("query_id", "type", "path", "line", "column", "byte_start", "byte_end", "match", "text",
-          "inverted", "lines", "matches", "mode", "sha256", "size", "mtime_ns", "source")
+          "inverted", "lines", "matches", "mode", "sha256", "size", "mtime_ns", "source",
+          # M9: solo en filas recortadas; su ausencia significa "no recortada".
+          "win_start", "line_len")
 ROW_TYPE = {"m": "match", "c": "context", "o": "occurrence", "p": "passthru"}
 
 
@@ -73,9 +75,20 @@ def decode_compact(lines: list[str]) -> tuple[list[dict], list[dict]]:
             recs.append({"query_id": qid, "type": "count", "path": d[1],
                          "lines": d[2] if tag == "#" else None, "matches": d[2] if tag == "#m" else None})
         else:
-            r = {"query_id": qid, "type": ROW_TYPE[tag[0]], "path": path, "line": d[1], "inverted": tag.endswith("v")}
+            # M9: una fila recortada lleva el sufijo `w` y dos elementos más
+            # ([t"w",line,col,bs,len,ventana,win_start,line_len(,match)]); la
+            # columna sigue contando la línea ENTERA, así que el match se
+            # desplaza dentro de la ventana por win_start.
+            base = tag[:-1] if tag.endswith("w") else tag
+            r = {"query_id": qid, "type": ROW_TYPE[tag[0]], "path": path, "line": d[1], "inverted": base.endswith("v")}
             if len(d) == 3:
                 r.update({"text": d[2], "column": None, "byte_start": None, "byte_end": None, "match": None})
+            elif len(d) >= 8:
+                col, bs, n, text, win_start, line_len = d[2:8]
+                shift = col - 1 - win_start
+                m = d[8] if len(d) == 9 else text.encode()[shift:shift + n].decode()
+                r.update({"column": col, "byte_start": bs, "byte_end": bs + n, "text": text,
+                          "match": m, "win_start": win_start, "line_len": line_len})
             else:
                 col, bs, n, text = d[2:6]
                 m = d[6] if len(d) == 7 else text.encode()[col - 1:col - 1 + n].decode()
@@ -108,6 +121,20 @@ CASES = [
     ("prov_lineas", ["--provenance", "--sort", "ZGREP_RARE_TOKEN", CORPUS]),
     ("prov_l", ["--provenance", "-l", "HIT", f"{FIX}/a.txt", f"{FIX}/b.txt"]),
     ("prov_c", ["--provenance", "-c", "HIT", f"{FIX}/a.txt", f"{FIX}/x.txt"]),
+]
+
+# M9: `--max-columns` corta filas largas; el compacto tiene que decodificar
+# EXACTAMENTE al evento de zgrep/1 (cortadas y enteras mezcladas, con contexto,
+# con --replace y sin que nada se corte).
+M9FIX = "evidence/agent-native/m9/fix"
+CASES += [
+    ("m9_ventana40", ["--max-columns", "40", "HIT", f"{M9FIX}/long.txt"]),
+    ("m9_ventana400", ["--sort", "--max-columns", "400", "HIT", f"{M9FIX}/long.txt"]),
+    ("m9_multi", ["--sort", "--max-columns", "200", "HIT", f"{M9FIX}/multi.txt"]),
+    ("m9_ctx", ["--max-columns", "40", "-C1", "HIT", f"{M9FIX}/multi.txt"]),
+    ("m9_replace", ["--max-columns", "40", "--replace=ZZ", "HIT", f"{M9FIX}/multi.txt"]),
+    ("m9_entero", ["--max-columns", "40", "HIT", f"{M9FIX}/short.txt"]),
+    ("m9_prov", ["--provenance", "--max-columns", "40", "HIT", f"{M9FIX}/long.txt"]),
 ]
 
 
@@ -188,6 +215,13 @@ def main() -> int:
         cr = [tuple(r.get(f) for f in FIELDS) for r in recs if r["type"] in RES]
         check(fr == cr and fs["returned"] == cs["returned"] and fs["omitted"] == cs["omitted"],
               f"--max-results {k}: mismos resultados y contadores en compacto", f"{fs} vs {cs}")
+
+    # M9: en lote la ventana es de la llamada y decodifica igual en los dos
+    # dialectos (las filas de una consulta no pueden pedirla en "flags").
+    qm9 = (json.dumps({"id": "long", "pattern": "HIT", "paths": [f"{M9FIX}/long.txt"]}) + "\n").encode()
+    full, rc1 = run([z, "--json", "--sort", "--max-columns", "40", "--queries-file", "-"], qm9)
+    comp, rc2 = run([z, "--json=compact", "--sort", "--max-columns", "40", "--queries-file", "-"], qm9)
+    compare("lote m9 ventana 40", full, comp, rc1, rc2)
 
     # La cabecera es perezosa: busqueda vacia = stdout vacio; con presupuesto,
     # el summary sale siempre y la cabecera va delante.
