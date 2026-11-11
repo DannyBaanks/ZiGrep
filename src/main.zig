@@ -830,6 +830,20 @@ fn patternHasUpper(pat: []const u8) bool {
     return false;
 }
 
+/// `--nav SPEC`: parse errors become usage errors with a specific message.
+fn parseNav(opts: *Options, spec: []const u8, invalid_what: []const u8) usage_error!nav.NavPlan {
+    return nav.NavPlan.parse(spec) catch |err| {
+        opts.fail = .{
+            .what = switch (err) {
+                error.ContradictoryNavPlan => "contradictory navigation spec: v^ (only the root's files) and ^v (skip the root's files) together search nothing",
+                else => invalid_what,
+            },
+            .arg = spec,
+        };
+        return error.Usage;
+    };
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -993,20 +1007,14 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     body["nav=".len..]
                 else
                     body["befunge=".len..];
-                opts.nav_plan = nav.NavPlan.parse(spec) catch {
-                    opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = spec };
-                    return error.Usage;
-                };
+                opts.nav_plan = try parseNav(opts, spec, "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)");
             } else if (std.mem.eql(u8, body, "nav") or std.mem.eql(u8, body, "befunge")) {
                 i += 1;
                 if (i >= args.len) {
                     opts.fail = .{ .what = "option requires an argument", .arg = a };
                     return error.Usage;
                 }
-                opts.nav_plan = nav.NavPlan.parse(args[i]) catch {
-                    opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = args[i] };
-                    return error.Usage;
-                };
+                opts.nav_plan = try parseNav(opts, args[i], "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)");
             } else if (std.mem.eql(u8, body, "ignore-case")) {
                 opts.ignore_case = true;
             } else if (std.mem.eql(u8, body, "invert-match")) {
@@ -1600,10 +1608,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     if (parseCount(value)) |mc| {
                         opts.max_count = mc;
                     } else {
-                        opts.nav_plan = nav.NavPlan.parse(value) catch {
-                            opts.fail = .{ .what = "invalid Befunge navigation spec or max-count number", .arg = value };
-                            return error.Usage;
-                        };
+                        opts.nav_plan = try parseNav(opts, value, "invalid Befunge navigation spec or max-count number");
                     }
                     ci = chars.len;
                 },

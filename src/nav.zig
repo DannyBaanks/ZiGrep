@@ -70,6 +70,11 @@ pub const NavPlan = struct {
             if (op == .left) plan.reverse_siblings = true;
         }
 
+        // A ceiling (no descent) plus a trampoline (no root files) leaves
+        // nothing to search: `v^v` used to run, find nothing and exit 1 with
+        // no message (M11 round 2, R18). It is a contradiction, so it is an
+        // error the caller can explain.
+        if (plan.has_ceiling and plan.has_trampoline) return error.ContradictoryNavPlan;
         return plan;
     }
 
@@ -126,3 +131,15 @@ test "nav: contraposition combos: ceiling and trampoline" {
     const rev = try NavPlan.parse("dl");
     try std.testing.expect(rev.reverse_siblings);
 }
+
+test "nav: ceiling + trampoline together is rejected (it would search nothing)" {
+    try std.testing.expectError(error.ContradictoryNavPlan, NavPlan.parse("v^v"));
+    try std.testing.expectError(error.ContradictoryNavPlan, NavPlan.parse("^v^"));
+    try std.testing.expectError(error.ContradictoryNavPlan, NavPlan.parse("du ud"));
+    // Each one alone still works.
+    const c = try NavPlan.parse("v^");
+    try std.testing.expect(c.has_ceiling and !c.has_trampoline);
+    const t = try NavPlan.parse("^v");
+    try std.testing.expect(t.has_trampoline and !t.has_ceiling);
+}
+
