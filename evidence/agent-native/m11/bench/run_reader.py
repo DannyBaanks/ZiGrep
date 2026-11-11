@@ -54,10 +54,11 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--workdir", help="empty directory for the claude backend")
     ap.add_argument("--only", help="comma-separated qid__cond keys")
+    ap.add_argument("--questions", default=str(HERE / "questions.json"), help="question corpus (round 2: questions_r2.json)")
     a = ap.parse_args()
     root = Path(a.contexts)
     man = json.loads((root / "manifest.json").read_text())
-    qs = {q["id"]: q for q in json.loads((HERE / "questions.json").read_text())["questions"]}
+    qs = {q["id"]: q for q in json.loads(Path(a.questions).read_text())["questions"]}
     system = (HERE / "reader_prompt.txt").read_text()
     out = root / "answers" / a.label
     out.mkdir(parents=True, exist_ok=True)

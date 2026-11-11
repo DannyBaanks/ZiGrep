@@ -40,9 +40,10 @@ def main() -> int:
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--model", default="sonnet")
     ap.add_argument("--seed", type=int, default=20261111)
+    ap.add_argument("--questions", default=str(HERE / "questions.json"), help="question corpus (round 2: questions_r2.json)")
     a = ap.parse_args()
     root = Path(a.contexts)
-    qs = {q["id"]: q for q in json.loads((HERE / "questions.json").read_text())["questions"]}
+    qs = {q["id"]: q for q in json.loads(Path(a.questions).read_text())["questions"]}
     out = root / "judge" / a.label
     out.mkdir(parents=True, exist_ok=True)
     keys = [f"{q}__{c}" for q in qs for c in CONDS]

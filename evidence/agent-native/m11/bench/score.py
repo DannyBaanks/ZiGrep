@@ -45,9 +45,10 @@ def main() -> int:
     ap.add_argument("--contexts", required=True)
     ap.add_argument("--label", required=True)
     ap.add_argument("--out")
+    ap.add_argument("--questions", default=str(HERE / "questions.json"), help="question corpus (round 2: questions_r2.json)")
     a = ap.parse_args()
     root = Path(a.contexts)
-    qs = json.loads((HERE / "questions.json").read_text())["questions"]
+    qs = json.loads(Path(a.questions).read_text())["questions"]
     rows = []
     for q in qs:
         for c in CONDS:
@@ -75,7 +76,7 @@ def main() -> int:
     lines.append("")
     lines.append("'!' = a forbidden (known-wrong) pattern matched;  'E' = reader error or missing answer")
     lines.append("")
-    for subset in ("dev", "heldout", "all"):
+    for subset in sorted({q["set"] for q in qs}) + ["all"]:
         sel = [r for r in rows if subset == "all" or r["set"] == subset]
         lines.append(f"[{subset}]  mean fact score / mean availability / forbidden hits / mean cites / abstentions")
         for c in CONDS:
@@ -112,7 +113,7 @@ def main() -> int:
                 r = next(x for x in rows if x["qid"] == q["id"] and x["cond"] == c)
                 cells.append(f"{'-' if r['judge_grade'] is None else r['judge_grade']:>4}")
             lines.append(f"{q['id']:3s} {q['set']:7s}" + "  ".join(cells))
-        for subset in ("dev", "heldout", "all"):
+        for subset in sorted({q["set"] for q in qs}) + ["all"]:
             sel = [r for r in rows if (subset == "all" or r["set"] == subset) and r.get("judge_grade") is not None]
             lines.append(f"[{subset}]")
             for c in CONDS:
