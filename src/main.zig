@@ -810,6 +810,26 @@ fn add_cache_root(opts: *Options, path: []const u8) usage_error!void {
     opts.cache_roots_count += 1;
 }
 
+/// `-S`: does the pattern contain an uppercase letter? Patterns are UTF-8,
+/// so Latin-1 uppercase is the two-byte sequence C3 80..C3 9E (À..Þ), minus
+/// C3 97 (×), the same range the -i folding handles (search.zig). The old
+/// check read raw bytes 0xC0..0xDE as Latin-1, so the UTF-8 lead byte 0xC3 of
+/// any accented LOWERCASE letter (ñ, á, ü...) counted as uppercase and
+/// `-S ñandú` stayed case-sensitive (M11 round 2, R20).
+fn patternHasUpper(pat: []const u8) bool {
+    var i: usize = 0;
+    while (i < pat.len) : (i += 1) {
+        const c = pat[i];
+        if (c >= 'A' and c <= 'Z') return true;
+        if (c == 0xC3 and i + 1 < pat.len) {
+            const d = pat[i + 1];
+            if (d >= 0x80 and d <= 0x9E and d != 0x97) return true;
+            i += 1;
+        }
+    }
+    return false;
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -2206,12 +2226,10 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     if (opts.smart_case and !opts.ignore_case) {
         var has_upper = false;
         for (patterns) |pat| {
-            for (pat) |c| {
-                if (c >= 'A' and c <= 'Z') has_upper = true;
-                if (c >= 0xC0 and c <= 0xDE and c != 0xD7) has_upper = true; // Latin-1
-                if (has_upper) break;
+            if (patternHasUpper(pat)) {
+                has_upper = true;
+                break;
             }
-            if (has_upper) break;
         }
         if (!has_upper) opts.ignore_case = true;
     }
@@ -3271,6 +3289,22 @@ test "parseArgs: --json con --exec es error de uso (stdout solo lleva eventos)" 
     var o: Options = .{};
     const a = [_][:0]const u8{ "zgrep", "--json", "--exec", "echo", "pat", "f.txt" };
     try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
+}
+
+test "patternHasUpper (-S): UTF-8, no bytes sueltos como Latin-1" {
+    try std.testing.expect(!patternHasUpper("abc"));
+    try std.testing.expect(patternHasUpper("aBc"));
+    // Lowercase accented letters: lead byte 0xC3, second byte >= 0xA0.
+    try std.testing.expect(!patternHasUpper("ñandú"));
+    try std.testing.expect(!patternHasUpper("über"));
+    // Uppercase Latin-1: Ñ = C3 91, Ú = C3 9A, À = C3 80, Þ = C3 9E.
+    try std.testing.expect(patternHasUpper("ÑANDÚ"));
+    try std.testing.expect(patternHasUpper("\xC3\x80"));
+    try std.testing.expect(patternHasUpper("\xC3\x9E"));
+    // × (C3 97) is not a letter.
+    try std.testing.expect(!patternHasUpper("a\xC3\x97b"));
+    // A trailing lone 0xC3 is not uppercase.
+    try std.testing.expect(!patternHasUpper("a\xC3"));
 }
 
 test "parseArgs: --max-columns (M9), valor y errores de uso" {
