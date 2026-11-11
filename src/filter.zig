@@ -238,9 +238,14 @@ pub const FilterEngine = struct {
         }
     }
 
+    /// `--no-ignore` turns off what comes from ignore FILES and the built-in
+    /// default lists: the loaders skip `.gitignore`/`.dataignore` and the
+    /// caller clears `use_defaults`, so `ignore_patterns` stays empty. It must
+    /// NOT cancel what the user asked for explicitly (`--no-hidden`,
+    /// `--exclude-dir`, `--exclude`, `--include`, `--include-ext`,
+    /// `--exclude-ext`), as in ripgrep, where `--no-ignore` keeps `-g` globs.
+    /// An early `return false` on `no_ignore` used to cancel all of them.
     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
-        if (self.no_ignore) return false;
-
         if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
             return true;
         }
@@ -263,8 +268,6 @@ pub const FilterEngine = struct {
     }
 
     pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
-        if (self.no_ignore) return false;
-
         if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
             return true;
         }
@@ -361,3 +364,26 @@ test "FilterEngine custom CLI exclusions and inclusions" {
     try std.testing.expect(!engine.isFileExcluded("main.zig"));
     try std.testing.expect(engine.isFileExcluded("script.py")); // Excluded because not .zig!
 }
+
+test "--no-ignore keeps the explicit filters and drops ignore files and defaults" {
+    var engine = FilterEngine.init(std.testing.allocator);
+    defer engine.deinit();
+    // What main.zig does for --no-ignore: no ignore files, no default lists.
+    engine.no_ignore = true;
+    engine.use_defaults = false;
+    // Explicit user filters.
+    engine.skip_hidden = true;
+    try engine.addExcludedDirs("skipme");
+    try engine.addExcludedExts("log");
+
+    // Explicit filters still apply (each one was cancelled before the fix).
+    try std.testing.expect(engine.isDirExcluded(".hidden"));
+    try std.testing.expect(engine.isFileExcluded(".hfile"));
+    try std.testing.expect(engine.isDirExcluded("skipme"));
+    try std.testing.expect(engine.isFileExcluded("k.log"));
+    // Default lists stay off: node_modules and *.min.js are searched.
+    try std.testing.expect(!engine.isDirExcluded("node_modules"));
+    try std.testing.expect(!engine.isFileExcluded("bundle.min.js"));
+    try std.testing.expect(!engine.isFileExcluded("main.zig"));
+}
+

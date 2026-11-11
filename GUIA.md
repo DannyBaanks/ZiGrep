@@ -363,6 +363,12 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 
    * `--no-ignore` desactiva también las exclusiones por defecto (`.git`,
      `node_modules`, `*.log`, …): es un escaneo en bruto.
+   * Lo que pides explícitamente **sigue aplicándose** con `--no-ignore`:
+     `--no-hidden`, `--exclude-dir`, `--exclude`, `--exclude-ext`, `--include`
+     e `--include-ext` (igual que ripgrep, que con `--no-ignore` conserva sus
+     `-g`). Hasta 2026-11-11 un `return false` temprano en `src/filter.zig`
+     los anulaba todos; lo encontró la evaluación de M11 y lo fija el test
+     "--no-ignore keeps the explicit filters…".
 
 ### Cómo saber qué ruta se usó
 
