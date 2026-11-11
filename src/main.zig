@@ -2240,6 +2240,11 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         },
     };
 
+    // Output separator is per-run, not per-line. Set BEFORE the stdin branch,
+    // which returns early: `-z` on stdin used to print '\n'-separated records
+    // (hidden while every NUL-containing stdin was misreported as binary).
+    scan.out_sep = if (opts.null_data) 0 else '\n';
+
     const is_stdin = operands.len == 0 or (operands.len == 1 and std.mem.eql(u8, operands[0], "-"));
     if (is_stdin) {
         var stdin_buf: std.ArrayList(u8) = .empty;
@@ -2292,13 +2297,14 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         const data = stdin_buf.items;
         const probe = @min(data.len, scan.binary_probe_bytes);
         const utf16_bom = scan.isUtf16Bom(data);
-        const is_bin = !opts.binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-        if (is_bin) {
-            if (opts.mode == .lines) {
-                std.debug.print("Binary file (standard input) matches\n", .{});
-            }
-            return 0;
-        }
+        // Same rule as files (scan.scanFile): a NUL in the first probe window
+        // means binary unless -a, a UTF-16 BOM, or --null-data (where NUL is
+        // the record separator). A binary input is then treated as NOT
+        // matching (`--binary-files=without-match`, the default): no lines,
+        // `-c` prints 0, rc 1. This used to print "Binary file (standard
+        // input) matches" and return 0 WITHOUT searching, so any binary stdin
+        // "matched" every pattern (M11 round 2, R24).
+        const is_bin = !opts.binary and !opts.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
 
         var utf8_data: ?[]u8 = null;
         defer if (utf8_data) |u| gpa.free(u);
@@ -2312,7 +2318,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         var out: std.ArrayList(u8) = .empty;
         defer out.deinit(gpa);
 
-        const br = scan.scanBuffer(gpa, search_data, &searcher, path_label, show_p, opts.mode, scan_cfg, &out) catch {
+        const br: scan.BufferResult = if (is_bin) .{} else scan.scanBuffer(gpa, search_data, &searcher, path_label, show_p, opts.mode, scan_cfg, &out) catch {
             return 2;
         };
 

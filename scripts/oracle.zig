@@ -437,18 +437,31 @@ pub fn main(init: std.process.Init) !void {
     // build cannot assume on PATH, so it is skipped there explicitly.
     var total_tests = cases.len;
     if (builtin.os.tag != .windows) {
-        total_tests += 1;
-        const test_name = "stdin pipeline (pipe -> zigrep)";
-        const cmd_z = try std.fmt.allocPrint(arena, "printf 'alpha\\nbeta\\ngamma\\n' | {s} -n 'beta'", .{exe});
-        const cmd_g = "printf 'alpha\\nbeta\\ngamma\\n' | grep -n 'beta'";
-        const z_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_z }) catch null;
-        const g_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_g }) catch null;
-        if (z_res != null and g_res != null and z_res.?.code == 0 and g_res.?.code == 0 and std.mem.eql(u8, z_res.?.stdout, g_res.?.stdout)) {
-            passed += 1;
-            common.printOut(init.io, "  [PASS] {s:<42} (exit 0, lines 1)\n", .{test_name});
-        } else {
-            failed += 1;
-            common.printOut(init.io, "  [FAIL] {s:<42} reason=STDIN_MISMATCH\n", .{test_name});
+        // Each case: the same printf input piped into zigrep and into grep,
+        // compared on exit code AND stdout bytes. `printf '\000'` writes a NUL.
+        const StdinCase = struct { name: []const u8, input: []const u8, z_args: []const u8, g_args: []const u8 };
+        const stdin_cases = [_]StdinCase{
+            .{ .name = "stdin pipeline (pipe -> zigrep)", .input = "alpha\\nbeta\\ngamma\\n", .z_args = "-n 'beta'", .g_args = "-n 'beta'" },
+            // M11 R24: binary stdin without the pattern used to print "Binary
+            // file (standard input) matches" and exit 0 without searching.
+            .{ .name = "stdin binary, no match -> rc 1, no output", .input = "abc\\000def\\n", .z_args = "'zzz'", .g_args = "'zzz'" },
+            // -z on stdin: NUL is the record separator, not a binary marker,
+            // and the output records are NUL-terminated (was '\\n').
+            .{ .name = "stdin -z: NUL records, NUL output", .input = "abc\\000def\\000", .z_args = "-z 'def'", .g_args = "-z 'def'" },
+        };
+        for (stdin_cases) |sc| {
+            total_tests += 1;
+            const cmd_z = try std.fmt.allocPrint(arena, "printf '{s}' | {s} {s}", .{ sc.input, exe, sc.z_args });
+            const cmd_g = try std.fmt.allocPrint(arena, "printf '{s}' | grep {s}", .{ sc.input, sc.g_args });
+            const z_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_z }) catch null;
+            const g_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_g }) catch null;
+            if (z_res != null and g_res != null and z_res.?.code == g_res.?.code and std.mem.eql(u8, z_res.?.stdout, g_res.?.stdout)) {
+                passed += 1;
+                common.printOut(init.io, "  [PASS] {s:<42} (exit {d})\n", .{ sc.name, z_res.?.code });
+            } else {
+                failed += 1;
+                common.printOut(init.io, "  [FAIL] {s:<42} reason=STDIN_MISMATCH (zigrep {d}, grep {d})\n", .{ sc.name, if (z_res) |z| z.code else 255, if (g_res) |g| g.code else 255 });
+            }
         }
     }
 
