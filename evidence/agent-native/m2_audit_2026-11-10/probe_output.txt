@@ -1,0 +1,19 @@
+zgrep: zgrep 0.4.0-dev | grep (GNU grep) 3.11 | ripgrep 14.1.0
+PASS rg --column HIT a.txt
+PASS rg --column --no-line-number HIT a.txt
+PASS rg --no-line-number --column HIT a.txt
+PASS rg --column -H HIT a.txt
+PASS rg --vimgrep HIT a.txt
+PASS grep HIT a.txt
+PASS grep HIT z.txt a.txt m.txt c.txt
+PASS grep -l HIT z.txt a.txt m.txt
+PASS grep -c HIT z.txt a.txt
+PASS grep -h HIT a.txt d/b.txt
+PASS grep -n HIT a.txt d/b.txt
+PASS grep -q HIT a.txt nope
+PASS rg -q HIT a.txt nope
+PASS grep -q ZZZ a.txt nope
+PASS grep HIT a.txt nope
+PASS json --passthru: passthru:False,match:False,passthru:False,match:False,passthru:False
+PASS json --exec: rc=2, stdout vacio
+TOTAL pass=17 fail=0

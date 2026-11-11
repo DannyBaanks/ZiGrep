@@ -30,7 +30,7 @@ const Algo = search.Algo;
 const Mode = scan.Mode;
 const Allocator = std.mem.Allocator;
 
-const version = "0.3.2";
+const version = "0.4.0-dev";
 
 /// Size budget for the zero-thread micro-tree fast path: a tree whose regular
 /// files add up to less than this is scanned on the calling thread, with no
@@ -248,10 +248,12 @@ pub const Options = struct {
     /// `-s` / `--no-messages`: do not report unreadable files.
     no_messages: bool = false,
     /// Line numbers are OFF by default (`-n`/`--line-number` turns them on), like
-    /// GNU grep and like rg when the output is a pipe. `--no-line-number` is accepted
-    /// for compatibility and is a no-op.
-    /// `-n` stays a no-op so `grep`-style clusters keep parsing.
+    /// GNU grep and like rg when the output is a pipe. `--column` implies them
+    /// (rg), unless `--no-line-number` appears anywhere on the command line.
     show_line_no: bool = false,
+    /// `--no-line-number` was given: it wins over the implicit `-n` of
+    /// `--column`, in any order (rg semantics, measured).
+    no_line_number_explicit: bool = false,
     /// `-Z` / `-0`: terminate file names with NUL instead of ':' / newline.
     null_filename: bool = false,
     /// `-A` / `-B` / `-C` line context.
@@ -957,6 +959,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.no_messages = true;
             } else if (std.mem.eql(u8, body, "no-line-number")) {
                 opts.show_line_no = false;
+                opts.no_line_number_explicit = true;
             } else if (std.mem.eql(u8, body, "line-number")) {
                 opts.show_line_no = true;
             } else if (std.mem.eql(u8, body, "json")) {
@@ -1574,6 +1577,17 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         }
     }
 
+    // rg: `--column` implies `--line-number`; a column alone ("6:beta") is
+    // indistinguishable from a line number for a machine reader.
+    if (opts.column and !opts.no_line_number_explicit) opts.show_line_no = true;
+    // `--json` promises stdout carries ONLY zgrep/1 events. `--exec` hands the
+    // child our stdout, so the two cannot be honoured together: refuse instead
+    // of mixing free text into the event stream (contract.md §8).
+    if (opts.json and opts.exec_cmd != null) {
+        opts.fail = .{ .what = "--json cannot be combined with --exec (the command's output would break the JSONL stream)", .arg = "--exec" };
+        return error.Usage;
+    }
+
     if (opts.patterns_count > 0 or opts.pattern_files_count > 0) {
         // Patterns came from -e / --regexp / -f: all positionals are operands (paths).
         const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
@@ -1909,6 +1923,7 @@ pub fn main(init: std.process.Init) !void {
     // Check operands validity
     var valid_operands: std.ArrayList([:0]const u8) = .empty;
     var had_error = false;
+    var all_files = true;
     for (operands) |op| {
         const info = vfs.statFile(init.io, op, .{}) catch |err| {
             if (!opts.no_messages) std.debug.print("zgrep: {s}: {s}\n", .{ op, @errorName(err) });
@@ -1916,8 +1931,15 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
         if (info.kind != .directory and info.kind != .file) continue;
+        if (info.kind != .file) all_files = false;
         try valid_operands.append(arena, op);
     }
+    // Several explicit FILES are answered in argument order, like GNU grep
+    // (and like rg in practice). The streaming swarm pops its work LIFO, so
+    // `zgrep pat a b c` used to print c, b, a: an agent that zips the output
+    // with its own argument list got it backwards. Directories keep the
+    // streaming path (rg does not promise an order there either; --sort does).
+    if (valid_operands.items.len > 1 and all_files) opts.sort = true;
 
     if (valid_operands.items.len == 0 and had_error) {
         std.process.exit(2);
@@ -2044,6 +2066,10 @@ pub fn main(init: std.process.Init) !void {
             );
         }
 
+        // POSIX/GNU grep (and rg): with -q a match wins over an error, so
+        // `zgrep -q pat present missing` is 0, not 2. --exec also runs in
+        // quiet mode but keeps "any error is 2".
+        if (matched and opts.mode == .quiet and opts.exec_cmd == null) std.process.exit(0);
         if (had_error) std.process.exit(2);
         if (matched) std.process.exit(0);
         std.process.exit(1);
@@ -2318,6 +2344,8 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (exec_failed) std.process.exit(2);
+    // -q: a match wins over an error (GNU grep, rg); see the streaming path.
+    if (stats_matched_files > 0 and opts.mode == .quiet and opts.exec_cmd == null) std.process.exit(0);
     if (had_error or stats_err > 0) std.process.exit(2);
     if (stats_matched_files > 0) std.process.exit(0);
     std.process.exit(1);
@@ -2783,6 +2811,38 @@ test "parseArgs: -U, --multiline, --multiline-dotall, --stop-on-nonmatch" {
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.stop_on_nonmatch);
     }
+}
+
+test "parseArgs: --column implica -n (rg) salvo --no-line-number en cualquier orden" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--column", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(o.show_line_no);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--column", "--no-line-number", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(!o.show_line_no);
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--no-line-number", "--column", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expect(!o.show_line_no);
+    }
+}
+
+test "parseArgs: --json con --exec es error de uso (stdout solo lleva eventos)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var o: Options = .{};
+    const a = [_][:0]const u8{ "zgrep", "--json", "--exec", "echo", "pat", "f.txt" };
+    try std.testing.expectError(error.Usage, parseArgs(arena.allocator(), &a, &o));
 }
 
 test "parseArgs: la numeracion arranca APAGADA (0.4.0) y -n la enciende" {

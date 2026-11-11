@@ -162,3 +162,54 @@ Null el flip cambia el número de línea por defecto, no el motor.
 La última fila es la regla de M1/M2: en modo JSON no se emite nada que no sea un
 evento. Verificado por el diferencial texto↔json (45/45) que ademas comprueba
 los `byte_start`/`byte_end` contra el fichero real.
+
+## 9. Correcciones de la auditoría e2e de M2 (2026-11-10, claude_code)
+
+Las secciones 1–8 no se reescriben: estas filas las corrigen o completan.
+Medido con GNU grep 3.11 (`/usr/bin/grep`: en un shell interactivo `grep`
+puede ser una función o un alias, verifícalo con `type grep`) y rg 14.1.0.
+
+**Afirmaciones que no se sostenían:**
+
+- §4 y §7: "zgrep 3–6× / 2–6× más rápido que grep en **8/8**". En
+  `word_boundary_occurrences` empata o pierde (§4: 0,188 vs 0,193; §7: 0,073 vs
+  0,067). Son **7/8**.
+- §6 y §7: las cifras de bytes (142.125, 9.885.342, 10.447.305...) son la
+  **suma de 3 repeticiones**, no la salida de una llamada (el §4 sí lo decía).
+  Una ejecución de `word_boundary_occurrences` son 3.295.114 bytes. El +5,7 % es
+  un cociente y no cambia. `task_bench.py` publica ahora `out_bytes_per_rep` e
+  imprime esa columna; `out_bytes_total` se conserva por compatibilidad.
+- §1, fila `-s`: en rg, `-s` es `--case-sensitive`, no "silenciar errores". Su
+  equivalente es `--no-messages`: rc 2 con stderr vacío, igual que zgrep y grep.
+- §3: "ninguna se cuelga" vale para las operaciones interactivas. Una búsqueda
+  **sin ruta** lee stdin, y si stdin es un pipe que nadie cierra espera para
+  siempre, igual que grep y rg (`sleep 4 | timeout 2 zgrep X` → 124 en los
+  tres). Un agente debe pasar siempre una ruta o `</dev/null`.
+
+**Bugs encontrados y corregidos** (tests y oráculo en el mismo commit):
+
+| caso | antes | ahora | referencia |
+|---|---|---|---|
+| `--column` sin `-n` | `6:beta HIT` | `2:6:beta HIT` | rg: `--column` implica `-n`; `--no-line-number` en cualquier orden lo apaga |
+| `-q pat presente inexistente` | rc 2 | rc 0 | grep y rg: con `-q`, un match gana al error |
+| `zgrep pat a b c` (ficheros) | c, b, a | a, b, c | grep: orden de los argumentos |
+| `--json --passthru` | línea no coincidente = `type:"match"`, `inverted:true` | `type:"passthru"`, `inverted:false` | schema zgrep/1 (§4k de la GUIA) |
+| `--json --exec` | texto del hijo mezclado en el stream | error de uso, rc 2, stdout vacío | regla del §8 |
+
+El caso `--column` del oráculo le pasaba `-n` a zgrep para igualar a rg, y eso
+escondía el bug 1. Ahora va sin `-n`, a propósito.
+
+**Filas que se añaden al contrato:**
+
+| situación | comportamiento |
+|---|---|
+| `-q`, match + operando ilegible | rc 0 (stderr con el error, salvo `-s`) |
+| varios **ficheros** explícitos | salida en el orden de los argumentos |
+| algún **directorio** entre los operandos | orden de terminación del enjambre, como rg; `--sort` lo fija |
+| `--json` con `--exec` | rc 2, stdout vacío |
+| `--json` con `--version` / `--type-list` | texto: son acciones informativas, no búsquedas, y no emiten eventos |
+| `-N` | navegación Befunge (no es el `--no-line-number` de rg) |
+
+Versión: este cambio de comportamiento sale como **0.4.0-dev**; el binario
+desplegado decía `zgrep 0.3.2`, y el plan exige 0.4.0 para cualquier cambio de
+comportamiento.

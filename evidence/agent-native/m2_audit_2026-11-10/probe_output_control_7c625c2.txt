@@ -1,0 +1,37 @@
+zgrep: zgrep 0.3.2 | grep (GNU grep) 3.11 | ripgrep 14.1.0
+FAIL rg --column HIT a.txt
+  zgrep: 6:beta HIT|1:HIT two|rc=0|
+  ref:   2:6:beta HIT|4:1:HIT two|rc=0|
+PASS rg --column --no-line-number HIT a.txt
+PASS rg --no-line-number --column HIT a.txt
+FAIL rg --column -H HIT a.txt
+  zgrep: a.txt:6:beta HIT|a.txt:1:HIT two|rc=0|
+  ref:   a.txt:2:6:beta HIT|a.txt:4:1:HIT two|rc=0|
+PASS rg --vimgrep HIT a.txt
+PASS grep HIT a.txt
+FAIL grep HIT z.txt a.txt m.txt c.txt
+  zgrep: c.txt:HIT|m.txt:HIT|a.txt:beta HIT|a.txt:HIT two|z.txt:HIT|rc=0|
+  ref:   z.txt:HIT|a.txt:beta HIT|a.txt:HIT two|m.txt:HIT|c.txt:HIT|rc=0|
+FAIL grep -l HIT z.txt a.txt m.txt
+  zgrep: m.txt|a.txt|z.txt|rc=0|
+  ref:   z.txt|a.txt|m.txt|rc=0|
+FAIL grep -c HIT z.txt a.txt
+  zgrep: a.txt:2|z.txt:1|rc=0|
+  ref:   z.txt:1|a.txt:2|rc=0|
+FAIL grep -h HIT a.txt d/b.txt
+  zgrep: x HIT|beta HIT|HIT two|rc=0|
+  ref:   beta HIT|HIT two|x HIT|rc=0|
+FAIL grep -n HIT a.txt d/b.txt
+  zgrep: d/b.txt:1:x HIT|a.txt:2:beta HIT|a.txt:4:HIT two|rc=0|
+  ref:   a.txt:2:beta HIT|a.txt:4:HIT two|d/b.txt:1:x HIT|rc=0|
+FAIL grep -q HIT a.txt nope
+  zgrep: rc=2|
+  ref:   rc=0|
+FAIL rg -q HIT a.txt nope
+  zgrep: rc=2|
+  ref:   rc=0|
+PASS grep -q ZZZ a.txt nope
+PASS grep HIT a.txt nope
+FAIL json --passthru: match:True,match:False,match:True,match:False,match:True
+FAIL json --exec: rc=0 stdout=a.txt
+TOTAL pass=6 fail=11

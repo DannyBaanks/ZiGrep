@@ -633,6 +633,86 @@ S/N con la lista exacta y el total.
 
 Verificado en tres fixtures: cache segura borrada, build en marcha omitido, y
 `zig-out` apuntado desde `~/bin` marcado PROTEGIDA.
+
+## 4k. `--json`: salida estructurada para agentes (nuevo en 0.4.0-dev)
+
+Una línea JSON por registro de salida. Para un agente es la diferencia entre
+parsear texto con regexes y leer campos:
+
+```sh
+zigrep --json -n HIT a.txt
+```
+
+```json
+{"schema":"zgrep/1","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+```
+
+| tipo | cuándo | qué trae |
+|---|---|---|
+| `match` | línea coincidente (o no, con `-v`: entonces `inverted:true`) | span del primer match, o `null` |
+| `context` | línea de `-A`/`-B`/`-C` | sin span |
+| `passthru` | línea NO coincidente que imprime `--passthru` | sin span, `inverted:false` |
+| `occurrence` | `-o`, `--vimgrep` | uno por ocurrencia, con span |
+| `file` | `-l` / `-L` | `mode`: with-match / without-match |
+| `count` | `-c` / `--count-matches` | `lines` o `matches` |
+
+Reglas del schema, deliberadas:
+
+* **`schema: "zgrep/1"` en cada evento** y solo se añaden campos: un campo nuevo
+  es un release, quitarlo es un release mayor;
+* `byte_start`/`byte_end` son **absolutos en el fichero** y están verificados
+  contra el fichero real por el diferencial (`json_conformance.py`, 45/45);
+* los campos que no aplican salen `null`, nunca inventados;
+* `--color`, `--heading`, `--column` y los separadores `--` son decoración de
+  texto: en JSON no existen (la información va en los campos). Si un modo
+  decorativo se cuela en el stream, es bug —ya pasó tres veces y hay test.
+
+El modo estructura es aditivo y apagado por defecto: la salida de texto no cambia
+ni un byte (hay test que lo fija).
+
+## 4l. 0.4.0-dev: los números de línea arrancan APAGADOS
+
+Cambio de comportamiento con migración explícita. Medido: ni `grep` ni `rg`
+numeran por defecto cuando la salida es un pipe —que es el caso de todo script y
+de todo agente—; `rg` solo numera en una terminal. El default viejo de `zgrep`
+("siempre número") costaba **+5,7 % de bytes de salida** en la tarea `word_boundary_occurrences`
+(`-o`) del benchmark task-level, y contaminaba cada pipe.
+
+```sh
+zgrep HIT a.txt        # HIT            (antes: 3:HIT)
+zgrep -n HIT a.txt     # 3:HIT
+zgrep --pretty HIT a.txt   # número + color + heading, como rg
+```
+
+`--no-line-number` sigue aceptada: con el default apagado solo importa contra
+`--column`, que implica número de línea como en `rg` (`2:6:texto`); con
+`--no-line-number` en cualquier posición queda solo la columna. `--pretty`, que
+ya era el alias `--color=always --heading --line-number`, por fin significa lo
+que dice.
+
+Si te molestó el cambio en un script, es una línea: añade `-n`. Y si querés el
+comportamiento viejo por defecto en tu entorno, `--line-number` en un alias.
+
+## 4m. Arreglos de la auditoría e2e de M2 (0.4.0-dev)
+
+Cuatro bugs que pasaban todas las baterías y salieron comparando a mano contra
+GNU grep 3.11 y rg 14.1.0. Cada uno tiene ya su test o su caso de oráculo:
+
+| # | Bug | Antes | Ahora |
+|---|---|---|---|
+| 1 | `--column` sin `-n` | `6:beta HIT` (¿línea o columna?) | `2:6:beta HIT`, como `rg` |
+| 2 | `--json --passthru` | líneas no coincidentes con `type:"match"` | `type:"passthru"`; `inverted` sale de `-v` |
+| 3 | varios ficheros sueltos | `zgrep p a b c` imprimía c, b, a | orden de los argumentos, como `grep` |
+| 4 | `--json --exec` | texto libre del hijo en el stream JSONL | error de uso, rc 2, stdout vacío |
+
+El bug 1 lo tapaba el propio oráculo: el caso `--column` le pasaba `-n` a zgrep
+para igualar a `rg`. Ahora el caso va sin `-n`, a propósito.
+
+Sigue igual, y queda documentado en `evidence/agent-native/contract.md`: con
+**directorios** el orden es el de terminación del enjambre (como `rg`); para un
+orden fijo, `--sort`. `-N` es la navegación Befunge, no el `--no-line-number`
+de `rg`.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y

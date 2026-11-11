@@ -222,6 +222,24 @@ const cases = [_]TestCase{
         .expected_exit = 0,
         .check_output = true,
     },
+    .{
+        // Several explicit FILE operands: output in argument order, like GNU
+        // grep. The streaming path used to answer them LIFO (last file first).
+        .name = "operand order: several files, argument order",
+        .zigrep_args = &.{ "-F", "Searcher", "src/search.zig", "src/main.zig", "src/scan.zig" },
+        .grep_args = &.{ "-IF", "Searcher", "src/search.zig", "src/main.zig", "src/scan.zig" },
+        .rg_args = null,
+        .expected_exit = 0,
+        .check_output = true,
+    },
+    .{
+        // POSIX: with -q a match wins over an unreadable operand (rc 0, not 2).
+        .name = "quiet -q: match + missing operand is 0",
+        .zigrep_args = &.{ "-q", "-F", "Searcher", "src/search.zig", "zz_missing_operand" },
+        .grep_args = &.{ "-q", "-F", "Searcher", "src/search.zig", "zz_missing_operand" },
+        .rg_args = &.{ "-q", "-F", "Searcher", "src/search.zig", "zz_missing_operand" },
+        .expected_exit = 0,
+    },
     // Features added after the first Windows port. Each one had a real bug at
     // some point, so each one gets a differential case against the reference
     // implementation that can express it.
@@ -241,7 +259,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "column --column 'Searcher'",
-        .zigrep_args = &.{ "-n", "--column", "-F", "Searcher", "src/search.zig" },
+        .zigrep_args = &.{ "--column", "-F", "Searcher", "src/search.zig" }, // --column implies -n, like rg: no -n on purpose
         .grep_args = null, // grep has no --column
         .rg_args = &.{ "--column", "-F", "Searcher", "src/search.zig" },
         .expected_exit = 0,

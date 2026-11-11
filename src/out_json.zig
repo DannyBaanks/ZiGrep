@@ -47,6 +47,9 @@ pub const LineEvent = struct {
     /// Texto efectivamente emitido en modo texto (con `--replace` es la línea
     /// ya sustituida; sin él, la línea tal cual).
     text: []const u8,
+    /// La línea se emitió porque NO coincide y se pidió `-v`. Viene del flag,
+    /// no se deduce de "match sin span" (eso etiquetaba mal el passthru).
+    inverted: bool = false,
 };
 
 pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
@@ -79,7 +82,7 @@ pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) All
     try out.appendSlice(gpa, ",\"text\":");
     try appendJsonString(out, gpa, ev.text);
     try out.appendSlice(gpa, ",\"inverted\":");
-    try out.appendSlice(gpa, if (ev.kind == .match and ev.span == null) "true" else "false");
+    try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
     try out.appendSlice(gpa, "}\n");
 }
 
@@ -183,6 +186,8 @@ test "emitLineEvent: contexto sin span, campos null" {
 }
 
 test "emitLineEvent: -v es match sin span, inverted=true" {
+    // `inverted` lo fija el emisor desde -v; ya no se deduce de "sin span"
+    // (esa heuristica marcaba como invertidas las lineas de --passthru).
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(std.testing.allocator);
     try emitLineEvent(&out, std.testing.allocator, .{
@@ -193,6 +198,7 @@ test "emitLineEvent: -v es match sin span, inverted=true" {
         .span = null,
         .kind = .match,
         .text = "plain",
+        .inverted = true,
     });
     try std.testing.expect(std.mem.indexOf(u8, out.items, "\"type\":\"match\",\"path\":\"a.txt\",\"line\":3,\"column\":null") != null);
     try std.testing.expect(std.mem.indexOf(u8, out.items, "\"inverted\":true") != null);

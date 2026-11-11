@@ -183,7 +183,10 @@ def measure(task: dict, tool: str, reps: int) -> dict:
     return {
         "calls": len(cmds),
         "wall_s_median": round(statistics.median(walls), 4),
+        # out_bytes_total suma TODAS las repeticiones (reps x llamadas); el
+        # proxy de tokens de UNA ejecucion de la tarea es out_bytes_per_rep.
         "out_bytes_total": sum(bytses),
+        "out_bytes_per_rep": sum(bytses) // reps,
         "correct": ok,
         "rc_set": sorted(set(rcs)),
     }
@@ -217,18 +220,18 @@ def main() -> int:
         "corpus_truth": (ROOT / (CORPUS + ".truth")).read_text().splitlines(),
         "reps": args.reps,
         "note": ("wall = mediana del muro de la tarea completa; calls = comandos que "
-                 "emite el agente; out_bytes = bytes de stdout (proxy de tokens); "
+                 "emite el agente; out_bytes_total = bytes de stdout sumados sobre TODAS las reps; out_bytes_per_rep = los de una ejecucion (proxy de tokens); "
                  "correct = respuesta igual a la referencia (truth o grep)."),
         "results": results,
     }
     (outdir / "task_bench.json").write_text(json.dumps(payload, indent=2) + "\n")
 
-    print(f"{'tarea':<28} {'herramienta':<8} {'llam':>4} {'muro s':>8} {'bytes':>9}  ok")
+    print(f"{'tarea':<28} {'herramienta':<8} {'llam':>4} {'muro s':>8} {'bytes/rep':>9}  ok")
     for name in TASKS:
         for tool in tools:
             t = results[tool]["tasks"][name]
             print(f"{name:<28} {tool:<8} {t['calls']:>4} {t['wall_s_median']:>8.3f} "
-                  f"{t['out_bytes_total']:>9}  {'SI' if t['correct'] else 'NO'}")
+                  f"{t['out_bytes_per_rep']:>9}  {'SI' if t['correct'] else 'NO'}")
     print(f"\ncrudo: {outdir / 'task_bench.json'}")
     return 0
 

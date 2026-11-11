@@ -201,6 +201,7 @@ fn emitLine(
             .span = json_span,
             .kind = json_kind,
             .text = text,
+            .inverted = config.invert and json_kind == .match,
         });
         return;
     }
@@ -475,6 +476,7 @@ fn emitLineSpanned(
             .span = first orelse searcher.matchSpan(line, 0),
             .kind = .match,
             .text = line,
+            .inverted = cfg.invert,
         });
         return;
     }
@@ -681,7 +683,10 @@ fn scanBufferLines(
         } else if (config.passthru and mode == .lines and !selected) {
             // --passthru prints the non-matching lines untouched; with -r the
             // matches of the matching lines were already substituted above.
-            if (!spans) {
+            // In --json a passthru line is its own event type (schema zgrep/1
+            // declares `passthru`), never a `match`: an agent that filters on
+            // type=="match" must count only the real matches.
+            if (!spans or config.json) {
                 try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null, .passthru, null, line_start, config);
             } else {
                 try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null, line_start);
@@ -1336,6 +1341,33 @@ test "scanBuffer --json: un evento por coincidencia, con bytes absolutos" {
     _ = try scanBuffer(std.testing.allocator, "one\ntwo\nHIT\n", &searcher, "a.txt", true, .lines, .{ .json = true }, &out);
     try std.testing.expectEqualStrings(
         \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+        \\
+    , out.items);
+}
+
+test "scanBuffer --json: --passthru emite passthru, nunca match" {
+    // Bug de la auditoria de M2: las lineas no coincidentes salian como
+    // type:"match" con inverted:true, y un agente que filtra por match
+    // contaba 5 en vez de 2.
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    _ = try scanBuffer(std.testing.allocator, "a\nHIT\nb\n", &searcher, "f", false, .lines, .{ .json = true, .passthru = true }, &out);
+    try std.testing.expectEqualStrings(
+        \\{"schema":"zgrep/1","type":"passthru","path":"f","line":1,"column":null,"byte_start":null,"byte_end":null,"match":null,"text":"a","inverted":false}
+        \\{"schema":"zgrep/1","type":"match","path":"f","line":2,"column":1,"byte_start":2,"byte_end":5,"match":"HIT","text":"HIT","inverted":false}
+        \\{"schema":"zgrep/1","type":"passthru","path":"f","line":3,"column":null,"byte_start":null,"byte_end":null,"match":null,"text":"b","inverted":false}
+        \\
+    , out.items);
+}
+
+test "scanBuffer --json: inverted sale del flag -v" {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    _ = try scanBuffer(std.testing.allocator, "a\nHIT\n", &searcher, "f", false, .lines, .{ .json = true, .invert = true }, &out);
+    try std.testing.expectEqualStrings(
+        \\{"schema":"zgrep/1","type":"match","path":"f","line":1,"column":null,"byte_start":null,"byte_end":null,"match":null,"text":"a","inverted":true}
         \\
     , out.items);
 }
