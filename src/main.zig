@@ -62,6 +62,10 @@ const usage =
     \\  -n                print line numbers (always on; kept for grep compat)
     \\      --no-line-number
     \\                    do not print line numbers
+    \\      --json         structured output (JSONL, one event per output
+    \\                    record): match, context, passthru, occurrence, file
+    \\                    or count, with path, line, column, byte_start,
+    \\                    byte_end and text. Schema zgrep/1, additive only.
     \\  -c, --count       print only a count of matching lines per file
     \\  -l, --files-with-matches
     \\                    print only the names of files with matches
@@ -288,6 +292,8 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// `-b`: byte offset of the match within the file (grep semantics).
     byte_offset: bool = false,
+    /// `--json`: structured JSONL output (schema zgrep/1) instead of text.
+    json: bool = false,
     /// `--cache`: analyse and clean the Zig build caches.
     cache: bool = false,
     cache_dry_run: bool = false,
@@ -947,6 +953,11 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.show_line_no = false;
             } else if (std.mem.eql(u8, body, "line-number")) {
                 opts.show_line_no = true;
+            } else if (std.mem.eql(u8, body, "json")) {
+                // Structured output. The text decoration flags (--color,
+                // --heading, --column, separadores) have no effect here: in
+                // JSON that information is a field, not a prefix.
+                opts.json = true;
             } else if (std.mem.eql(u8, body, "null")) {
                 opts.null_filename = true;
             } else if (std.mem.startsWith(u8, body, "replace=")) {
@@ -1830,6 +1841,7 @@ pub fn main(init: std.process.Init) !void {
             .multiline = opts.multiline,
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+            .json = opts.json,
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -1971,6 +1983,7 @@ pub fn main(init: std.process.Init) !void {
             .multiline = opts.multiline,
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+            .json = opts.json,
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -2140,6 +2153,7 @@ pub fn main(init: std.process.Init) !void {
             .multiline = opts.multiline,
             .stop_on_nonmatch = opts.stop_on_nonmatch,
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+            .json = opts.json,
         },
         .gpa = gpa,
         .window = window,
@@ -2166,8 +2180,10 @@ pub fn main(init: std.process.Init) !void {
             if (idx < exec_matched.len) exec_matched[idx] = slots[idx].matched;
             if (opts.mode != .quiet) {
                 if (slots[idx].buf.items.len > 0) {
-                    if (context_mode and prev_emitted) out.writeAll("--\n");
-                    if (heading_on and prev_emitted) out.writeAll("\n");
+                    // Igual que en el camino con hilos: separador de grupos y
+                    // blanco de heading son decoracion de texto, no de JSON.
+                    if (context_mode and prev_emitted and !opts.json) out.writeAll("--\n");
+                    if (heading_on and prev_emitted and !opts.json) out.writeAll("\n");
                     out.writeAll(slots[idx].buf.items);
                     prev_emitted = true;
                 }
@@ -2205,8 +2221,12 @@ pub fn main(init: std.process.Init) !void {
                 if (slots[w].ready.load(.acquire)) {
                     if (w < exec_matched.len) exec_matched[w] = slots[w].matched;
                     if (slots[w].buf.items.len > 0) {
-                        if (context_mode and prev_emitted) out.writeAll("--\n");
-                        if (heading_on and prev_emitted) out.writeAll("\n");
+                        // El separador de grupos y la linea en blanco de
+                        // `--heading` son decoracion de TEXTO: en modo JSON
+                        // rompen el stream (cazado por el diferencial de M1:
+                        // una linea "--" entre los eventos de dos ficheros).
+                        if (context_mode and prev_emitted and !opts.json) out.writeAll("--\n");
+                        if (heading_on and prev_emitted and !opts.json) out.writeAll("\n");
                         out.writeAll(slots[w].buf.items);
                         prev_emitted = true;
                     }

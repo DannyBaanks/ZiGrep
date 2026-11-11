@@ -15,6 +15,7 @@ const linux = std.os.linux;
 const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
 const Match = @import("search.zig").Match;
+const out_json = @import("out_json.zig");
 const search = @import("search.zig");
 const io_engine = @import("io_engine.zig");
 
@@ -68,6 +69,8 @@ pub const ScanConfig = struct {
     null_data: bool = false,
     /// `-U`: the whole file is one record, so a match may span newlines.
     multiline: bool = false,
+    /// `--json`: structured output (JSONL, schema zgrep/1) instead of text.
+    json: bool = false,
     /// `--stop-on-nonmatch`: stop once a non-matching line follows a match.
     stop_on_nonmatch: bool = false,
     /// `--encoding`: how bytes become the haystack.
@@ -184,7 +187,23 @@ fn emitLine(
     text: []const u8,
     null_filename: bool,
     byte_offset: ?usize,
+    json_kind: out_json.Kind,
+    json_span: ?Match,
+    line_start: usize,
+    config: ScanConfig,
 ) Allocator.Error!void {
+    if (config.json) {
+        try out_json.emitLineEvent(out, gpa, .{
+            .path = path,
+            .line_no = line_no,
+            .line_start = line_start,
+            .line_bytes = text,
+            .span = json_span,
+            .kind = json_kind,
+            .text = text,
+        });
+        return;
+    }
     // With `--heading` the path went on its own header line, so the per-line
     // prefix is off.
     const with_path = show_path and !heading_mode;
@@ -288,6 +307,19 @@ fn emitMatches(
     while (from <= line.len) {
         const m = searcher.matchSpan(line, from) orelse break;
         if (m.end > m.start) {
+            if (cfg.json) {
+                try out_json.emitLineEvent(out, gpa, .{
+                    .path = path,
+                    .line_no = line_no,
+                    .line_start = line_start,
+                    .line_bytes = line,
+                    .span = m,
+                    .kind = .occurrence,
+                    .text = if (cfg.replace) |rep| rep else line[m.start..m.end],
+                });
+                from = m.end;
+                continue;
+            }
             // `-b -o`: grep prints the offset of the MATCH, absolute in the
             // file, so it is line_start + m.start.
             const off: ?usize = if (cfg.byte_offset) line_start + m.start else null;
@@ -318,6 +350,32 @@ fn emitReplacedLine(
     line: []const u8,
 ) Allocator.Error!void {
     const rep = cfg.replace.?;
+    if (cfg.json) {
+        var buf: std.ArrayList(u8) = .empty;
+        defer buf.deinit(gpa);
+        var from: usize = 0;
+        while (from <= line.len) {
+            const m = searcher.matchSpan(line, from) orelse break;
+            if (m.end == m.start) {
+                from = m.start + 1;
+                continue;
+            }
+            try buf.appendSlice(gpa, line[from..m.start]);
+            try buf.appendSlice(gpa, rep);
+            from = m.end;
+        }
+        if (from <= line.len) try buf.appendSlice(gpa, line[from..]);
+        try out_json.emitLineEvent(out, gpa, .{
+            .path = path,
+            .line_no = line_no,
+            .line_start = line_start,
+            .line_bytes = line,
+            .span = searcher.matchSpan(line, 0),
+            .kind = .match,
+            .text = buf.items,
+        });
+        return;
+    }
     const off: ?usize = if (cfg.byte_offset) line_start else null;
     try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
     var from: usize = 0;
@@ -356,7 +414,7 @@ fn emitSpannedLines(
     while (i < data.len) {
         const raw = std.mem.findScalarPos(u8, data, i, '\n') orelse data.len;
         const end = if (cfg.crlf and raw > i and data[raw - 1] == '\r') raw - 1 else raw;
-        try emitLine(out, gpa, path, show_path, cfg.show_line_no, ':', no, data[i..end], cfg.null_filename, if (cfg.byte_offset) i else null);
+        try emitLine(out, gpa, path, show_path, cfg.show_line_no, ':', no, data[i..end], cfg.null_filename, if (cfg.byte_offset) i else null, .match, null, i, cfg);
         if (raw >= span.end) break;
         i = raw + 1;
         no += 1;
@@ -374,6 +432,18 @@ fn emitSpanOnce(
     line_start: usize,
     text: []const u8,
 ) Allocator.Error!void {
+    if (cfg.json) {
+        try out_json.emitLineEvent(out, gpa, .{
+            .path = path,
+            .line_no = line_no,
+            .line_start = line_start,
+            .line_bytes = text,
+            .span = .{ .start = 0, .end = text.len },
+            .kind = .occurrence,
+            .text = text,
+        });
+        return;
+    }
     const off: ?usize = if (cfg.byte_offset) line_start else null;
     try emitPrefix(out, gpa, path, show_path, cfg.show_line_no, ':', line_no, cfg.null_filename, cfg.color, off);
     try out.appendSlice(gpa, text);
@@ -392,9 +462,22 @@ fn emitLineSpanned(
     line_no: usize,
     line: []const u8,
     column_override: ?usize,
+    line_start: usize,
 ) Allocator.Error!void {
     var first: ?Match = null;
     if (cfg.column) first = searcher.matchSpan(line, 0);
+    if (cfg.json) {
+        try out_json.emitLineEvent(out, gpa, .{
+            .path = path,
+            .line_no = line_no,
+            .line_bytes = line,
+            .line_start = line_start,
+            .span = first orelse searcher.matchSpan(line, 0),
+            .kind = .match,
+            .text = line,
+        });
+        return;
+    }
     // With `--heading` the path is on its own line, so no per-line prefix.
     if (show_path and !heading_mode) {
         try out.appendSlice(gpa, path);
@@ -529,7 +612,7 @@ fn scanBufferLines(
             }
 
             if (mode == .lines) {
-                if (heading_mode and !printed_any) {
+                if (heading_mode and !config.json and !printed_any) {
                     try emitHeading(out, gpa, path);
                     printed_any = true;
                 }
@@ -548,7 +631,7 @@ fn scanBufferLines(
                     var vfrom: usize = 0;
                     while (vfrom <= line_slice.len) {
                         const m = searcher.matchSpan(line_slice, vfrom) orelse break;
-                        try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, m.start);
+                        try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, m.start, line_start);
                         if (m.end == m.start) {
                             vfrom = m.start + 1;
                         } else {
@@ -569,7 +652,7 @@ fn scanBufferLines(
                         }
                     }
                 } else if (spans) {
-                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null);
+                    try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null, line_start);
                 } else {
                     if (ring.len > 0 and ring_len > 0) {
                         const first = if (line_no > config.before_context) line_no - config.before_context else 1;
@@ -578,14 +661,14 @@ fn scanBufferLines(
                             const at = (ring_pos + ring.len - ring_len + k) % ring.len;
                             const ref = ring[at];
                             if (ref.no < first or ref.no <= last_printed) continue;
-                            if (context_enabled and printed_any and ref.no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename, if (config.byte_offset) ref.start else null);
+                            if (context_enabled and printed_any and ref.no > last_printed + 1 and !config.json) try out.appendSlice(gpa, "--\n");
+                            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', ref.no, data[ref.start..ref.end], config.null_filename, if (config.byte_offset) ref.start else null, .context, null, ref.start, config);
                             last_printed = ref.no;
                             printed_any = true;
                         }
                     }
-                    if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
+                    if (context_enabled and printed_any and line_no > last_printed + 1 and !config.json) try out.appendSlice(gpa, "--\n");
+                    try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null, .match, if (config.json) searcher.matchSpan(line_slice, 0) else null, line_start, config);
                     last_printed = line_no;
                     printed_any = true;
                 }
@@ -599,13 +682,13 @@ fn scanBufferLines(
             // --passthru prints the non-matching lines untouched; with -r the
             // matches of the matching lines were already substituted above.
             if (!spans) {
-                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
+                try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null, .passthru, null, line_start, config);
             } else {
-                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null);
+                try emitLineSpanned(out, gpa, searcher, config, path, show_path, line_no, print_slice, null, line_start);
             }
         } else if (mode == .lines and after_left > 0 and line_no > last_printed) {
-            if (context_enabled and printed_any and line_no > last_printed + 1) try out.appendSlice(gpa, "--\n");
-            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null);
+            if (context_enabled and printed_any and line_no > last_printed + 1 and !config.json) try out.appendSlice(gpa, "--\n");
+            try emitLine(out, gpa, path, show_path, config.show_line_no, '-', line_no, print_slice, config.null_filename, if (config.byte_offset) line_start else null, .context, null, line_start, config);
             last_printed = line_no;
             printed_any = true;
             after_left -= 1;
@@ -654,7 +737,7 @@ pub fn scanBuffer(
     // the jump-to-next-match fast path below cannot provide context.
     // The fast path splits on '\n' internally (the DFA's own line handling),
     // so with `--null-data` a record that contains \n could never match.
-    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline) {
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json) {
         return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
@@ -709,13 +792,13 @@ pub fn scanBuffer(
             }
         }
         if (mode == .lines) {
-            if (heading_mode and !config.null_filename and !heading_out) {
+            if (heading_mode and !config.json and !config.null_filename and !heading_out) {
                 try emitHeading(out, gpa, path);
                 heading_out = true;
             }
             // The printed text keeps the CR: `--crlf` changes how a line is
             // MATCHED (the CR is not part of it), not which bytes come out.
-            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..raw_end], config.null_filename, if (config.byte_offset) line_start else null);
+            try emitLine(out, gpa, path, show_path, config.show_line_no, ':', line_no, data[line_start..raw_end], config.null_filename, if (config.byte_offset) line_start else null, .match, null, line_start, config);
         }
         if (config.max_count) |mc| {
             if (res.lines >= mc) break;
@@ -794,7 +877,7 @@ fn scanFilePortable(
         return res;
     };
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
+        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
         return res;
     }
 
@@ -809,7 +892,7 @@ fn scanFilePortable(
                 return res;
             }
             processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
             return res;
         }
     }
@@ -822,7 +905,7 @@ fn scanFilePortable(
             var map = map_value;
             defer map.destroy(io);
             processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
             return res;
         } else |_| {}
     }
@@ -841,7 +924,7 @@ fn scanFilePortable(
         return res;
     }
     processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |err| res.err = err;
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |err| res.err = err;
     return res;
 }
 
@@ -980,7 +1063,7 @@ fn scanFileLinux(
         // Did the entire file fit in the scratch buffer?
         if (got < sbuf.len) {
             if (got == 0) {
-                if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
+                if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
                 return res;
             }
             const data = sbuf[0..got];
@@ -1021,7 +1104,7 @@ fn scanFileLinux(
                     res.bytes = data.len;
                 }
             }
-            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
+            if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
             return res;
         }
         // File >= sbuf.len: rewind to 0 for mmap/read fallback.
@@ -1037,7 +1120,7 @@ fn scanFileLinux(
     const size: usize = @intCast(@as(isize, @bitCast(szr)));
     _ = linux.lseek(fd, 0, linux.SEEK.SET);
     if (size == 0) {
-        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
+        if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
         return res;
     }
 
@@ -1127,7 +1210,7 @@ fn scanFileLinux(
     // --- modes that emit once per file ------------------------------------
     // `-c` reports every scanned file, including binary-skipped ones as 0,
     // which is what `grep -c` does.
-    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename)) |e| res.err = e;
+    if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| res.err = e;
     return res;
 }
 
@@ -1141,7 +1224,18 @@ pub fn emitOncePerFile(
     mode: Mode,
     res: FileScan,
     null_filename: bool,
+    json: bool,
 ) ?linux.E {
+    if (json) {
+        if (mode == .count or mode == .count_matches) {
+            out_json.emitCountEvent(out, gpa, path, if (mode == .count) res.lines else null, if (mode == .count_matches) res.matches else null) catch return .NOMEM;
+        } else if (mode == .files and res.matched) {
+            out_json.emitFileEvent(out, gpa, path, true) catch return .NOMEM;
+        } else if (mode == .files_without_match and !res.matched) {
+            out_json.emitFileEvent(out, gpa, path, false) catch return .NOMEM;
+        }
+        return null;
+    }
     if (mode == .count or mode == .count_matches) {
         if (show_path) {
             out.appendSlice(gpa, path) catch return .NOMEM;
@@ -1210,6 +1304,51 @@ fn run(
     show_path: bool,
 ) ![]u8 {
     return runWithConfig(data, needle, mode, .{}, path, show_path);
+}
+
+test "scanBuffer --json: un evento por coincidencia, con bytes absolutos" {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    _ = try scanBuffer(std.testing.allocator, "one\ntwo\nHIT\n", &searcher, "a.txt", true, .lines, .{ .json = true }, &out);
+    try std.testing.expectEqualStrings(
+        \\{"schema":"zgrep/1","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+        \\
+    , out.items);
+}
+
+test "scanBuffer --json: sin --json la salida de texto no cambia" {
+    var a: std.ArrayList(u8) = .empty;
+    defer a.deinit(std.testing.allocator);
+    var b: std.ArrayList(u8) = .empty;
+    defer b.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    _ = try scanBuffer(std.testing.allocator, "one\nHIT\n", &searcher, "a.txt", true, .lines, .{}, &a);
+    _ = try scanBuffer(std.testing.allocator, "one\nHIT\n", &searcher, "a.txt", true, .lines, .{ .json = false }, &b);
+    try std.testing.expectEqualStrings(a.items, b.items);
+    // y ninguno de los dos es JSON
+    try std.testing.expect(std.mem.indexOf(u8, a.items, "\"schema\"") == null);
+}
+
+test "scanBufferLines --json: contexto con span null y tipo context" {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("HIT", .auto);
+    _ = try scanBufferLines(std.testing.allocator, "one\ntwo\nHIT\nfour\n", &searcher, "a.txt", true, .lines, .{ .json = true, .before_context = 1, .after_context = 1 }, &out);
+    // tres eventos, y NINGUNO es la linea "--" del separador de grupos
+    try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, out.items, "\n"));
+    try std.testing.expect(std.mem.indexOf(u8, out.items, "\n--\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"type\":\"context\"") != null);
+}
+
+test "scanBufferLines --json: -o emite un evento por ocurrencia" {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(std.testing.allocator);
+    const searcher = Searcher.init("TOKEN", .auto);
+    _ = try scanBufferLines(std.testing.allocator, "aa TOKEN bb TOKEN\nplain\n", &searcher, "o.txt", true, .lines, .{ .json = true, .only_matching = true }, &out);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, out.items, "\n"));
+    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"type\":\"occurrence\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"byte_start\":3") != null);
 }
 
 test "scanBuffer: line numbers and content" {
@@ -1568,7 +1707,7 @@ test "scanBuffer: -Z prints a NUL after the file name" {
         defer out.deinit(std.testing.allocator);
         const searcher = Searcher.init("HIT", .auto);
         const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .count, .{ .null_filename = true }, &out);
-        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .count, .{ .matched = br.matched, .lines = br.lines }, true);
+        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .count, .{ .matched = br.matched, .lines = br.lines }, true, false);
         try std.testing.expectEqualStrings("a.txt\x003\n", out.items);
     }
     {
@@ -1579,7 +1718,7 @@ test "scanBuffer: -Z prints a NUL after the file name" {
         defer out.deinit(std.testing.allocator);
         const searcher = Searcher.init("HIT", .auto);
         const br = try scanBuffer(std.testing.allocator, ctx_data, &searcher, "a.txt", true, .files, .{ .null_filename = true }, &out);
-        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .files, .{ .matched = br.matched, .lines = br.lines }, true);
+        _ = emitOncePerFile(&out, std.testing.allocator, "a.txt", true, .files, .{ .matched = br.matched, .lines = br.lines }, true, false);
         try std.testing.expectEqualStrings("a.txt\x00", out.items);
     }
 }
@@ -1596,7 +1735,7 @@ test "scanBuffer: --count-matches counts MATCHES, not lines" {
         const br = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", true, .count_matches, .{}, &out);
         try std.testing.expectEqual(@as(usize, 3), br.matches);
         try std.testing.expectEqual(@as(usize, 2), br.lines);
-        _ = emitOncePerFile(&out, std.testing.allocator, "f.txt", true, .count_matches, .{ .matched = br.matched, .lines = br.lines, .matches = br.matches }, false);
+        _ = emitOncePerFile(&out, std.testing.allocator, "f.txt", true, .count_matches, .{ .matched = br.matched, .lines = br.lines, .matches = br.matches }, false, false);
         try std.testing.expectEqualStrings("f.txt:3\n", out.items);
     }
     // With `-o` the path is the line-by-line one; the count must agree.

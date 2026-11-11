@@ -65,6 +65,31 @@ con nombre largo:
 | `-h` | `--no-filename` | `--help` | no-filename (grep) |
 | `-I` | `--binary-files=without-match` | `--no-filename` | binary skip no-op (grep) |
 
+## `--json`: diferencial texto <-> JSON (M1, 45/45)
+
+`json_conformance.py` corre cada caso dos veces —modo texto y con `--json`— y
+comprueba tres cosas: que cada evento declare el schema `zgrep/1`, que los
+eventos reproducen **en el mismo orden** las líneas de la salida de texto, y que
+los `byte_start`/`byte_end` de cada evento con span sean los bytes reales del
+fichero (rebanando el fichero, no confiando en el evento).
+
+45 casos: básicos, contexto, modos de fichero/recuento, spans (`-o`, `--column`,
+`--replace`, `--passthru`, `-U`, `--vimgrep`, `--crlf`, `-z`), corpus congelado
+(offsets verificados contra ficheros de verdad) y stdin.
+
+Tres bugs reales salieron de aquí, todos de la misma clase —decoración de texto
+colándose en el stream JSON—:
+
+1. el camino ordenado (`--sort`) tenía su propia construcción de `ScanConfig`,
+   que no recibía `json`: `--sort --json` devolvía **texto en silencio**;
+2. `--heading` emitía su línea de cabecera como texto pelado;
+3. los separadores de grupo `--` (cinco sitios: `scan.zig` ×3, `uring` ×2,
+   `kamikaze` ×2, `main.zig` ×2) rompían el JSONL con contexto multiví fichero.
+
+Para un agente, un stream "JSON" con una línea `--` es peor que no tener JSON:
+falla el parse en el momento peor. De ahí la regla de M1: en modo JSON no se
+emite nada que no sea un evento.
+
 ## Lo entregado en esta ronda (0.3.0)
 
 | Flag | Estado |

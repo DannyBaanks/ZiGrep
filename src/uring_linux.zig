@@ -170,7 +170,7 @@ pub const UringScanner = struct {
                     // anillo y se descartaba el resto: --stats mentía a la baja
                     // justo en frío, que es donde se usa el uring.
                     const fs = scan.scanFile(io, gpa, searcher, path, show_path, mode, binary, config, out, null, null);
-                    if (context_mode) scan.insertGroupSeparator(out, gpa, before_len);
+                    if (context_mode and !config.json) scan.insertGroupSeparator(out, gpa, before_len);
                     result.bytes_scanned += fs.bytes;
                     const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;
                     if (is_hit) {
@@ -207,8 +207,8 @@ pub const UringScanner = struct {
                         }
                     }
                 }
-                if (scan.emitOncePerFile(out, gpa, path, show_path, mode, fs, config.null_filename)) |e| fs.err = e;
-                if (context_mode) scan.insertGroupSeparator(out, gpa, before_len);
+                if (scan.emitOncePerFile(out, gpa, path, show_path, mode, fs, config.null_filename, config.json)) |e| fs.err = e;
+                if (context_mode and !config.json) scan.insertGroupSeparator(out, gpa, before_len);
 
                 const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;
                 if (is_hit) {

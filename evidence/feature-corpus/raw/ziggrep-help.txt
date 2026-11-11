@@ -7,6 +7,9 @@ usage: zgrep [OPTIONS] PATTERN [PATH...]
 options:
   -F                fixed-string pattern(s); without it PATTERN is a regex
   -E                extended regex (the default; kept for grep compat)
+  -G, --basic-regexp
+                    basic regex (grep's default). zgrep speaks ERE, so
+                    the pattern is TRANSLATED, not ignored
   -e PATTERN        search for PATTERN; repeat for several (any may match)
   -f, --file=FILE   read patterns from FILE (one per line, repeatable)
   -x, --line-regexp match whole lines only
@@ -18,6 +21,10 @@ options:
   -n                print line numbers (always on; kept for grep compat)
       --no-line-number
                     do not print line numbers
+      --json         structured output (JSONL, one event per output
+                    record): match, context, passthru, occurrence, file
+                    or count, with path, line, column, byte_start,
+                    byte_end and text. Schema zgrep/1, additive only.
   -c, --count       print only a count of matching lines per file
   -l, --files-with-matches
                     print only the names of files with matches
@@ -36,8 +43,63 @@ options:
   -h                do not print the file name with each result
   -a                treat binary files as text
   -Z, -0, --null    print a NUL after each file name
+  -o, --only-matching
+                    print only the matched part of each line
+      --count-matches
+                    like --count, but counting matches instead of lines
+      --column     print the 1-based byte column of the first match (rg)
+      --color[=WHEN]
+                    highlight matches (always|never|auto; auto = never)
+      --replace=TEXT
+                    with -o semantics, print TEXT instead of each match (rg)
+      --passthru   also print the lines that do not match (with -r)
+      --exec, --execute, -X CMD
+                    run CMD for every file with a match; {} is the path.
+                    Without {} the path is appended (find -exec style)
   -s, --no-messages suppress error messages about unreadable files
   -j, --threads N   worker threads (default: number of CPUs)
+  -S, --smart-case  case-insensitive unless PATTERN has an uppercase
+  -t, --type NAME   restrict to a file type (py, zig, md, ...)
+      --type-not NAME
+                    skip a file type instead
+      --type-list    list every known type and exit
+      --max-depth=N  do not descend below N levels (rg; long only)
+      --max-filesize=N[KMGT]
+                    skip files larger than N (rg)
+  -b, --byte-offset print the byte offset of each match in the file
+      --crlf        treat CRLF as the line terminator, not just \n
+  -z, --null-data  NUL separates records instead of \n (grep -z)
+  -U, --multiline   a match may span newlines (rg)
+      --multiline-dotall
+                    with -U, `.` also crosses a newline
+      --stop-on-nonmatch
+                    stop once a non-matching line follows a matching one
+      --pre=CMD    search the stdout of CMD instead of the file (rg);
+                    {} in CMD is the file path
+      --encoding=ENC
+                    auto | none | utf-8 | utf-16 | utf-16le | utf-16be |
+                    latin1  (default auto: BOM sniff only)
+      --pre-glob=GLOB
+                    only apply --pre to files matching GLOB
+      --heading     print the file path above each file's matches (rg)
+      --no-heading  print it as a per-line prefix instead (default)
+  -p, --pretty       alias for --color=always --heading --line-number
+      --vimgrep     one line per match, with line and column (rg)
+      --cache       analyse the Zig caches on disk, show what is safe to
+                    delete and ASK before deleting anything
+      --dry-run     with --cache: only the analysis, delete nothing
+      --force       with --cache: no prompt (for scripts)
+      --cache-root=PATH
+                    root to scan for caches (repeatable; default $HOME/Development)
+      --cache-depth=N
+                    how deep below a root to look (default 2)
+      --cache-include-out
+                    also consider zig-out (DANGER: installs live there)
+      --cache-no-global
+                    do not include ~/.cache/zig
+      --binary-files=TYPE
+                    text | without-match (zgrep never prints binary
+                    content, so 'binary' is rejected, not faked)
   -k, --kamikaze, --dataflow
                     streaming dataflow with concurrent kamikaze swarm (default)
       --sort, --deterministic
@@ -53,6 +115,8 @@ options:
                     only search file extensions (e.g. zig,rs,py)
       --exclude=GLOB
                     skip files matching GLOB (e.g. *.min.js)
+      --exclude-from=FILE
+                    read more --exclude globs from FILE, one per line
       --include=GLOB
                     only search files matching GLOB
       --no-ignore   do not read .dataignore / .gitignore or apply defaults
@@ -74,8 +138,9 @@ options:
       --help        print this help
   -V, --version     print the version
 
-regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \\d \\w \\s * + ? {n,m} | ( ) ^ $
-not supported (reported as an error): \\b, back-references, lookaround.
+regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+word boundaries \b and \B are supported (zero-width assertions).
+not supported (reported as an error): back-references, lookaround.
 a plain string with no metacharacters takes the fast literal path.
 patterns containing a newline are rejected.
 when no PATH is given or when PATH is '-', standard input is read.

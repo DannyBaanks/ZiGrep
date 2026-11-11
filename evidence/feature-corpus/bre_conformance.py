@@ -8,7 +8,8 @@ if B.exists():
     shutil.rmtree(B)
 B.mkdir(parents=True)
 
-Z = "/tmp/opencode/znew"
+import os
+Z = os.environ.get("ZGREP_BIN", str(pathlib.Path(__file__).resolve().parents[2] / "zig-out" / "bin" / "zgrep"))
 data = "cat\ncot\ncat dog\ncat|dog\nca+t\nab123\nab12+\nfoo_bar\n(bar)\na(b)c\nx{2}y\nxx{2}y\n"
 (B / "t.txt").write_text(data)
 

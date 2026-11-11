@@ -455,7 +455,10 @@ fn scanBatch(
             // solo se pasa en ese modo; `sync`/`uring` no cambian ni un syscall.
             if (ctx.io_engine_mode == .auto) ctx.engine else null,
         );
-        if (ctx.context_mode) scan.insertGroupSeparator(local_out, ctx.gpa, before_len);
+        // El separador "--" es decoracion de TEXTO: en modo JSON no puede
+        // salir, porque romperia el stream JSONL (cazado por el diferencial
+        // texto<->json de M1: linea "--" en medio de los eventos).
+        if (ctx.context_mode and !ctx.scan_config.json) scan.insertGroupSeparator(local_out, ctx.gpa, before_len);
         local_files += 1;
         local_bytes += res.bytes;
         const is_hit = if (ctx.mode == .files_without_match) !res.matched else res.matched;
@@ -714,7 +717,7 @@ fn tryQuickTreeScan(
             scratch,
             null, // el camino ordenado (`--sort`) no tiene muestra de motor
         );
-        if (context_mode) scan.insertGroupSeparator(&local_out, gpa, before_len);
+        if (context_mode and !scan_config.json) scan.insertGroupSeparator(&local_out, gpa, before_len);
 
         stats.files_scanned += 1;
         stats.bytes_scanned += res.bytes;

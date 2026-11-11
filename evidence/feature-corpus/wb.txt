@@ -1,0 +1,10 @@
+a cat sat
+concatenate
+category
+(cat)
+cat-dog
+a_cat_b
+abc 123 def
+abc123def
+cat
+un perro y un gato juntos dog

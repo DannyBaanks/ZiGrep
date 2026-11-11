@@ -10,7 +10,7 @@ Generado por `build_corpus.py` a partir de las capturas de `raw/` (inventario) m
 
 - **rg**: 115 tokens de opcion
 
-- **zgrep**: 39 tokens de opcion
+- **zgrep**: 58 tokens de opcion
 
 
 ## Decisiones
@@ -19,11 +19,11 @@ Generado por `build_corpus.py` a partir de las capturas de `raw/` (inventario) m
 
 - mantener: **20** opciones
 
-- NO VALE: **12** opciones
+- NO VALE: **11** opciones
 
 - no aplica: **11** opciones
 
-- hecho (esta ronda): **6** opciones
+- hecho (esta ronda): **7** opciones
 
 - INTEGRAR AHORA: **6** opciones
 
@@ -82,7 +82,7 @@ Generado por `build_corpus.py` a partir de las capturas de `raw/` (inventario) m
 | Salida | -Z / --null  ·  -0 | si | si (-0) | si (nuevo) | hecho | S | media | NUEVO: -Z (grep), -0 (rg) y --null. NUL tras el nombre en lineas, -c y -l/-L. |
 | Salida | --color / --colors / --pretty / --vimgrep | no | si | no | bloqueado por motor | L | media | El resaltado necesita la posicion del match; --vimgrep ademas necesita --column. |
 | Salida | -r / --replace | no | si | no | bloqueado por motor | L | media | COLISION: en grep -r es --recursive. Necesita capturas; no las hay. |
-| Salida | --json | no | si | no | no vale | L | baja | Protocolo completo de rg sobre spans de match; con el motor actual saldria vacio. |
+| Salida | --json | no | si | si | hecho | M | alta | Schema zgrep/1 (JSONL): match, context, passthru, occurrence, file y count, con path, line, column, byte_start, byte_end y text. Solo anadir campos. Diferencial texto<->json: 45/45. |
 | Salida | --line-buffered / --block-buffered | si (line) | si | no | integrar despues | M | baja | zgrep ya vacia por lote; el modo interactivo ganaria poco. |
 | Salida | --heading / --no-heading | no | si | no | integrar despues | S | media | Agrupar por fichero con cabecera. |
 | Salida | --group-separator (grep) / --context-separator (rg) | si | si | no | integrar despues | S | baja | El separador es fijo '--' hoy; parametrizarlo es facil. |

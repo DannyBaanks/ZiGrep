@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 B="/home/danny/Development/ISyCo Git/ZigGrep/zig-out/bin/zigrep"
-cd /tmp/opencode || exit 1
+cd "$(dirname "$0")" || exit 1
 printf 'a cat sat\nconcatenate\ncategory\n(cat)\ncat-dog\na_cat_b\nabc 123 def\nabc123def\ncat\nun perro y un gato juntos dog\n' > wb.txt
 pass=0; fail=0
 for p in '\bcat\b' '\Bcat\B' '\bcat' 'cat\b' '\b[0-9]+\b' '^\bcat\b$' '\bcat\b.*\bdog\b' '\bthe\b' '\Bcat'; do
