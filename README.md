@@ -21,7 +21,7 @@ The latest release is `v0.3.2`. The `main` branch is `0.4.0-dev`.
 ```sh
 zigrep "Searcher" src/                  # literal search over a tree
 zigrep 'fn\s+\w+\(' /path/to/project    # regular expression (linear time)
-zigrep -i "ñandú" docs/                 # case-insensitive, ASCII + Latin-1
+zigrep -i "ñandú" docs/                 # case-insensitive literal, ASCII + Latin-1
 zigrep --sort "pattern" .               # deterministic, GNU grep traversal order
 zigrep --json "pattern" src/            # JSONL events (schema zgrep/1)
 ```
@@ -223,7 +223,7 @@ rejected. Measured on a 6-core, 12-thread Ryzen 5:
   skips `.git`, `node_modules`, `target`, `.zig-cache` and `.venv`.
   `--no-default-ignore` disables that list.
 - **Thread start-up.** A directory of at most 32 files is searched on the main
-  thread without spawning workers. With `-q`, three files are probed before the
+  thread without spawning workers. With `-q`, up to four files in the root are probed before the
   workers start, so an early match exits immediately. Paths are formatted into
   stack buffers during traversal, with no heap allocation per entry.
 - **Literal search.** A 32-byte SIMD scan (`@Vector(32, u8)`) is anchored on the
@@ -232,7 +232,9 @@ rejected. Measured on a 6-core, 12-thread Ryzen 5:
 - **Regular expressions.** A Thompson NFA is compiled into a lazily built,
   thread-local DFA. Required literals feed the SIMD prefilter. Execution time is
   linear in the input, with no backtracking.
-- **Text handling.** `-i` folds ASCII and the Latin-1 supplement. Files with a
+- **Text handling.** `-i` folds ASCII. For literal patterns it also folds the
+  Latin-1 supplement (á/Á, ñ/Ñ); the regex engine folds ASCII only, so
+  `-i 'ñand.'` does not match `ÑANDÚ` while `-i 'ñandú'` does. Files with a
   UTF-16 LE/BE byte order mark are decoded, and `--encoding` overrides the
   detection.
 - **I/O.** Workers reuse 256 KB buffers and memory-map only files above 256 KB.

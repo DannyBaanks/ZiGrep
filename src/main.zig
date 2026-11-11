@@ -57,7 +57,7 @@ const usage =
     \\  -e PATTERN        search for PATTERN; repeat for several (any may match)
     \\  -f, --file=FILE   read patterns from FILE (one per line, repeatable)
     \\  -x, --line-regexp match whole lines only
-    \\  -i, --ignore-case ignore case (ASCII + Latin-1 Unicode)
+    \\  -i, --ignore-case ignore case (ASCII; Latin-1 too for literal patterns)
     \\  -v, --invert-match
     \\                    select non-matching lines
     \\  -w, --word-regexp match whole words only
@@ -304,7 +304,8 @@ pub const Options = struct {
     only_matching: bool = false,
     /// `--column`: print the 1-based byte column of the first match (rg).
     column: bool = false,
-    /// `--color=always|never|auto` (auto degrades to never off a TTY).
+    /// `--color=always|never|auto`. auto = never: there is no isatty check, so
+    /// auto never colours, not even on a terminal (see ColorMode).
     color: ColorMode = .never,
     /// `--replace=TEXT` (rg): substitute every match with TEXT. The rest of
     /// the line survives (rg); with `-o` the record is just the replacement.

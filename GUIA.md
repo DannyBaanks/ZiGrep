@@ -296,7 +296,8 @@ zigrep --sort "const" workspace/assembly
 # expresiones regulares lineales (Thompson NFA + Lazy DFA, sin backtracking catastrófico)
 zigrep 'fn\s+\w+\(' /ruta/al/proyecto
 
-# insensibilidad a mayúsculas con soporte Unicode Latin-1 (á/Á, ñ/Ñ, ü/Ü, etc.)
+# insensibilidad a mayúsculas; un patrón LITERAL pliega también Latin-1 (á/Á, ñ/Ñ, ü/Ü);
+# una regex (con metacaracteres) solo pliega ASCII: -i 'ñand.' no encuentra ÑANDÚ
 zigrep -i "ñandú" docs/
 
 # navegación 2D Befunge: techo (solo archivos en raíz a profundidad 0, rebota carpetas)
@@ -390,7 +391,7 @@ enjambre (árbol ≥ 2 MB, varias rutas, `--sort`, `--force-swarm`, …).
 | `1` | no hubo coincidencias |
 | `2` | error: patrón ausente, ruta inexistente, opción desconocida |
 
-`zigrep` soporta tanto búsqueda literal acelerada por SIMD (`-F` o auto) como expresiones regulares lineales (`. [a-z] [^x] \d \w \s * + ? {n,m} | () ^ $`), `-i` (ASCII + Latin-1 Unicode), `-w` (palabra completa) y `-e` (múltiples patrones). Un patrón con salto de línea se rechaza con mensaje y salida 2.
+`zigrep` soporta tanto búsqueda literal acelerada por SIMD (`-F` o auto) como expresiones regulares lineales (`. [a-z] [^x] \d \w \s * + ? {n,m} | () ^ $`), `-i` (ASCII; Latin-1 solo en patrones literales, la regex pliega ASCII), `-w` (palabra completa) y `-e` (múltiples patrones). Un patrón con salto de línea se rechaza con mensaje y salida 2.
 
 ---
 

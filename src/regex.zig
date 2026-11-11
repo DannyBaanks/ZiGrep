@@ -14,7 +14,8 @@
 //!   repeats    *  +  ?  {n}  {n,}  {n,m}   (a trailing `?` is accepted and ignored)
 //!   anchors    ^  $   (line anchors; every haystack is split on '\n')
 //!   escapes    \. \\ \( \) \[ \] \{ \} \* \+ \? \| \^ \$ \/ \- ...
-//! Not supported (reported as errors, never silently mis-matched): `\b`,
+//!   word boundaries  \b  \B   (zero-width, resolved in the NFA closure)
+//! Not supported (reported as errors, never silently mis-matched):
 //! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
 //! UTF-8 character is several bytes; -i folds ASCII only.
 const std = @import("std");
