@@ -35,56 +35,56 @@ const TestCase = struct {
 const cases = [_]TestCase{
     .{
         .name = "literal 'Searcher' (-n)",
-        .zigrep_args = &.{ "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "Searcher", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "case-insensitive -i 'searcher'",
-        .zigrep_args = &.{ "-i", "searcher", "src" },
+        .zigrep_args = &.{ "-n", "-i", "searcher", "src" },
         .grep_args = &.{ "-rnIF", "-i", "searcher", "src" },
         .rg_args = &.{ "-n", "-F", "-i", "searcher", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "whole-word -w 'Searcher'",
-        .zigrep_args = &.{ "-w", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "-w", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "-w", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "-w", "Searcher", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "combined -i -w 'searcher'",
-        .zigrep_args = &.{ "-i", "-w", "searcher", "src" },
+        .zigrep_args = &.{ "-n", "-i", "-w", "searcher", "src" },
         .grep_args = &.{ "-rnIF", "-i", "-w", "searcher", "src" },
         .rg_args = &.{ "-n", "-F", "-i", "-w", "searcher", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "multi-pattern -e 'const' -e 'pub'",
-        .zigrep_args = &.{ "-e", "const", "-e", "pub", "src" },
+        .zigrep_args = &.{ "-n", "-e", "const", "-e", "pub", "src" },
         .grep_args = &.{ "-rnIF", "-e", "const", "-e", "pub", "src" },
         .rg_args = &.{ "-n", "-F", "-e", "const", "-e", "pub", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "regex 'pub\\s+fn\\s+'",
-        .zigrep_args = &.{ "pub\\s+fn\\s+", "src" },
+        .zigrep_args = &.{ "-n", "pub\\s+fn\\s+", "src" },
         .grep_args = &.{ "-rnIE", "pub[[:space:]]+fn[[:space:]]+", "src" },
         .rg_args = &.{ "-n", "pub\\s+fn\\s+", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "regex alternation 'searcher|filter'",
-        .zigrep_args = &.{ "-i", "searcher|filter", "src" },
+        .zigrep_args = &.{ "-n", "-i", "searcher|filter", "src" },
         .grep_args = &.{ "-rnIE", "-i", "searcher|filter", "src" },
         .rg_args = &.{ "-n", "-i", "searcher|filter", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "regex digits '[0-9]{2,}'",
-        .zigrep_args = &.{ "[0-9]{2,}", "src" },
+        .zigrep_args = &.{ "-n", "[0-9]{2,}", "src" },
         // Git for Windows' GNU grep 3.0 misparses this interval expression.
         // The equivalent ERE below keeps the differential check meaningful.
         .grep_args = &.{ "-rnIE", "[0-9][0-9]+", "src" },
@@ -93,7 +93,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "regex anchor '^const'",
-        .zigrep_args = &.{ "^const ", "src" },
+        .zigrep_args = &.{ "-n", "^const ", "src" },
         .grep_args = &.{ "-rnIE", "^const ", "src" },
         .rg_args = &.{ "-n", "^const ", "src" },
         .expected_exit = 0,
@@ -130,7 +130,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "kamikaze swarm -k 'Searcher'",
-        .zigrep_args = &.{ "-k", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "-k", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "Searcher", "src" },
         .expected_exit = 0,
@@ -145,14 +145,14 @@ const cases = [_]TestCase{
     },
     .{
         .name = "io_uring async batch --uring 'Searcher'",
-        .zigrep_args = &.{ "--uring", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "--uring", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "Searcher", "src" },
         .expected_exit = 0,
     },
     .{
         .name = "deterministic sorted mode --sort",
-        .zigrep_args = &.{ "--sort", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "--sort", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "--sort", "path", "Searcher", "src" },
         .expected_exit = 0,
@@ -160,7 +160,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "nav depth ceiling -m 'v^' (scan root only)",
-        .zigrep_args = &.{ "-m", "v^", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "-m", "v^", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "Searcher", "src" },
         .expected_exit = 0,
@@ -168,7 +168,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "nav trampoline -m '^v' (dive into subdirs)",
-        .zigrep_args = &.{ "-m", "^v", "name", ".github" },
+        .zigrep_args = &.{ "-n", "-m", "^v", "name", ".github" },
         .grep_args = &.{ "-rnIF", "name", ".github" },
         .rg_args = &.{ "-n", "-F", "name", ".github" },
         .expected_exit = 0,
@@ -176,7 +176,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "absent needle (exit 1)",
-        .zigrep_args = &.{ "zzz_non_existent_token_xyz", "src" },
+        .zigrep_args = &.{ "-n", "zzz_non_existent_token_xyz", "src" },
         .grep_args = &.{ "-rnIF", "zzz_non_existent_token_xyz", "src" },
         .rg_args = &.{ "-n", "-F", "zzz_non_existent_token_xyz", "src" },
         .expected_exit = 1,
@@ -184,7 +184,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "invert-match -v 'const'",
-        .zigrep_args = &.{ "-v", "const", "src/root.zig" },
+        .zigrep_args = &.{ "-n", "-v", "const", "src/root.zig" },
         .grep_args = &.{ "-rnIF", "-v", "const", "src/root.zig" },
         .rg_args = &.{ "-n", "-F", "-v", "const", "src/root.zig" },
         .expected_exit = 0,
@@ -200,7 +200,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "max-count -m 1 'Searcher'",
-        .zigrep_args = &.{ "-m", "1", "Searcher", "src/search.zig" },
+        .zigrep_args = &.{ "-n", "-m", "1", "Searcher", "src/search.zig" },
         .grep_args = &.{ "-rnIF", "-m", "1", "Searcher", "src/search.zig" },
         .rg_args = &.{ "-n", "-F", "-m", "1", "Searcher", "src/search.zig" },
         .expected_exit = 0,
@@ -208,7 +208,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "max-count --max-count=2 'Searcher'",
-        .zigrep_args = &.{ "--max-count=2", "Searcher", "src/search.zig" },
+        .zigrep_args = &.{ "-n", "--max-count=2", "Searcher", "src/search.zig" },
         .grep_args = &.{ "-rnIF", "--max-count=2", "Searcher", "src/search.zig" },
         .rg_args = &.{ "-n", "-F", "--max-count=2", "Searcher", "src/search.zig" },
         .expected_exit = 0,
@@ -216,7 +216,7 @@ const cases = [_]TestCase{
     },
     .{
         .name = "invert-match with max-count -v -m 2",
-        .zigrep_args = &.{ "-v", "-m", "2", "pub", "src/root.zig" },
+        .zigrep_args = &.{ "-n", "-v", "-m", "2", "pub", "src/root.zig" },
         .grep_args = &.{ "-rnIF", "-v", "-m", "2", "pub", "src/root.zig" },
         .rg_args = &.{ "-n", "-F", "-v", "-m", "2", "pub", "src/root.zig" },
         .expected_exit = 0,
@@ -234,21 +234,21 @@ const cases = [_]TestCase{
     },
     .{
         .name = "replace --replace ZZ (rest of line)",
-        .zigrep_args = &.{ "--replace", "ZZ", "-F", "Searcher", "src/search.zig" },
+        .zigrep_args = &.{ "-n", "--replace", "ZZ", "-F", "Searcher", "src/search.zig" },
         .grep_args = null, // grep 3.0 has no --replace
         .rg_args = &.{ "-n", "--replace", "ZZ", "-F", "Searcher", "src/search.zig" },
         .expected_exit = 0,
     },
     .{
         .name = "column --column 'Searcher'",
-        .zigrep_args = &.{ "--column", "-F", "Searcher", "src/search.zig" },
+        .zigrep_args = &.{ "-n", "--column", "-F", "Searcher", "src/search.zig" },
         .grep_args = null, // grep has no --column
         .rg_args = &.{ "--column", "-F", "Searcher", "src/search.zig" },
         .expected_exit = 0,
     },
     .{
         .name = "exclude-from drops search.zig",
-        .zigrep_args = &.{ "--exclude-from=scripts/fixtures/exclude.txt", "-F", "Searcher", "src" },
+        .zigrep_args = &.{ "-n", "--exclude-from=scripts/fixtures/exclude.txt", "-F", "Searcher", "src" },
         .grep_args = &.{ "-rnIF", "--exclude-from=scripts/fixtures/exclude.txt", "Searcher", "src" },
         .rg_args = &.{ "-n", "-F", "--ignore-file=scripts/fixtures/exclude.txt", "Searcher", "src" },
         .expected_exit = 0,
@@ -421,7 +421,7 @@ pub fn main(init: std.process.Init) !void {
     if (builtin.os.tag != .windows) {
         total_tests += 1;
         const test_name = "stdin pipeline (pipe -> zigrep)";
-        const cmd_z = try std.fmt.allocPrint(arena, "printf 'alpha\\nbeta\\ngamma\\n' | {s} 'beta'", .{exe});
+        const cmd_z = try std.fmt.allocPrint(arena, "printf 'alpha\\nbeta\\ngamma\\n' | {s} -n 'beta'", .{exe});
         const cmd_g = "printf 'alpha\\nbeta\\ngamma\\n' | grep -n 'beta'";
         const z_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_z }) catch null;
         const g_res = runCmd(arena, init.io, &.{ "sh", "-c", cmd_g }) catch null;

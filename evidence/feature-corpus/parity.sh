@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Conformance rebANADA de paridad, en igualdad de condiciones:
 #  - rutas normalizadas sin './' (grep lo añade, zgrep no)
-#  - lineas numeradas por defecto en zgrep -> se compara con --no-line-number
-#    donde la referencia no las lleva, y se usa cuando la
-#    referencia (grep/rg) omite los ocultos por defecto
+#  - desde 0.4.0 zgrep NO numera por defecto (como grep y como rg en pipe):
+#    los --no-line-number que quedan son compatibilidad, no una traduccion
 # La raiz se resuelve ANTES del cd: despues, "$0" ya es relativo al directorio
 # de fixtures y la ruta deja de resolver (bug que dejo el arnes en 2/25 cuando
 # /tmp/opencode/znew desaparecio con el reinicio del servidor).

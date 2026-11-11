@@ -1,6 +1,10 @@
 #!/bin/bash
 # Differential conformance: zgrep (build) vs GNU grep 3.11 (and rg where the
 # semantics coincide). Every case was chosen so the expected output is known.
+#
+# NOTA (0.4.0): la numeracion por defecto de zgrep ahora es APAGADA, asi que
+# los casos cuya referencia usa -n llevan -n tambien del lado de zgrep. Antes
+# era al reves (zgrep numeraba siempre y se comparaba con --no-line-number).
 cd "$(dirname "$0")" || exit 1
 #
 # NOTA (numeracion por defecto): zgrep imprime el numero de linea SIEMPRE
@@ -20,22 +24,22 @@ run() { "$@" 2>&1; }
 hex() { od -An -c | tr -s ' '; }
 
 echo "===== -x ====="
-chk "-x cat"           "$(run grep -nx cat x.txt)"              "$(run z -x cat x.txt)"
-chk "-x -i CAT"        "$(run grep -nx -i CAT x.txt)"           "$(run z -x -i CAT x.txt)"
+chk "-x cat"           "$(run grep -nx cat x.txt)"              "$(run z -n -x cat x.txt)"
+chk "-x -i CAT"        "$(run grep -nx -i CAT x.txt)"           "$(run z -n -x -i CAT x.txt)"
 chk "-x -F a.b (sin -n)"        "$(run grep -x -F a.b x.txt)"           "$(run z -x --no-line-number -F a.b x.txt)"
-chk "-x -e dog -e cat" "$(run grep -nx -e dog -e cat x.txt)"    "$(run z -x -e dog -e cat x.txt)"
+chk "-x -e dog -e cat" "$(run grep -nx -e dog -e cat x.txt)"    "$(run z -n -x -e dog -e cat x.txt)"
 chk "-x -c"            "$(run grep -x -c cat x.txt)"           "$(run z -x -c cat x.txt)"
 chk "-x -l (2f)"       "$(run grep -x -l cat x.txt b.txt)"     "$(run z -x -l cat x.txt b.txt)"
-chk "-x (arbol)"       "$(run grep -nrx cat . | sed 's|^\./||' | LC_ALL=C sort)" "$(run z --sort -x cat . | LC_ALL=C sort)"                 "$(run z -x cat .)"
+chk "-x (arbol)"       "$(run grep -nrx cat . | sed 's|^\./||' | LC_ALL=C sort)" "$(run z -n --sort -x cat . | LC_ALL=C sort)"                 "$(run z -x cat .)"
 
 echo "===== -f ====="
-chk "-f pats"          "$(run grep -n -f pats x.txt)"             "$(run z -f pats x.txt)"
-chk "-f pats2 (vacia)" "$(run grep -n -f pats2 x.txt)"            "$(run z -f pats2 x.txt)"
-chk "-f empty"         "$(run grep -n -f empty_pats x.txt)"       "$(run z -f empty_pats x.txt)"
+chk "-f pats"          "$(run grep -n -f pats x.txt)"             "$(run z -n -f pats x.txt)"
+chk "-f pats2 (vacia)" "$(run grep -n -f pats2 x.txt)"            "$(run z -n -f pats2 x.txt)"
+chk "-f empty"         "$(run grep -n -f empty_pats x.txt)"       "$(run z -n -f empty_pats x.txt)"
 run grep -f empty_pats x.txt >/dev/null; r1=$?
 run z -f empty_pats x.txt >/dev/null; r2=$?
 chk "rc -f empty"      "$r1"                                   "$r2"
-chk "-e + -f"          "$(run grep -n -e dog -f pats x.txt)"      "$(run z -e dog -f pats x.txt)"
+chk "-e + -f"          "$(run grep -n -e dog -f pats x.txt)"      "$(run z -n -e dog -f pats x.txt)"
 
 echo "===== -s ====="
 o1=$(run grep -s cat /nonexistent 2>/dev/null); r1=$?
@@ -52,9 +56,9 @@ chk "sin numeros -c"   "$(run grep -c HIT a.txt b.txt)"        "$(run z --sort -
 echo "===== -Z ====="
 chk "-Z -l"            "$(run grep -Z -l HIT a.txt b.txt | hex)" "$(run z --sort -Z -l HIT a.txt b.txt | hex)"
 chk "-Z -c"            "$(run grep -Z -c HIT a.txt b.txt | hex)" "$(run z --sort -Z -c HIT a.txt b.txt | hex)"
-chk "-Z -H"            "$(run grep -Z -n -H HIT a.txt | hex)"       "$(run z -Z -H HIT a.txt | hex)"
+chk "-Z -H"            "$(run grep -Z -n -H HIT a.txt | hex)"       "$(run z -n -Z -H HIT a.txt | hex)"
 chk "-Z -L"            "$(run grep -Z -L HIT c.txt | hex)"       "$(run z -Z -L HIT c.txt | hex)"
-chk "-Z -A1"           "$(run grep -Z -n -H -A1 HIT a.txt | hex)"   "$(run z -Z -H -A1 HIT a.txt | hex)"
+chk "-Z -A1"           "$(run grep -Z -n -H -A1 HIT a.txt | hex)"   "$(run z -n -Z -H -A1 HIT a.txt | hex)"
 
 echo "===== contexto ====="
 chk "-A1 -B1"          "$(run grep -n -A1 -B1 HIT a.txt)"        "$(run z -n -A1 -B1 HIT a.txt)"

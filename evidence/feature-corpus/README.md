@@ -171,7 +171,7 @@ de la conformance.
   igual que rg; `--heading` fuerza el camino ordenado porque en streaming los
   grupos de ficheros se entremezclan.
 
-Verificacion completa: 90 tests, oraculo 26/26, 1419/1419 spans, 40/40 + 25/25
+Verificacion completa (0.4.0-dev): 111 tests, oraculo 30/30, 40/40 + 25/25 + 45/45 json
 + 15/15 + 5/5 de conformance, fuzzers a cero.
 
 ## Las cinco que dejaron de ser "no vale"

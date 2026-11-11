@@ -59,9 +59,13 @@ const usage =
     \\                    select non-matching lines
     \\  -w, --word-regexp match whole words only
     \\  -r                recurse into directories (always on; kept for grep compat)
-    \\  -n                print line numbers (always on; kept for grep compat)
+    \\  -n, --line-number
+    \\                    prefix each match with its line number (OFF by
+    \\                    default, like GNU grep and like rg when piped:
+    \\                    the machine-readable case; 0.4.0 changes this from
+    \\                    "always on", see GUIA §4l)
     \\      --no-line-number
-    \\                    do not print line numbers
+    \\                    keep them off (accepted for compatibility)
     \\      --json         structured output (JSONL, one event per output
     \\                    record): match, context, passthru, occurrence, file
     \\                    or count, with path, line, column, byte_start,
@@ -243,9 +247,11 @@ pub const Options = struct {
     line_regexp: bool = false,
     /// `-s` / `--no-messages`: do not report unreadable files.
     no_messages: bool = false,
-    /// Line numbers are printed by default; `--no-line-number` disables them.
+    /// Line numbers are OFF by default (`-n`/`--line-number` turns them on), like
+    /// GNU grep and like rg when the output is a pipe. `--no-line-number` is accepted
+    /// for compatibility and is a no-op.
     /// `-n` stays a no-op so `grep`-style clusters keep parsing.
-    show_line_no: bool = true,
+    show_line_no: bool = false,
     /// `-Z` / `-0`: terminate file names with NUL instead of ':' / newline.
     null_filename: bool = false,
     /// `-A` / `-B` / `-C` line context.
@@ -2776,6 +2782,50 @@ test "parseArgs: -U, --multiline, --multiline-dotall, --stop-on-nonmatch" {
         const a = [_][:0]const u8{ "zgrep", "--stop-on-nonmatch", "pat" };
         _ = try parseArgs(alloc, &a, &o);
         try std.testing.expect(o.stop_on_nonmatch);
+    }
+}
+
+test "parseArgs: la numeracion arranca APAGADA (0.4.0) y -n la enciende" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var o: Options = .{};
+    const a = [_][:0]const u8{ "zgrep", "pat", "f.txt" };
+    _ = try parseArgs(alloc, &a, &o);
+    // Default nuevo, medido contra grep y contra rg-en-pipe: ninguno numera
+    // salvo que se pida. La premisa del corpus ("rg numera por defecto") era
+    // falsa en el caso que importa (ver evidence/agent-native/contract.md).
+    try std.testing.expect(!o.show_line_no);
+    // -n y --line-number la encienden
+    {
+        var o2: Options = .{};
+        const a2 = [_][:0]const u8{ "zgrep", "-n", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a2, &o2);
+        try std.testing.expect(o2.show_line_no);
+    }
+    {
+        var o3: Options = .{};
+        const a3 = [_][:0]const u8{ "zgrep", "--line-number", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a3, &o3);
+        try std.testing.expect(o3.show_line_no);
+    }
+    // --pretty la enciende tambien (es alias de --color=always --heading
+    // --line-number; con el default apagado por fin tiene sentido)
+    {
+        var o4: Options = .{};
+        const a4 = [_][:0]const u8{ "zgrep", "--pretty", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a4, &o4);
+        try std.testing.expect(o4.show_line_no);
+        try std.testing.expectEqual(ColorMode.always, o4.color);
+        try std.testing.expect(o4.heading);
+    }
+    // --json NO implica numeracion: los campos la llevan
+    {
+        var o5: Options = .{};
+        const a5 = [_][:0]const u8{ "zgrep", "--json", "pat", "f.txt" };
+        _ = try parseArgs(alloc, &a5, &o5);
+        try std.testing.expect(!o5.show_line_no);
+        try std.testing.expect(o5.json);
     }
 }
 

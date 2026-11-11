@@ -41,7 +41,7 @@ pub const ScanConfig = struct {
     before_context: usize = 0,
     after_context: usize = 0,
     /// Print the line-number prefix (default on, like GNU grep -n).
-    show_line_no: bool = true,
+    show_line_no: bool = false,
     /// `-Z`: terminate file names with NUL instead of ':' / newline.
     null_filename: bool = false,
     /// `-o`: one output line per (non-empty) match instead of per line.
@@ -1303,7 +1303,30 @@ fn run(
     path: []const u8,
     show_path: bool,
 ) ![]u8 {
-    return runWithConfig(data, needle, mode, .{}, path, show_path);
+    // Los tests de abajo fijan el comportamiento CON `-n`, que es el que
+    // tenian cuando se escribieron. El default nuevo (sin numeros) tiene su
+    // propio test, para que los dos comportamientos queden clavados.
+    return runWithConfig(data, needle, mode, .{ .show_line_no = true }, path, show_path);
+}
+
+test "scanBuffer: sin -n no hay numero de linea (default 0.4.0)" {
+    const got = try runWithConfig("alpha\nbeta gamma\ngamma\n", "gamma", .lines, .{}, "f.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\beta gamma
+        \\gamma
+        \\
+    , got);
+}
+
+test "scanBuffer: -n enciende la numeracion explicitamente" {
+    const got = try runWithConfig("alpha\nbeta gamma\ngamma\n", "gamma", .lines, .{ .show_line_no = true }, "f.txt", false);
+    defer std.testing.allocator.free(got);
+    try std.testing.expectEqualStrings(
+        \\2:beta gamma
+        \\3:gamma
+        \\
+    , got);
 }
 
 test "scanBuffer --json: un evento por coincidencia, con bytes absolutos" {
@@ -1416,21 +1439,21 @@ test "scanBuffer: line cursor survives long gaps between matches" {
 
 test "scanBuffer: invert-match (-v)" {
     const data = "apple\nbanana\ncherry\napricot\n";
-    const got = try runWithConfig(data, "ap", .lines, .{ .invert = true }, "f", false);
+    const got = try runWithConfig(data, "ap", .lines, .{ .invert = true, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("2:banana\n3:cherry\n", got);
 }
 
 test "scanBuffer: max-count (-m)" {
     const data = "hit 1\nhit 2\nhit 3\nhit 4\n";
-    const got = try runWithConfig(data, "hit", .lines, .{ .max_count = 2 }, "f", false);
+    const got = try runWithConfig(data, "hit", .lines, .{ .max_count = 2, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("1:hit 1\n2:hit 2\n", got);
 }
 
 test "scanBuffer: invert-match with max-count (-v -m)" {
     const data = "apple\nbanana\ncherry\ndate\n";
-    const got = try runWithConfig(data, "apple", .lines, .{ .invert = true, .max_count = 2 }, "f", false);
+    const got = try runWithConfig(data, "apple", .lines, .{ .invert = true, .max_count = 2, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("2:banana\n3:cherry\n", got);
 }
@@ -1440,7 +1463,7 @@ test "scanFile: files-without-match (-L)" {
     var out: std.ArrayList(u8) = .empty;
     defer out.deinit(gpa);
     const searcher = Searcher.init("non_existent_token_xyz", .auto);
-    const res = scanFile(std.testing.io, gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{}, &out, null, null);
+    const res = scanFile(std.testing.io, gpa, &searcher, "src/root.zig", false, .files_without_match, false, .{ .show_line_no = true,}, &out, null, null);
     try std.testing.expect(!res.matched);
     try std.testing.expectEqualStrings("src/root.zig\n", out.items);
 }
@@ -1461,7 +1484,7 @@ test "scanFile: en auto la sonda es la primera lectura y sus bytes se escanean" 
     const searcher = Searcher.init("needle", .auto);
     var st = io_engine.State{};
 
-    const res = scanFile(std.testing.io, gpa, &searcher, path, false, .lines, false, .{}, &out, &scratch, &st);
+    const res = scanFile(std.testing.io, gpa, &searcher, path, false, .lines, false, .{ .show_line_no = true,}, &out, &scratch, &st);
     try std.testing.expect(res.err == null);
     try std.testing.expect(res.matched);
     try std.testing.expectEqual(@as(usize, 1), res.lines);
@@ -1501,7 +1524,7 @@ test "utf16: BOM detection and LE decoding" {
 const ctx_data = "l1\nl2\nHIT a\nl4\nl5\nl6\nl7\nHIT b\nl9\nHIT c\nl11\n";
 
 test "scanBuffer: -A1 -B1 without file names" {
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1, .after_context = 1 }, "a.txt", false);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1, .after_context = 1, .show_line_no = true }, "a.txt", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\2-l2
@@ -1518,7 +1541,7 @@ test "scanBuffer: -A1 -B1 without file names" {
 }
 
 test "scanBuffer: -A2 -B2 with file names" {
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 2, .after_context = 2 }, "a.txt", true);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 2, .after_context = 2, .show_line_no = true }, "a.txt", true);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\a.txt-1-l1
@@ -1538,7 +1561,7 @@ test "scanBuffer: -A2 -B2 with file names" {
 
 test "scanBuffer: after-context only and before-context only" {
     {
-        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .after_context = 1 }, "a.txt", false);
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .after_context = 1 }, "a.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings(
             \\3:HIT a
@@ -1552,7 +1575,7 @@ test "scanBuffer: after-context only and before-context only" {
         , got);
     }
     {
-        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1 }, "a.txt", false);
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .before_context = 1 }, "a.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings(
             \\2-l2
@@ -1570,7 +1593,7 @@ test "scanBuffer: after-context only and before-context only" {
 test "scanBuffer: a match inside a previous after-context is printed once, as a match" {
     // Lines 8, 9, 10 are consecutive matches; only the group separator makes
     // groups at all here, and grep does not print one between adjacent matches.
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 1 }, "a.txt", false);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .before_context = 1 }, "a.txt", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\2-l2
@@ -1585,7 +1608,7 @@ test "scanBuffer: a match inside a previous after-context is printed once, as a 
 }
 
 test "scanBuffer: context wider than the file stays a single group" {
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .before_context = 10, .after_context = 10 }, "a.txt", true);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .before_context = 10, .after_context = 10 }, "a.txt", true);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\a.txt-1-l1
@@ -1604,7 +1627,7 @@ test "scanBuffer: context wider than the file stays a single group" {
 }
 
 test "scanBuffer: max-count stops matching but still drains after-context" {
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .after_context = 2, .max_count = 1 }, "a.txt", false);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .after_context = 2, .max_count = 1 }, "a.txt", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\3:HIT a
@@ -1657,20 +1680,20 @@ test "scanBuffer: invert without context prints no group separators" {
     // Regression: the ordered path used by -v once leaked the `--` group
     // separator even with -A/-B/-C disabled (oracle case "invert-match -v").
     const data = "one\ntwo\nthree\nfour\nfive\nsix\n";
-    const got = try runWithConfig(data, "zzz", .lines, .{ .invert = true }, "f", false);
+    const got = try runWithConfig(data, "zzz", .lines, .{ .invert = true, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("1:one\n2:two\n3:three\n4:four\n5:five\n6:six\n", got);
-    const inc = try runWithConfig(data, "e", .lines, .{ .invert = true }, "f", false);
+    const inc = try runWithConfig(data, "e", .lines, .{ .invert = true, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(inc);
     try std.testing.expectEqualStrings("2:two\n4:four\n6:six\n", inc);
     // same, with after-context: matches become context of an inverted match
-    const with_ctx = try runWithConfig(data, "e", .lines, .{ .invert = true, .after_context = 1 }, "f", false);
+    const with_ctx = try runWithConfig(data, "e", .lines, .{ .show_line_no = true, .invert = true, .after_context = 1 }, "f", false);
     defer std.testing.allocator.free(with_ctx);
     try std.testing.expectEqualStrings("2:two\n3-three\n4:four\n5-five\n6:six\n", with_ctx);
 }
 
 test "scanBuffer: -A1 -B1 still honours invert (-v)" {
-    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .invert = true, .after_context = 1 }, "a.txt", false);
+    const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .invert = true, .after_context = 1 }, "a.txt", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings(
         \\1:l1
@@ -1690,17 +1713,17 @@ test "scanBuffer: -A1 -B1 still honours invert (-v)" {
 
 test "scanBuffer: -Z prints a NUL after the file name" {
     {
-        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .null_filename = true }, "a.txt", true);
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .null_filename = true }, "a.txt", true);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("a.txt\x003:HIT a\na.txt\x008:HIT b\na.txt\x0010:HIT c\n", got);
     }
     {
-        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .null_filename = true, .after_context = 1 }, "a.txt", true);
+        const got = try runWithConfig(ctx_data, "HIT", .lines, .{ .show_line_no = true, .null_filename = true, .after_context = 1 }, "a.txt", true);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("a.txt\x003:HIT a\na.txt\x004-l4\n--\na.txt\x008:HIT b\na.txt\x009-l9\na.txt\x0010:HIT c\na.txt\x0011-l11\n", got);
     }
     {
-        const got = try runWithConfig(ctx_data, "HIT", .count, .{ .null_filename = true }, "a.txt", true);
+        const got = try runWithConfig(ctx_data, "HIT", .count, .{ .show_line_no = true, .null_filename = true }, "a.txt", true);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("", got);
         var out: std.ArrayList(u8) = .empty;
@@ -1752,7 +1775,7 @@ test "scanBuffer: -z makes NUL the RECORD separator, not the field separator" {
     // GNU grep -z prints `1:record<NUL>`, the ':' stays a colon.
     out_sep = 0;
     defer out_sep = '\n';
-    const got = try runWithConfig("needle\x00other needle\x00", "needle", .lines, .{ .null_data = true }, "f.txt", false);
+    const got = try runWithConfig("needle\x00other needle\x00", "needle", .lines, .{ .null_data = true, .show_line_no = true }, "f.txt", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("1:needle\x002:other needle\x00", got);
 }
@@ -1764,7 +1787,7 @@ test "scanBuffer: --crlf counts CRLF lines once and keeps the CR in the output" 
     // twice.
     const data = "needle one\r\nneedle two\r\nplain\r\n";
     {
-        const got = try runWithConfig(data, "needle", .lines, .{ .crlf = true }, "f.txt", false);
+        const got = try runWithConfig(data, "needle", .lines, .{ .crlf = true, .show_line_no = true }, "f.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("1:needle one\r\n2:needle two\r\n", got);
     }
@@ -1791,7 +1814,7 @@ test "scanBuffer: --crlf counts CRLF lines once and keeps the CR in the output" 
         var out: std.ArrayList(u8) = .empty;
         defer out.deinit(std.testing.allocator);
         const searcher = try search.build(arena_inst.allocator(), &.{"needle one$"}, .{ .crlf = true });
-        _ = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", false, .lines, .{ .crlf = true }, &out);
+        _ = try scanBuffer(std.testing.allocator, data, &searcher, "f.txt", false, .lines, .{ .crlf = true, .show_line_no = true }, &out);
         try std.testing.expectEqualStrings("1:needle one\r\n", out.items);
     }
 }
@@ -1800,19 +1823,19 @@ test "scanBuffer: --replace substitutes inside the line, the rest of it survives
     // rg: `needle here` becomes `X here`. It used to print only `X`, which
     // also made `--passthru --replace` incoherent.
     {
-        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X" }, "f.txt", false);
+        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X", .show_line_no = true }, "f.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("1:X here\n2:second X\n", got);
     }
     // With `-o` the record is just the replacement.
     {
-        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X", .only_matching = true }, "f.txt", false);
+        const got = try runWithConfig("needle here\nsecond needle\n", "needle", .lines, .{ .replace = "X", .only_matching = true, .show_line_no = true }, "f.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("1:X\n2:X\n", got);
     }
     // Every match of the line is substituted, not only the first.
     {
-        const got = try runWithConfig("aa aa\n", "aa", .lines, .{ .replace = "X" }, "f.txt", false);
+        const got = try runWithConfig("aa aa\n", "aa", .lines, .{ .replace = "X", .show_line_no = true }, "f.txt", false);
         defer std.testing.allocator.free(got);
         try std.testing.expectEqualStrings("1:X X\n", got);
     }

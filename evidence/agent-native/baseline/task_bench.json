@@ -30,7 +30,7 @@
       "tasks": {
         "files_with_needle": {
           "calls": 1,
-          "wall_s_median": 0.0098,
+          "wall_s_median": 0.0051,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -40,7 +40,7 @@
         },
         "count_matching_lines": {
           "calls": 1,
-          "wall_s_median": 0.0145,
+          "wall_s_median": 0.0078,
           "out_bytes_total": 151125,
           "correct": true,
           "rc_set": [
@@ -50,7 +50,7 @@
         },
         "rare_files": {
           "calls": 1,
-          "wall_s_median": 0.0107,
+          "wall_s_median": 0.0047,
           "out_bytes_total": 441,
           "correct": true,
           "rc_set": [
@@ -60,7 +60,7 @@
         },
         "rare_call_sites": {
           "calls": 1,
-          "wall_s_median": 0.0106,
+          "wall_s_median": 0.0046,
           "out_bytes_total": 963,
           "correct": true,
           "rc_set": [
@@ -70,7 +70,7 @@
         },
         "absent_token": {
           "calls": 1,
-          "wall_s_median": 0.0073,
+          "wall_s_median": 0.0055,
           "out_bytes_total": 0,
           "correct": true,
           "rc_set": [
@@ -80,7 +80,7 @@
         },
         "context_audit": {
           "calls": 1,
-          "wall_s_median": 0.0165,
+          "wall_s_median": 0.0072,
           "out_bytes_total": 2724,
           "correct": true,
           "rc_set": [
@@ -90,7 +90,7 @@
         },
         "two_patterns": {
           "calls": 1,
-          "wall_s_median": 0.0076,
+          "wall_s_median": 0.0063,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -100,8 +100,8 @@
         },
         "word_boundary_occurrences": {
           "calls": 1,
-          "wall_s_median": 0.1882,
-          "out_bytes_total": 10447305,
+          "wall_s_median": 0.0726,
+          "out_bytes_total": 9885342,
           "correct": true,
           "rc_set": [
             0
@@ -115,7 +115,7 @@
       "tasks": {
         "files_with_needle": {
           "calls": 1,
-          "wall_s_median": 0.0109,
+          "wall_s_median": 0.0049,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -125,7 +125,7 @@
         },
         "count_matching_lines": {
           "calls": 1,
-          "wall_s_median": 0.014,
+          "wall_s_median": 0.0062,
           "out_bytes_total": 151125,
           "correct": true,
           "rc_set": [
@@ -135,7 +135,7 @@
         },
         "rare_files": {
           "calls": 1,
-          "wall_s_median": 0.0098,
+          "wall_s_median": 0.0047,
           "out_bytes_total": 441,
           "correct": true,
           "rc_set": [
@@ -145,7 +145,7 @@
         },
         "rare_call_sites": {
           "calls": 1,
-          "wall_s_median": 0.0105,
+          "wall_s_median": 0.005,
           "out_bytes_total": 963,
           "correct": true,
           "rc_set": [
@@ -155,7 +155,7 @@
         },
         "absent_token": {
           "calls": 1,
-          "wall_s_median": 0.0101,
+          "wall_s_median": 0.005,
           "out_bytes_total": 0,
           "correct": true,
           "rc_set": [
@@ -165,7 +165,7 @@
         },
         "context_audit": {
           "calls": 1,
-          "wall_s_median": 0.0189,
+          "wall_s_median": 0.0077,
           "out_bytes_total": 2724,
           "correct": true,
           "rc_set": [
@@ -175,7 +175,7 @@
         },
         "two_patterns": {
           "calls": 1,
-          "wall_s_median": 0.0086,
+          "wall_s_median": 0.0058,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -185,7 +185,7 @@
         },
         "word_boundary_occurrences": {
           "calls": 1,
-          "wall_s_median": 0.1722,
+          "wall_s_median": 0.0808,
           "out_bytes_total": 9885342,
           "correct": true,
           "rc_set": [
@@ -200,7 +200,7 @@
       "tasks": {
         "files_with_needle": {
           "calls": 1,
-          "wall_s_median": 0.0303,
+          "wall_s_median": 0.0118,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -210,7 +210,7 @@
         },
         "count_matching_lines": {
           "calls": 1,
-          "wall_s_median": 0.0471,
+          "wall_s_median": 0.0178,
           "out_bytes_total": 151125,
           "correct": true,
           "rc_set": [
@@ -220,7 +220,7 @@
         },
         "rare_files": {
           "calls": 1,
-          "wall_s_median": 0.0471,
+          "wall_s_median": 0.0175,
           "out_bytes_total": 441,
           "correct": true,
           "rc_set": [
@@ -230,7 +230,7 @@
         },
         "rare_call_sites": {
           "calls": 1,
-          "wall_s_median": 0.0552,
+          "wall_s_median": 0.0234,
           "out_bytes_total": 963,
           "correct": true,
           "rc_set": [
@@ -240,7 +240,7 @@
         },
         "absent_token": {
           "calls": 1,
-          "wall_s_median": 0.0365,
+          "wall_s_median": 0.0167,
           "out_bytes_total": 0,
           "correct": true,
           "rc_set": [
@@ -250,7 +250,7 @@
         },
         "context_audit": {
           "calls": 1,
-          "wall_s_median": 0.0636,
+          "wall_s_median": 0.0232,
           "out_bytes_total": 2724,
           "correct": true,
           "rc_set": [
@@ -260,7 +260,7 @@
         },
         "two_patterns": {
           "calls": 1,
-          "wall_s_median": 0.0314,
+          "wall_s_median": 0.0119,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -270,7 +270,7 @@
         },
         "word_boundary_occurrences": {
           "calls": 1,
-          "wall_s_median": 0.1934,
+          "wall_s_median": 0.0665,
           "out_bytes_total": 9885342,
           "correct": true,
           "rc_set": [
@@ -285,7 +285,7 @@
       "tasks": {
         "files_with_needle": {
           "calls": 1,
-          "wall_s_median": 0.0144,
+          "wall_s_median": 0.0088,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -295,7 +295,7 @@
         },
         "count_matching_lines": {
           "calls": 1,
-          "wall_s_median": 0.0162,
+          "wall_s_median": 0.0079,
           "out_bytes_total": 151125,
           "correct": true,
           "rc_set": [
@@ -305,7 +305,7 @@
         },
         "rare_files": {
           "calls": 1,
-          "wall_s_median": 0.0119,
+          "wall_s_median": 0.0067,
           "out_bytes_total": 441,
           "correct": true,
           "rc_set": [
@@ -315,7 +315,7 @@
         },
         "rare_call_sites": {
           "calls": 1,
-          "wall_s_median": 0.0142,
+          "wall_s_median": 0.007,
           "out_bytes_total": 963,
           "correct": true,
           "rc_set": [
@@ -325,7 +325,7 @@
         },
         "absent_token": {
           "calls": 1,
-          "wall_s_median": 0.0109,
+          "wall_s_median": 0.0065,
           "out_bytes_total": 0,
           "correct": true,
           "rc_set": [
@@ -335,7 +335,7 @@
         },
         "context_audit": {
           "calls": 1,
-          "wall_s_median": 0.0154,
+          "wall_s_median": 0.007,
           "out_bytes_total": 2724,
           "correct": true,
           "rc_set": [
@@ -345,7 +345,7 @@
         },
         "two_patterns": {
           "calls": 1,
-          "wall_s_median": 0.0137,
+          "wall_s_median": 0.0091,
           "out_bytes_total": 142125,
           "correct": true,
           "rc_set": [
@@ -355,7 +355,7 @@
         },
         "word_boundary_occurrences": {
           "calls": 1,
-          "wall_s_median": 0.0412,
+          "wall_s_median": 0.0169,
           "out_bytes_total": 9885342,
           "correct": true,
           "rc_set": [

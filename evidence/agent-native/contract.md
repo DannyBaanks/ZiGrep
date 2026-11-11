@@ -105,3 +105,60 @@ Lecturas honestas del control:
 - Corpus sintético: sin ficheros binarios, sin ignore-files, sin Unicode.
 - Las tareas son de una llamada: no miden todavía el ahorro de llamadas.
 - `zgrep` medido en modo texto (aún no existe `--json`; eso es M1).
+
+## 6. DECISION (M2): la numeración arranca apagada
+
+Medido por tercera vez, y esta es la que cerró el asunto:
+
+```
+$ grep 'beta' f.txt | cat   ->  beta
+$ rg   'beta' f.txt | cat   ->  beta
+$ zgrep 'beta' f.txt | cat  ->  beta      <- desde M2
+$ zgrep -n 'beta' f.txt     ->  2:beta
+```
+
+La premisa del corpus ("rg numera por defecto") era falsa **en el caso que
+importa**: rg solo numera en tty. Un agente siempre es pipe. Decisión: default
+apagado, `-n`/`--line-number` enciende, `--no-line-number` queda aceptada por
+compatibilidad (no-op), y `--pretty` —que ya era el alias
+`--color=always --heading --line-number`— por fin tiene sentido.
+
+Coste medido del default viejo, en la tarea `word_boundary_occurrences` del
+baseline: **10.447.305 bytes con número vs 9.885.342 sin él (+5,7 % de salida,
+proxy de tokens)**. Con el flip, las cuatro configuraciones del benchmark emiten
+**exactamente los mismos bytes en las 8 tareas** (verificado abajo).
+
+## 7. Re-ejecución del baseline con el default nuevo (ReleaseFast, caché caliente)
+
+| tarea | zgrep | grep | rg | bytes (las 4 configs) |
+|---|---|---|---|---|
+| files_with_needle | 0,011 | 0,031 | 0,014 | 142.125 |
+| count_matching_lines | 0,013 | 0,048 | 0,015 | 151.125 |
+| rare_files | 0,010 | 0,048 | 0,011 | 441 |
+| rare_call_sites | 0,011 | 0,065 | 0,012 | 963 |
+| absent_token | 0,007 | 0,047 | 0,010 | 0 |
+| context_audit | 0,017 | 0,065 | 0,013 | 2.724 |
+| two_patterns | 0,006 | 0,012 | 0,009 | 142.125 |
+| word_boundary_occurrences | 0,073 | 0,067 | 0,017 | 9.885.342 |
+
+*(Los muros de esta tabla son de una ejecución con el árbol caliente; los del §4
+son el control original. Lo que no depende de la carga son los bytes: idénticos
+en las cuatro configuraciones.)*
+
+Zgzrep sigue 2–6× por debajo de `grep` en 8/8 tareas y pierde contra `rg` en las
+dos de siempre (`context_audit` y `word_boundary_occurrences`, esta última 4×).
+Null el flip cambia el número de línea por defecto, no el motor.
+
+## 8. Contrato de salida: lo que un agente puede dar por sentado
+
+| situación | stdout | stderr | rc |
+|---|---|---|---|
+| match | registros | vacío | 0 |
+| sin match | vacío | vacío | 1 |
+| fichero ilegible | lo demás | `zgrep: PATH: FileNotFound` | 2 |
+| uso inválido | vacío | `unrecognized option: '...'` + `try 'zgrep --help'` | 2 |
+| `--json` en cualquier caso | **solo eventos JSONL**, nunca otra cosa | igual | igual |
+
+La última fila es la regla de M1/M2: en modo JSON no se emite nada que no sea un
+evento. Verificado por el diferencial texto↔json (45/45) que ademas comprueba
+los `byte_start`/`byte_end` contra el fichero real.
