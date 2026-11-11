@@ -34,7 +34,7 @@ MODES = {
 
 def search_lines(out: bytes) -> bytes:
     keep = []
-    for l in out.decode().splitlines():
+    for l in out.decode().split("\n")[:-1]:
         d = json.loads(l)
         if isinstance(d, dict):
             if d.get("type") in ("query_end", "summary") or d == {"schema": "zgrep/1c"} or list(d) == ["query_id"]:

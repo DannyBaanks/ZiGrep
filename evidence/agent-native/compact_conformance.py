@@ -134,7 +134,7 @@ def main() -> int:
 
     def compare(name: str, full: bytes, comp: bytes, rc1: int, rc2: int) -> None:
         nonlocal full_bytes, compact_bytes
-        fl, cl = full.decode().splitlines(), comp.decode().splitlines()
+        fl, cl = full.decode().split("\n")[:-1], comp.decode().split("\n")[:-1]
         try:
             recs, ctrl = decode_compact(cl)
         except (ValueError, AssertionError, json.JSONDecodeError, KeyError, IndexError) as e:
@@ -168,8 +168,8 @@ def main() -> int:
         full, rc1 = run([z, "--json", "--queries-file", "-", *extra], q)
         comp, rc2 = run([z, "--json=compact", "--queries-file", "-", *extra], q)
         compare(f"lote {' '.join(extra)}", full, comp, rc1, rc2)
-        fe = [json.loads(l) for l in full.decode().splitlines()]
-        _, ctrl = decode_compact(comp.decode().splitlines())
+        fe = [json.loads(l) for l in full.decode().split("\n")[:-1]]
+        _, ctrl = decode_compact(comp.decode().split("\n")[:-1])
         fq = [e for e in fe if e["type"] in ("query_end", "summary")]
         for e in fq + ctrl:
             e.pop("output_bytes", None)
@@ -180,8 +180,8 @@ def main() -> int:
     for k in (0, 1, 4):
         full, _ = run([z, "--json", "--queries-file", "-", "--max-results", str(k)], q)
         comp, _ = run([z, "--json=compact", "--queries-file", "-", "--max-results", str(k)], q)
-        fe = [json.loads(l) for l in full.decode().splitlines()]
-        recs, ctrl = decode_compact(comp.decode().splitlines())
+        fe = [json.loads(l) for l in full.decode().split("\n")[:-1]]
+        recs, ctrl = decode_compact(comp.decode().split("\n")[:-1])
         fs, cs = fe[-1], ctrl[-1]
         RES = ("match", "occurrence", "file", "count")
         fr = [tuple(e.get(f) for f in FIELDS) for e in fe if e["type"] in RES]
@@ -194,7 +194,7 @@ def main() -> int:
     out, rc = run([z, "--json=compact", "ZZZ_NOPE", f"{FIX}/a.txt"])
     check(out == b"" and rc == 1, "vacio: stdout vacio y rc 1 (sin cabecera)")
     out, rc = run([z, "--json=compact", "--max-results", "1", "ZZZ_NOPE", f"{FIX}/a.txt"])
-    ls = out.decode().splitlines()
+    ls = out.decode().split("\n")[:-1]
     check(rc == 1 and len(ls) == 2 and ls[0] == '{"schema":"zgrep/1c"}' and json.loads(ls[1])["type"] == "summary",
           "vacio con presupuesto: cabecera + summary")
 
@@ -203,7 +203,7 @@ def main() -> int:
     check(rc == 2 and out == b"", "cerrado: --json=<desconocido>")
     out, rc = run([z, "--json=compact", "--queries-file", "-", f"{FIX}/a.txt"],
                   b'{"id":"x","pattern":"HIT","flags":["--json"]}\n')
-    end = [json.loads(l) for l in out.decode().splitlines() if '"query_end"' in l]
+    end = [json.loads(l) for l in out.decode().split("\n")[:-1] if '"query_end"' in l]
     check(rc == 2 and end and end[0]["rc"] == 2 and "dialect" in end[0]["error"],
           "cerrado: cambiar de dialecto dentro de una consulta")
 

@@ -71,7 +71,7 @@ def enc_c(evs: list[dict]) -> str:
 
 def dec_c(s: str) -> list[dict]:
     res = []
-    for l in s.splitlines()[1:]:
+    for l in s.split("\n")[:-1][1:]:
         d = json.loads(l)
         e = {k: None for k in FIELDS}
         e.update({"inverted": False} if d["type"] in ("match", "context", "passthru", "occurrence") else {})
@@ -96,7 +96,7 @@ def enc_d(evs: list[dict]) -> str:
 
 def dec_d(s: str) -> list[dict]:
     res = []
-    for l in s.splitlines()[1:]:
+    for l in s.split("\n")[:-1][1:]:
         d = json.loads(l)
         if d.pop("whole", None):
             d["match"] = d["text"]
@@ -149,7 +149,7 @@ def enc_e(evs: list[dict]) -> str:
 
 def dec_e(s: str) -> list[dict]:
     res = []
-    for l in s.splitlines()[1:]:
+    for l in s.split("\n")[:-1][1:]:
         d = json.loads(l)
         if "rows" not in d:
             e = {k: None for k in FIELDS}
@@ -206,7 +206,7 @@ def enc_f(evs: list[dict]) -> str:
 
 def dec_f(s: str) -> list[dict]:
     res, cur = [], None
-    for l in s.splitlines()[1:]:
+    for l in s.split("\n")[:-1][1:]:
         d = json.loads(l)
         e = {k: None for k in FIELDS}
         if isinstance(d, dict):
@@ -243,7 +243,7 @@ def main() -> int:
         raw = subprocess.run([z, "--json", *args], cwd=ROOT, capture_output=True).stdout
         if len(raw) > LIMIT:
             raw = raw[: raw.rfind(b"\n", 0, LIMIT) + 1]
-        evs = [json.loads(l) for l in raw.decode().splitlines()]
+        evs = [json.loads(l) for l in raw.decode().split("\n")[:-1]]
         want = [canon(e) for e in evs]
         paths = {e["path"] for e in evs}
         grep_out = subprocess.run(["/usr/bin/grep", *GREP_EQUIV[name]], cwd=ROOT, capture_output=True).stdout

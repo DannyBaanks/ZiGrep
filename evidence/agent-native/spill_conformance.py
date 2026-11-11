@@ -53,7 +53,7 @@ def control(d: dict) -> bool:
 
 
 def full_search_lines(out: bytes) -> list[str]:
-    return [l for l in out.decode().splitlines() if not control(json.loads(l))]
+    return [l for l in out.decode().split("\n")[:-1] if not control(json.loads(l))]
 
 
 def records(lines: list[str]) -> list[dict]:
@@ -90,7 +90,7 @@ def main() -> int:
         ref, _ = run([z, *unbudgeted], stdin)
         sdir = tmp / name.replace(" ", "_").replace("/", "")
         out, rc = run([z, *args, f"--spill={sdir}"], stdin)
-        lines = out.decode().splitlines()
+        lines = out.decode().split("\n")[:-1]
         summ = json.loads(lines[-1])
         sp = summ["spill"]
         if summ["omitted"] == 0 and summ["truncated"] is False:
@@ -103,10 +103,10 @@ def main() -> int:
         mode = stat.S_IMODE(os.stat(sp["path"]).st_mode)
         check(sp["sha256"] == hashlib.sha256(data).hexdigest() and sp["bytes"] == len(data) and mode == 0o600,
               f"{name}: sha256/bytes/0600 del spill", f"{sp} real={hashlib.sha256(data).hexdigest()} {len(data)} {oct(mode)}")
-        slines = data.decode().splitlines()
+        slines = data.decode().split("\n")[:-1]
         if "--json=compact" in args:
             got = records(lines) + records(slines)
-            want = records(ref.decode().splitlines())
+            want = records(ref.decode().split("\n")[:-1])
             spill_res = sum(1 for r in records(slines) if r["type"] in RES)
         else:
             got = full_search_lines(out) + slines
@@ -122,19 +122,19 @@ def main() -> int:
     ro.mkdir()
     ro.chmod(0o500)
     out, rc = run([z, "--json", "--max-results", "1", f"--spill={ro}/x", "ZGREP_RARE_TOKEN", CORPUS])
-    s = json.loads(out.decode().splitlines()[-1])
+    s = json.loads(out.decode().split("\n")[:-1][-1])
     check(rc == 0 and s["truncated"] and isinstance(s["spill"], dict) and "error" in s["spill"]
           and len(full_search_lines(out)) == 1,
           "directorio no escribible: summary.spill.error, rc y stdout intactos", f"rc={rc} {s.get('spill')}")
     ro.chmod(0o700)
     out, _ = run([z, "--json", "--max-results", "1", "ZGREP_RARE_TOKEN", CORPUS])
-    s = json.loads(out.decode().splitlines()[-1])
+    s = json.loads(out.decode().split("\n")[:-1][-1])
     check(s["omitted"] > 0 and s["spill"] is None, "truncado sin --spill: spill null (el agente sabe que debe re-ejecutar)")
     out, rc = run([z, "--json", "--spill", "HIT", f"{FIX}/a.txt"])
     check(rc == 2 and out == b"", "cerrado: --spill sin presupuesto")
     out, rc = run([z, "--queries-file", "-", "--max-results", "1", f"{FIX}/a.txt"],
                   b'{"id":"x","pattern":"HIT","flags":["--spill"]}\n')
-    e = [json.loads(l) for l in out.decode().splitlines() if '"query_end"' in l]
+    e = [json.loads(l) for l in out.decode().split("\n")[:-1] if '"query_end"' in l]
     check(rc == 2 and e and e[0]["rc"] == 2 and "spill" in e[0]["error"], "cerrado: --spill dentro de una consulta")
 
     print(f"TOTAL {passed} pass / {failed} fail")

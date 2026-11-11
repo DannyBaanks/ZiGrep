@@ -157,7 +157,7 @@ def json_events(out: bytes) -> list[dict]:
     """Eventos de busqueda de una salida JSON, en cualquiera de los dos
     dialectos: zgrep/1 tal cual, o zgrep/1c decodificado con el decodificador
     de referencia de compact_conformance.py. Una linea invalida = fallo."""
-    lines = out.decode("utf-8", "replace").splitlines()
+    lines = out.decode("utf-8", "replace").split("\n")[:-1]
     try:
         if lines and json.loads(lines[0]) == {"schema": "zgrep/1c"}:
             import compact_conformance
@@ -208,7 +208,7 @@ def normalize_calls(outs: list[bytes], how: str, json_mode: bool = False) -> obj
                         qid = e.get("query_id")
                         found.add((int(qid if qid is not None else i), e["path"], e["line"]))
                 continue
-            for l in out.decode("utf-8", "replace").splitlines():
+            for l in out.decode("utf-8", "replace").split("\n")[:-1]:
                 if False:
                     pass
                 else:
@@ -224,7 +224,7 @@ def normalize_calls(outs: list[bytes], how: str, json_mode: bool = False) -> obj
 
 
 def normalize(out: bytes, how: str) -> object:
-    lines = out.decode("utf-8", "replace").splitlines()
+    lines = out.decode("utf-8", "replace").split("\n")[:-1]
     if how == "lines":
         return sorted(lines)
     if how == "sorted_lines_no_numbers":

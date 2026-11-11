@@ -72,8 +72,8 @@ def main() -> int:
 
     def verify_stream(name: str, plain: bytes, prov: bytes, stdin_bytes: bytes | None, ordered: bool) -> None:
         nonlocal checked_files
-        plines = plain.decode().splitlines()
-        vlines = prov.decode().splitlines()
+        plines = plain.decode().split("\n")[:-1]
+        vlines = prov.decode().split("\n")[:-1]
         evs = [json.loads(l) for l in vlines]
         stripped = [l for l, e in zip(vlines, evs) if e["type"] != "provenance"]
         if ordered:
@@ -143,8 +143,8 @@ def main() -> int:
          b'{"id":"b","pattern":"HIT","paths":["' + FIX.encode() + b'/a.txt"]}\n')
     plain, _ = run([z, "--queries-file", "-"], q)
     prov, _ = run([z, "--queries-file", "-", "--provenance"], q)
-    pe = [json.loads(l) for l in prov.decode().splitlines()]
-    ple = [json.loads(l) for l in plain.decode().splitlines()]
+    pe = [json.loads(l) for l in prov.decode().split("\n")[:-1]]
+    ple = [json.loads(l) for l in plain.decode().split("\n")[:-1]]
     # summary.output_bytes cambia (los eventos provenance pesan): se compara el resto.
     strip = [e for e in pe if e["type"] != "provenance"]
     for e in (strip[-1], ple[-1]):
@@ -169,7 +169,7 @@ def main() -> int:
     a_txt = (ROOT / FIX / "a.txt").read_bytes()
     for flag, field in (("-c", "lines"), ("--count-matches", "matches")):
         out, rc = run([z, "--json", flag, "HIT"], a_txt)
-        evs = [json.loads(l) for l in out.decode().splitlines()]
+        evs = [json.loads(l) for l in out.decode().split("\n")[:-1]]
         txt, _ = run([z, flag, "HIT"], a_txt)
         check(rc == 0 and len(evs) == 1 and evs[0]["type"] == "count" and str(evs[0][field]) == txt.decode().strip(),
               f"stdin --json {flag}: evento count igual al recuento de texto", f"{out!r} vs {txt!r}")
@@ -180,7 +180,7 @@ def main() -> int:
     for path_flag in ([], ["--force-swarm"], ["--sort"], ["--io-engine=uring"]):
         for ctx in (["-C2"], ["-A1"], ["-B3"]):
             out, _ = run([z, "--json", *path_flag, *ctx, "ZGREP_RARE_TOKEN", CORPUS])
-            bad = [l for l in out.decode().splitlines() if not l.startswith('{"schema":"zgrep/1",')]
+            bad = [l for l in out.decode().split("\n")[:-1] if not l.startswith('{"schema":"zgrep/1",')]
             check(not bad and out, f"stream JSON puro {' '.join(path_flag + ctx)}", f"{bad[:3]}")
 
     # Fallar cerrado: sin --json no hay sitio para el hash.

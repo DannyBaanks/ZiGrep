@@ -1,0 +1,26 @@
+arbol: chatgpt-http-mcp commit=3a25b3aec02d package-lock sha256=None
+tokenizador: BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo; filas muestreadas por consulta=3000, semilla 9
+consulta       W  filas cortadas  tokens actual  tokens cortado  ahorro  match intacto
+function     120             289         202961          114819   43.4%  NO
+function     200              79         202961          116422   42.6%  si
+function     400              22         202961          118199   41.8%  si
+export       120             218         125927          111339   11.6%  si
+export       200              58         125927          112935   10.3%  si
+export       400              22         125927          114676    8.9%  si
+require\(    120              60         256837          103996   59.5%  si
+require\(    200              29         256837          104760   59.2%  si
+require\(    400              20         256837          106077   58.7%  si
+fetch        120             278         426566           65359   84.7%  si
+fetch        200             143         426566           67964   84.1%  si
+fetch        400              61         426566           72351   83.0%  si
+Error        120             290         517702          120277   76.8%  si
+Error        200              91         517702          122402   76.4%  si
+Error        400              56         517702          125982   75.7%  si
+
+TOTAL W=120: 1529993 -> 515790 tokens, ahorro 66.3%, match intacto en todas: False
+TOTAL W=200: 1529993 -> 524483 tokens, ahorro 65.7%, match intacto en todas: True
+TOTAL W=400: 1529993 -> 537285 tokens, ahorro 64.9%, match intacto en todas: True
+
+VEREDICTO (regla >= 20 % con match intacto): IMPLEMENTAR; la W mas generosa que cumple es 400 (64.9%)
+
+(corrección 2026-11-11: la 1a línea dice "package-lock sha256=None" porque el árbol usa bun.lock; bun.lock sha256=55be6e8497a244212905b9ec1eebc128be2c6cd617f7eeba50c22c3c34796389. El script ya busca bun/pnpm/yarn/npm.)

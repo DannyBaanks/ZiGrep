@@ -63,7 +63,7 @@ def run(argv: list[str], stdin: bytes | None = None) -> tuple[bytes, bytes, int]
 
 
 def events(out: bytes) -> list[dict]:
-    return [json.loads(l) for l in out.decode().splitlines()]
+    return [json.loads(l) for l in out.decode().split("\n")[:-1]]
 
 
 def inject_id(line: str, qid: str) -> str:
@@ -102,10 +102,10 @@ def main() -> int:
     separate: dict[str, tuple[list[str], int]] = {}
     for qid, pat, flags, paths in QUERIES:
         out, _, rc = run([z, "--json", "--sort", *flags, "-e", pat, "--", *paths])
-        separate[qid] = (out.decode().splitlines(), rc)
+        separate[qid] = (out.decode().split("\n")[:-1], rc)
 
     bout, _, brc = run([z, "--queries-file", qfile])
-    lines = bout.decode().splitlines()
+    lines = bout.decode().split("\n")[:-1]
     try:
         evs = [json.loads(l) for l in lines]
         check(True, "lote: todas las lineas son JSON")
@@ -155,7 +155,7 @@ def main() -> int:
 
     def budget_case(name: str, extra: list[str], max_results: int | None, max_tokens: int | None) -> None:
         out, _, _ = run([z, "--queries-file", qfile, *extra])
-        ls = out.decode().splitlines()
+        ls = out.decode().split("\n")[:-1]
         try:
             es = [json.loads(l) for l in ls]
         except json.JSONDecodeError as e:
