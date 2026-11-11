@@ -15,10 +15,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # grep 3.12 y xz ya vienen en la imagen ubuntu-26.04. Si apt no llega a
+      # los mirrors (2026-11-11: tres corridas seguidas sin DNS para
+      # *.ubuntu.com), ripgrep 15.1.0 -- la misma version que trae apt -- se
+      # baja de su release oficial con el sha256 fijado; github.com si
+      # resuelve, el checkout acaba de usarlo.
       - name: Install dependencies (ripgrep & GNU grep)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y grep ripgrep xz-utils
+          if sudo apt-get update && sudo apt-get install -y grep ripgrep xz-utils; then
+            exit 0
+          fi
+          echo "apt fallo: ripgrep 15.1.0 desde la release oficial"
+          rg_tgz=ripgrep-15.1.0-x86_64-unknown-linux-musl.tar.gz
+          curl -fsSL --retry 5 -o "$RUNNER_TEMP/$rg_tgz" \
+            "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/$rg_tgz"
+          echo "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599  $RUNNER_TEMP/$rg_tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$rg_tgz" -C "$RUNNER_TEMP"
+          sudo install -m 0755 "$RUNNER_TEMP/ripgrep-15.1.0-x86_64-unknown-linux-musl/rg" /usr/local/bin/rg
+          command -v grep xz rg
 
       - name: Setup Zig 0.16.0
         run: |
