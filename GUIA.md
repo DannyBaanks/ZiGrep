@@ -987,29 +987,32 @@ match intacto) decía IMPLEMENTAR, y la confirmación con la implementación rea
 reproduce la cifra.
 
 ```sh
-zgrep --json=compact --max-columns 400 -E 'require\(' node_modules
+zgrep --json=compact --sort --max-columns 40 HIT evidence/agent-native/m9/fix/multi.txt
 ```
 
 ```json
 {"schema":"zgrep/1c"}
-{"path":"node_modules/body-parser/lib/read.js"}
-["mw",12,7,812,8,"const bodyParser = require('body-parser')",3,410]
-{"path":"node_modules/ajv/lib/compile/index.js"}
-["m",4,1,0,7,"module.exports"]
-["mw",88,31,4412,7,"...ajv.validate = require('./validate').default",28,512]
+{"path":"evidence/agent-native/m9/fix/multi.txt"}
+["mw",2,121,196,3,"ppppppppppppppppppHITqqqqqqqqqqqqqqqqqqq",102,243]
+["mw",4,301,697,3,"rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrHIT",263,303]
+["m",5,1,701,3,"HIT"]
+["mw",6,701,1405,3,"ttttttttttttttttttttttttttttHITttttttttt",672,712]
 ```
+
+*(Salida real del fixture versionado: `evidence/agent-native/m9/fix`, W=40. Las
+tres líneas largas se recortan; la que cabe (`["m",5,...]`) sale entera.)*
 
 Fila recortada en `zgrep/1c`: el tag lleva el sufijo `w` y dos elementos más.
 
 | línea | significado |
 |---|---|
 | `[t+"w", line, col, byte_start, len, ventana, win_start, line_len]` | el `text` es una ventana: a lo sumo N bytes alrededor del match |
-| `[..., match]` | 9º elemento, solo si el match no es derivable dentro de la ventana (nunca ocurre con el recorte: la ventana siempre lo contiene) |
+| `[..., match]` | 9º elemento, solo si el match no es derivable dentro de la ventana (con el recorte no ocurre: la ventana siempre lo contiene) |
 
 En `zgrep/1` el mismo recorte añade dos campos junto a `text`:
 
 ```json
-{"schema":"zgrep/1","type":"match","path":"node_modules/body-parser/lib/read.js","line":12,"column":7,"byte_start":812,"byte_end":820,"match":"require(","text":"const bodyParser = require('body-parser')","win_start":3,"line_len":410,"inverted":false}
+{"schema":"zgrep/1","type":"match","path":"evidence/agent-native/m9/fix/long.txt","line":1,"column":201,"byte_start":200,"byte_end":203,"match":"HIT","text":"xxxxxxxxxxxxxxxxxxHITyyyyyyyyyyyyyyyyyyy","win_start":182,"line_len":403,"inverted":false}
 ```
 
 `win_start` y `line_len` viajan **solo** en la fila recortada: su presencia es la
