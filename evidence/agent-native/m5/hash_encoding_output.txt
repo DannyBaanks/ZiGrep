@@ -1,0 +1,5 @@
+tokenizador: BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo; n=500 hashes, semilla 20261111
+hex (zgrep/1, sha256sum)           chars= 64  tokens/hash= 56.48
+base64url sin relleno (zgrep/1c)   chars= 43  tokens/hash= 31.85
+base64                             chars= 44  tokens/hash= 33.07
+base85                             chars= 40  tokens/hash= 31.34

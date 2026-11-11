@@ -476,7 +476,10 @@ fn scanBatch(
     if (local_out.items.len > 0 and ctx.mode != .quiet) {
         ctx.out_mutex.lock();
         defer ctx.out_mutex.unlock();
-        if (ctx.context_mode and ctx.context_emitted) flushToStdout(ctx.io, "--\n");
+        // `--` separates context groups in TEXT only: in --json it is a
+        // non-event line in the JSONL stream (bug of M1 caught in M5; the
+        // micro path and the ordered path already guarded it).
+        if (ctx.context_mode and ctx.context_emitted and !ctx.scan_config.json) flushToStdout(ctx.io, "--\n");
         if (local_out.items.len > 0) ctx.context_emitted = true;
         flushToStdout(ctx.io, local_out.items);
         local_out.clearRetainingCapacity();

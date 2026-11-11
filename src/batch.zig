@@ -60,6 +60,12 @@ pub const Emitter = struct {
 
     /// JSON ya serializado del id de la consulta en curso (`null` = sin lote).
     query_id: ?[]const u8 = null,
+    /// `--json=compact` (zgrep/1c): filas `[...]`, cabeceras `{"path"}`; las
+    /// filas no llevan query_id (lo marca `{"query_id":..}` al empezar).
+    compact: bool = false,
+    /// Cabecera `{"path"}` retenida hasta que salga la primera fila de su
+    /// fichero: un truncado no deja cabeceras huerfanas.
+    pending_header: std.ArrayList(u8) = .empty,
 
     lock: Lock = .{},
     /// Bytes de una línea que llegó partida entre dos escrituras.
@@ -83,6 +89,7 @@ pub const Emitter = struct {
     pub fn deinit(self: *Emitter) void {
         self.carry.deinit(self.gpa);
         self.staged.deinit(self.gpa);
+        self.pending_header.deinit(self.gpa);
     }
 
     pub fn install(self: *Emitter) void {
@@ -124,7 +131,61 @@ pub const Emitter = struct {
         return t *| bytes_per_token;
     }
 
+    fn compactEvent(self: *Emitter, line: []const u8) Allocator.Error!void {
+        if (std.mem.startsWith(u8, line, "{\"schema\":\"zgrep/1c\"")) {
+            // cabecera de stream: control, siempre, no cuenta
+            try self.staged.appendSlice(self.gpa, line);
+            try self.staged.append(self.gpa, '\n');
+            return;
+        }
+        if (std.mem.startsWith(u8, line, "{\"path\":")) {
+            self.pending_header.clearRetainingCapacity();
+            try self.pending_header.appendSlice(self.gpa, line);
+            try self.pending_header.append(self.gpa, '\n');
+            return;
+        }
+        if (line.len < 4 or line[0] != '[' or line[1] != '"') {
+            self.dropped_non_event += 1;
+            self.q_dropped += 1;
+            return;
+        }
+        const tag_end = std.mem.indexOfScalarPos(u8, line, 2, '"') orelse line.len;
+        const tag = line[2..tag_end];
+        const result = !(tag.len > 0 and (tag[0] == 'c' or tag[0] == 'p'));
+        const out_len = line.len + 1 + self.pending_header.items.len;
+        if (self.reason == null) {
+            if (result) {
+                if (self.max_results) |m| {
+                    if (self.returned >= m) self.reason = .max_results;
+                }
+            }
+            if (self.reason == null) {
+                if (self.budgetBytes()) |b| {
+                    if (self.output_bytes + out_len > b) self.reason = .max_output_tokens;
+                }
+            }
+        }
+        if (self.reason != null) {
+            self.pending_header.clearRetainingCapacity();
+            if (result) {
+                self.omitted += 1;
+                self.q_omitted += 1;
+            }
+            return;
+        }
+        try self.staged.appendSlice(self.gpa, self.pending_header.items);
+        self.pending_header.clearRetainingCapacity();
+        try self.staged.appendSlice(self.gpa, line);
+        try self.staged.append(self.gpa, '\n');
+        self.output_bytes += out_len;
+        if (result) {
+            self.returned += 1;
+            self.q_returned += 1;
+        }
+    }
+
     fn event(self: *Emitter, line: []const u8) Allocator.Error!void {
+        if (self.compact) return self.compactEvent(line);
         if (!std.mem.startsWith(u8, line, json_prefix)) {
             self.dropped_non_event += 1;
             self.q_dropped += 1;
@@ -184,11 +245,21 @@ pub const Emitter = struct {
         try self.event(line);
     }
 
-    pub fn beginQuery(self: *Emitter, id_json: []const u8) void {
+    pub fn beginQuery(self: *Emitter, id_json: []const u8) Allocator.Error!void {
         self.query_id = id_json;
         self.q_returned = 0;
         self.q_omitted = 0;
         self.q_dropped = 0;
+        if (self.compact) {
+            // las filas compactas no llevan id: este marcador abre la consulta
+            self.lock.lock();
+            defer self.lock.unlock();
+            self.pending_header.clearRetainingCapacity();
+            try self.staged.appendSlice(self.gpa, "{\"query_id\":");
+            try self.staged.appendSlice(self.gpa, id_json);
+            try self.staged.appendSlice(self.gpa, "}\n");
+            _ = self.flushStaged();
+        }
     }
 
     /// Cierra la consulta en curso con su evento `query_end`.
@@ -196,6 +267,7 @@ pub const Emitter = struct {
         self.lock.lock();
         defer self.lock.unlock();
         try self.drainCarry();
+        self.pending_header.clearRetainingCapacity();
         const g = self.gpa;
         try self.staged.appendSlice(g, json_prefix ++ "\"query_id\":");
         try self.staged.appendSlice(g, self.query_id orelse "null");
@@ -329,7 +401,7 @@ test "Emitter: añade query_id y cuenta resultados" {
     const gpa = std.testing.allocator;
     var e: Emitter = .{ .io = undefined, .gpa = gpa };
     defer e.deinit();
-    e.beginQuery("\"q1\"");
+    try e.beginQuery("\"q1\"");
     try e.feed("{\"schema\":\"zgrep/1\",\"type\":\"match\",\"path\":\"a\"}\n{\"schema\":\"zgrep/1\",\"type\":\"context\",\"path\":\"a\"}\n");
     try std.testing.expectEqualStrings(
         \\{"schema":"zgrep/1","query_id":"q1","type":"match","path":"a"}

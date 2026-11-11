@@ -39,7 +39,22 @@ pub const StdoutSink = struct {
 };
 pub var stdout_sink: ?StdoutSink = null;
 
+/// A prefix written once, right before the FIRST bytes that reach stdout, and
+/// never if nothing does (zgrep/1c's stream header: an empty search must stay
+/// an empty stdout, like every grep). Writers are already serialized (the
+/// swarm under its out mutex, the ordered path on one thread), so the swap
+/// is enough to keep the prefix first.
+pub var stdout_prefix: []const u8 = "";
+pub var stdout_prefix_pending: std.atomic.Value(bool) = .init(false);
+
 pub fn writeStdout(io: std.Io, bytes: []const u8) bool {
+    if (bytes.len > 0 and stdout_prefix_pending.swap(false, .acq_rel)) {
+        if (!writeStdoutInner(io, stdout_prefix)) return false;
+    }
+    return writeStdoutInner(io, bytes);
+}
+
+fn writeStdoutInner(io: std.Io, bytes: []const u8) bool {
     if (stdout_sink) |sk| return sk.write(sk.ctx, bytes);
     return writeStdoutRaw(io, bytes);
 }

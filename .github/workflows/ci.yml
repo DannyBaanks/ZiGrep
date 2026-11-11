@@ -61,6 +61,11 @@ jobs:
       - name: Provenance conformance (M4)
         run: python3 evidence/agent-native/provenance_conformance.py
 
+      # M5: --json=compact (zgrep/1c) decodifica EXACTAMENTE a zgrep/1 (todos
+      # los modos, caminos, procedencia, stdin y lote) y pesa menos.
+      - name: Compact JSON conformance (M5)
+        run: python3 evidence/agent-native/compact_conformance.py
+
   windows-native:
     name: Native Windows Build, Tests & Oracle
     runs-on: windows-latest

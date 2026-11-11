@@ -1296,11 +1296,49 @@ pub fn finishFile(
     source: ProvSource,
     mtime_from: MtimeFrom,
 ) ?linux.E {
+    const rows_end = out.items.len;
     if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| return e;
-    if (config.json and config.provenance and out.items.len > start) {
-        insertProvenance(out, gpa, path, start, data, source, mtimeNs(mtime_from, path)) catch return .NOMEM;
+    if (!config.json) return null;
+    // compact: line rows carry no path, so they need the file header; the
+    // -l/-c rows carry their own path and only get one for --provenance.
+    const needs = if (out_json.compact)
+        rows_end > start or (config.provenance and out.items.len > start)
+    else
+        config.provenance and out.items.len > start;
+    if (needs) {
+        insertFileHeader(out, gpa, path, start, data, source, if (config.provenance) mtimeNs(mtime_from, path) else null, config.provenance) catch return .NOMEM;
     }
     return null;
+}
+
+/// What goes in front of one file's output: in `zgrep/1` the `provenance`
+/// event (only with `--provenance`); in `zgrep/1c` the `{"path":..}` header,
+/// which carries the provenance fields when they were asked for. Only
+/// `--provenance` hashes.
+pub fn insertFileHeader(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: []const u8,
+    start: usize,
+    data: []const u8,
+    source: ProvSource,
+    mtime_ns: ?i128,
+    provenance: bool,
+) Allocator.Error!void {
+    if (!out_json.compact) {
+        if (provenance) try insertProvenance(out, gpa, path, start, data, source, mtime_ns);
+        return;
+    }
+    var ev: std.ArrayList(u8) = .empty;
+    defer ev.deinit(gpa);
+    if (provenance) {
+        var digest: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+        try out_json.emitCompactFileHeader(&ev, gpa, path, .{ .sha256 = &digest, .size = data.len, .mtime_ns = mtime_ns, .source = source.name() });
+    } else {
+        try out_json.emitCompactFileHeader(&ev, gpa, path, null);
+    }
+    try out.insertSlice(gpa, start, ev.items);
 }
 
 pub fn insertProvenance(

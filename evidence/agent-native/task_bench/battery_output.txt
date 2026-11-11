@@ -1,0 +1,15 @@
+2026-11-11T00:07:18-06:00
+base: 297be942e3a9a035732fd6ab69150203bb6c8297 + arbol de trabajo M5
++- run test 124 pass, 1 skip (125 total) 261ms MaxRSS:16M
+Results: 32 PASSED, 0 FAILED (total 32)
+zgrep 0.4.0-dev
+TOTAL pass=40 fail=0
+TOTAL pass=25 fail=0
+TOTAL 15 pass / 0 fail
+TOTAL 12 pass / 0 fail
+TOTAL 45 pass / 0 fail
+TOTAL pass=17 fail=0
+TOTAL 41 pass / 0 fail
+TOTAL 71 pass / 0 fail
+bytes en los casos: completo=729497 compacto=257552 (x0.35)
+TOTAL 37 pass / 0 fail

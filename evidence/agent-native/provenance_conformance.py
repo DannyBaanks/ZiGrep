@@ -173,6 +173,15 @@ def main() -> int:
         check(rc == 0 and len(evs) == 1 and evs[0]["type"] == "count" and str(evs[0][field]) == txt.decode().strip(),
               f"stdin --json {flag}: evento count igual al recuento de texto", f"{out!r} vs {txt!r}")
 
+    # Regresion (bug de M1 cazado en M5): en el enjambre, el separador "--" de
+    # los grupos de contexto se colaba en el stream JSON. En --json TODA linea
+    # debe ser un evento, en todos los caminos de lectura.
+    for path_flag in ([], ["--force-swarm"], ["--sort"], ["--io-engine=uring"]):
+        for ctx in (["-C2"], ["-A1"], ["-B3"]):
+            out, _ = run([z, "--json", *path_flag, *ctx, "ZGREP_RARE_TOKEN", CORPUS])
+            bad = [l for l in out.decode().splitlines() if not l.startswith('{"schema":"zgrep/1",')]
+            check(not bad and out, f"stream JSON puro {' '.join(path_flag + ctx)}", f"{bad[:3]}")
+
     # Fallar cerrado: sin --json no hay sitio para el hash.
     out, rc = run([z, "--provenance", "HIT", f"{FIX}/a.txt"])
     check(rc == 2 and out == b"", "cerrado: --provenance sin --json")

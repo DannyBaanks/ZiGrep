@@ -305,3 +305,38 @@ alguna línea coincide). Medido: `-L HIT a.txt` → zgrep 1, grep 0, rg 1.
 *después* de la búsqueda (es una foto, no un candado); ficheros en un sistema de
 ficheros sin `statx` (`mtime_ns` saldría null); el camino portable (Windows)
 corre en CI solo por los tests unitarios, el diferencial es Linux.
+
+## 12. M5: el experimento, y lo que cambió por sus datos (2026-11-11, claude_code)
+
+El veredicto por claim **no se escribe aquí a mano**: lo genera
+`evidence/agent-native/task_bench/make_claims.py` desde el crudo
+(`task_bench.json`) en `task_bench/claims.md`. Este apartado registra el método
+y las decisiones.
+
+**Método.** `task_bench.py --final`: 9 tareas de agente sobre el corpus congelado,
+10 configuraciones (zgrep texto, grep, rg como controles; zgrep `--json`,
+`--json=compact`, con y sin `--provenance`; lote completo y compacto), 5
+repeticiones, mediana e IQR del muro. Corrección: la salida JSON se convierte a
+sus líneas de texto equivalentes y se compara con la MISMA referencia (`.truth` o
+GNU grep); una línea JSON inválida cuenta como respuesta incorrecta. **Tokens
+reales**: BPE de Qwen (vocab 151936) vía `isyinfer-zig tokenize`
+(`evidence/agent-native/tokcount.py`), además de los bytes.
+
+**Lo que los datos cambiaron, en este milestone:**
+
+| hallazgo | decisión | evidencia |
+|---|---|---|
+| `zgrep/1` cuesta ~2,8x los tokens del texto | se añade `--json=compact` (schema `zgrep/1c`), misma información | `m5/format_study_output.txt`: 4 candidatos sin pérdida + texto como vara; gana el F (agrupado por fichero, filas posicionales, emitible en streaming) |
+| el sha256 en hex tokeniza mal (~56 tokens/hash) | en `zgrep/1c`, `sha256_b64u` (base64url, ~32 tokens/hash); `zgrep/1` sigue en hex | medido con el mismo BPE sobre 500 hashes aleatorios (README de m5) |
+| la leyenda de filas en la cabecera hacía el compacto MÁS pesado en salidas diminutas | cabecera mínima `{"schema":"zgrep/1c"}`; leyenda en la GUIA | `compact_conformance.py` (criterio "pesa menos") |
+| la cabecera salía también en búsquedas vacías (9 tokens contra 0, y rompía "sin match = stdout vacío") | cabecera perezosa: antes de la primera línea, nunca en vacío | mismo diferencial, casos "vacío" |
+| **bug de M1**: en el enjambre, el separador `--` de contexto se colaba en `--json` | arreglado en `kamikaze.zig`; regresión en todos los caminos (`provenance_conformance.py`) | el arnés de M5 lo **tapaba** (descartaba `--`); ahora una línea no-evento = fallo. Control negativo: el arnés corregido marca el binario viejo como incorrecto |
+| el estimador bytes/4 de `--max-output-tokens` subestima los tokens reales ~2x | **no** se cambia aquí: queda como M7 (plan), con su propia medida de error | bytes/tokens de `task_bench.json` por config |
+
+**Contrato que se añade (`zgrep/1c`)**: GUIA §4p. Solo se añaden tipos de fila y
+campos; un cambio de forma es `zgrep/2c`.
+
+**Bug externo anotado (no de ZigGrep):** `isyinfer-zig tokenize` imprime el
+`prompt` sin escapar dentro de su JSON de salida (no es JSON válido si el texto
+trae comillas o saltos de línea). `tokcount.py` lo esquiva leyendo solo
+`status` y `n_tokens`.

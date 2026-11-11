@@ -1,0 +1,42 @@
+tokenizador: BPE Qwen (vocab 151936) via isyinfer-zig tokenize; BOS descontado por trozo
+tarea                          formato      bytes   tokens  tok/A  sin perdida
+rare_call_sites (-n)           A              762      271   1.00  control
+rare_call_sites (-n)           B (texto)       321      124   0.46  -
+rare_call_sites (-n)           C              676      244   0.90  si
+rare_call_sites (-n)           D              634      226   0.83  si
+rare_call_sites (-n)           E              514      205   0.76  si
+rare_call_sites (-n)           F              487      196   0.72  si
+context_audit (-C2)            A             2189      735   1.00  control
+context_audit (-C2)            B (texto)       902      337   0.46  -
+context_audit (-C2)            C             1521      528   0.72  si
+context_audit (-C2)            D             1479      510   0.69  si
+context_audit (-C2)            E              849      279   0.38  si
+context_audit (-C2)            F              822      276   0.38  si
+files_with_needle (-l)         A           111375    44125   1.00  control
+files_with_needle (-l)         B (texto)     47375    25125   0.57  -
+files_with_needle (-l)         C            92397    37134   0.84  si
+files_with_needle (-l)         D            92397    37134   0.84  si
+files_with_needle (-l)         E            92457    37152   0.84  si
+files_with_needle (-l)         F            55457    28152   0.64  si
+count (-c)                     A           118375    48125   1.00  control
+count (-c)                     B (texto)     50375    28125   0.58  -
+count (-c)                     C            84397    37134   0.77  si
+count (-c)                     D            84397    37134   0.77  si
+count (-c)                     E            84457    37152   0.77  si
+count (-c)                     F            58457    31152   0.65  si
+src_audit (-w, codigo real)    A            14904     5229   1.00  control
+src_audit (-w, codigo real)    B (texto)      4892     1684   0.32  -
+src_audit (-w, codigo real)    C            12442     4411   0.84  si
+src_audit (-w, codigo real)    D            11291     3812   0.73  si
+src_audit (-w, codigo real)    E             5520     2371   0.45  si
+src_audit (-w, codigo real)    F             5466     2388   0.46  si
+occurrences (-o, 1er MB)       A          1048522   414445   1.00  control
+occurrences (-o, 1er MB)       B (texto)    327886   165814   0.40  -
+occurrences (-o, 1er MB)       C           886652   360490   0.87  si
+occurrences (-o, 1er MB)       D           721767   299036   0.72  si
+occurrences (-o, 1er MB)       E           300960   144695   0.35  si
+occurrences (-o, 1er MB)       F           300132   148824   0.36  si
+
+TOTAL tokens: A=512930, B (texto)=221209, C=439941, D=377852, E=221854, F=210988
+relativo a A: A=1.00, B (texto)=0.43, C=0.86, D=0.74, E=0.43, F=0.41
+exit=0

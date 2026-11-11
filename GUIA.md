@@ -839,6 +839,76 @@ hardware en esta máquina).
 Arreglo de paso: stdin con `--json -c` imprimía el recuento en texto y con
 `--count-matches` no imprimía nada; ahora usa el mismo emisor que los ficheros.
 
+## 4p. `--json=compact`: la misma información en menos tokens (0.4.0-dev, M5)
+
+M5 midió con un tokenizador BPE real que `--json` cuesta ~2,8x los tokens del
+texto de grep. `--json=compact` (schema `zgrep/1c`) lleva **exactamente la misma
+información** que `--json` —offsets, columnas, tipo, procedencia— y en el arnés
+cuesta prácticamente lo mismo que el texto de grep, que sí pierde los offsets
+(cifras en `evidence/agent-native/task_bench/claims.md`, generado desde el crudo).
+
+```sh
+zgrep --json=compact -C1 HIT a.txt b.txt
+```
+
+```json
+{"schema":"zgrep/1c"}
+{"path":"a.txt"}
+["c",2,"two"]
+["m",3,1,8,3,"HIT"]
+["c",4,"four"]
+{"path":"b.txt"}
+["c",1,"beta line"]
+["m",2,1,10,3,"HIT here"]
+["c",3,"gamma"]
+```
+
+Cómo se lee (la leyenda no viaja en la salida, para no pagarla en cada llamada):
+
+| línea | significado |
+|---|---|
+| `{"schema":"zgrep/1c"}` | cabecera, una vez, antes de la primera línea (búsqueda vacía = stdout vacío) |
+| `{"path":P}` | las filas que siguen son del fichero `P` |
+| `[t, line, col, byte_start, len, text]` | fila con span; `t` = `m` match, `o` ocurrencia (`-o`) |
+| `[t, line, text]` | fila sin span; `t` = `c` contexto, `p` passthru, `mv` línea de `-v` |
+| `[..., text, match]` | 7º elemento solo si el match NO es `text[col-1 .. col-1+len]` (con `--replace`) |
+| `["l",P]` / `["L",P]` | `-l` / `-L` |
+| `["#",P,n]` / `["#m",P,n]` | `-c` / `--count-matches` |
+
+`col` y `byte_start` cuentan bytes; `byte_start + len` = `byte_end` de zgrep/1.
+
+```sh
+zgrep --json=compact -c HIT a.txt x.txt
+```
+
+```json
+{"schema":"zgrep/1c"}
+["#","a.txt",1]
+["#","x.txt",0]
+```
+
+Con `--provenance`, la cabecera de fichero lleva la procedencia, y el hash va en
+**base64url sin relleno** (`sha256_b64u`): el mismo sha256, ~44 % menos tokens
+que en hex (medido). `zgrep/1` sigue en hex, como `sha256sum`.
+
+```sh
+zgrep --json=compact --provenance HIT a.txt
+```
+
+```json
+{"schema":"zgrep/1c"}
+{"path":"a.txt","sha256_b64u":"ifPoXYvYtBVrr81dvvFttZamEM2XB9IJfPqrnhrrsHs","size":26,"mtime_ns":1794350072429715620,"source":"file"}
+["m",3,1,8,3,"HIT"]
+```
+
+En lote, cada consulta abre con `{"query_id":ID}` y sus filas son de esa
+consulta hasta el `query_end`; `query_end` y `summary` son los de zgrep/1. El
+dialecto es de la llamada: una consulta no puede cambiarlo en `"flags"`.
+
+Verificado sin pérdida (`compact_conformance.py`, en CI): cada caso decodifica a
+exactamente los registros de `--json`, en todos los modos y caminos de lectura,
+con procedencia, stdin y lote.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y

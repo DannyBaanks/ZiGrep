@@ -23,6 +23,26 @@ const Match = @import("search.zig").Match;
 pub const schema = "zgrep/1";
 const json_prefix = "{\"schema\":\"zgrep/1\",";
 
+/// `--json=compact` (schema `zgrep/1c`, M5): la MISMA informacion que zgrep/1
+/// en ~0,4x los tokens (medido: evidence/agent-native/m5/format_study.py).
+/// Fijado una vez por ejecucion antes de escanear; los hilos solo lo leen.
+///
+///   * cabecera de stream: `{"schema":"zgrep/1c"}` (una vez);
+///   * cabecera de fichero: `{"path":P}` antes de las filas de ese fichero
+///     (con `--provenance` lleva ademas sha256_b64u/size/mtime_ns/source:
+///     el sha256 en base64url sin relleno, que tokeniza ~44 % mejor que hex);
+///   * filas de linea, una por linea JSON: `[t, line, col, byte_start, len,
+///     text]` con span, `[t, line, text]` sin span; t = m|c|o|p, con `v` si la
+///     linea sale por `-v`. `match` = text[col-1 .. col-1+len] en bytes; solo
+///     si NO se deriva asi (`--replace`) va como 7o elemento;
+///   * `-l`/`-L`: `["l",P]` / `["L",P]`; `-c`: `["#",P,n]`;
+///     `--count-matches`: `["#m",P,n]` (llevan el path: no tienen cabecera).
+pub var compact: bool = false;
+/// Solo el schema: la leyenda de las filas costaba ~65 bytes por llamada y
+/// hacia el compacto MAS pesado que zgrep/1 en salidas diminutas (medido por
+/// compact_conformance.py). Esta documentada en la GUIA §4p.
+pub const compact_stream_header = "{\"schema\":\"zgrep/1c\"}\n";
+
 pub const Kind = enum {
     /// Una línea coincide (o no, con `-v`): es la línea emitida en modo texto.
     match,
@@ -53,6 +73,7 @@ pub const LineEvent = struct {
 };
 
 pub fn emitLineEvent(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+    if (compact) return emitLineRow(out, gpa, ev);
     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"");
     try out.appendSlice(gpa, switch (ev.kind) {
         .match => "match",
@@ -120,8 +141,80 @@ pub fn emitProvenanceEvent(
     try out.appendSlice(gpa, "\"}\n");
 }
 
+fn emitLineRow(out: *std.ArrayList(u8), gpa: Allocator, ev: LineEvent) Allocator.Error!void {
+    try out.appendSlice(gpa, "[\"");
+    try out.append(gpa, switch (ev.kind) {
+        .match => 'm',
+        .context => 'c',
+        .passthru => 'p',
+        .occurrence => 'o',
+    });
+    if (ev.inverted) try out.append(gpa, 'v');
+    try out.appendSlice(gpa, "\",");
+    try appendInt(out, gpa, ev.line_no);
+    if (ev.span) |sp| {
+        const len = sp.end - sp.start;
+        try out.append(gpa, ',');
+        try appendInt(out, gpa, sp.start + 1);
+        try out.append(gpa, ',');
+        try appendInt(out, gpa, ev.line_start + sp.start);
+        try out.append(gpa, ',');
+        try appendInt(out, gpa, len);
+        try out.append(gpa, ',');
+        try appendJsonString(out, gpa, ev.text);
+        const m = ev.line_bytes[sp.start..sp.end];
+        const derivable = sp.start + len <= ev.text.len and std.mem.eql(u8, ev.text[sp.start .. sp.start + len], m);
+        if (!derivable) {
+            try out.append(gpa, ',');
+            try appendJsonString(out, gpa, m);
+        }
+    } else {
+        try out.append(gpa, ',');
+        try appendJsonString(out, gpa, ev.text);
+    }
+    try out.appendSlice(gpa, "]\n");
+}
+
+/// Cabecera de fichero en `--json=compact`: `{"path":P}` o, con
+/// `--provenance`, `{"path":P,"sha256":..,"size":..,"mtime_ns":..,"source":..}`.
+pub fn emitCompactFileHeader(
+    out: *std.ArrayList(u8),
+    gpa: Allocator,
+    path: []const u8,
+    prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+) Allocator.Error!void {
+    try out.appendSlice(gpa, "{\"path\":");
+    try appendJsonString(out, gpa, path);
+    if (prov) |p| {
+        // base64url sin relleno (RFC 4648 §5): el MISMO hash en 43 caracteres.
+        // Medido con un BPE real: 31,9 tokens por hash frente a 56,5 en hex.
+        // zgrep/1 sigue en hex (lo que imprime sha256sum).
+        try out.appendSlice(gpa, ",\"sha256_b64u\":\"");
+        var b64: [43]u8 = undefined;
+        _ = std.base64.url_safe_no_pad.Encoder.encode(&b64, p.sha256);
+        try out.appendSlice(gpa, &b64);
+        try out.appendSlice(gpa, "\",\"size\":");
+        try appendInt(out, gpa, p.size);
+        try out.appendSlice(gpa, ",\"mtime_ns\":");
+        if (p.mtime_ns) |m| {
+            var buf: [48]u8 = undefined;
+            try out.appendSlice(gpa, std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable);
+        } else try out.appendSlice(gpa, "null");
+        try out.appendSlice(gpa, ",\"source\":\"");
+        try out.appendSlice(gpa, p.source);
+        try out.append(gpa, '"');
+    }
+    try out.appendSlice(gpa, "}\n");
+}
+
 /// `-l` / `-L`.
 pub fn emitFileEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, with_match: bool) Allocator.Error!void {
+    if (compact) {
+        try out.appendSlice(gpa, if (with_match) "[\"l\"," else "[\"L\",");
+        try appendJsonString(out, gpa, path);
+        try out.appendSlice(gpa, "]\n");
+        return;
+    }
     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"file\",\"path\":");
     try appendJsonString(out, gpa, path);
     try out.appendSlice(gpa, ",\"mode\":\"");
@@ -133,6 +226,14 @@ pub fn emitFileEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, 
 /// de los dos campos viene informado; el otro `null`, para que el schema no
 /// cambie entre modos.
 pub fn emitCountEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, lines: ?usize, matches: ?usize) Allocator.Error!void {
+    if (compact) {
+        try out.appendSlice(gpa, if (lines != null) "[\"#\"," else "[\"#m\",");
+        try appendJsonString(out, gpa, path);
+        try out.append(gpa, ',');
+        try appendInt(out, gpa, lines orelse matches orelse 0);
+        try out.appendSlice(gpa, "]\n");
+        return;
+    }
     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"count\",\"path\":");
     try appendJsonString(out, gpa, path);
     try out.appendSlice(gpa, ",\"lines\":");
@@ -246,6 +347,30 @@ test "emitFileEvent y emitCountEvent" {
     try std.testing.expectEqualStrings(
         \\{"schema":"zgrep/1","type":"file","path":"x.txt","mode":"with-match"}
         \\{"schema":"zgrep/1","type":"count","path":"x.txt","lines":2,"matches":null}
+        \\
+    , out.items);
+}
+
+test "zgrep/1c: filas posicionales; match solo si no se deriva del texto" {
+    const gpa = std.testing.allocator;
+    compact = true;
+    defer compact = false;
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(gpa);
+    const m = Match{ .start = 5, .end = 8 };
+    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 2, .line_start = 10, .line_bytes = "beta HIT", .span = m, .kind = .match, .text = "beta HIT" });
+    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 2, .line_start = 10, .line_bytes = "beta HIT", .span = m, .kind = .match, .text = "beta XX" });
+    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 3, .line_start = 19, .line_bytes = "gamma", .span = null, .kind = .context, .text = "gamma" });
+    try emitLineEvent(&out, gpa, .{ .path = "a", .line_no = 4, .line_start = 25, .line_bytes = "x", .span = null, .kind = .match, .text = "x", .inverted = true });
+    try emitFileEvent(&out, gpa, "b", true);
+    try emitCountEvent(&out, gpa, "c", null, 7);
+    try std.testing.expectEqualStrings(
+        \\["m",2,6,15,3,"beta HIT"]
+        \\["m",2,6,15,3,"beta XX","HIT"]
+        \\["c",3,"gamma"]
+        \\["mv",4,"x"]
+        \\["l","b"]
+        \\["#m","c",7]
         \\
     , out.items);
 }

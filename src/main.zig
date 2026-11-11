@@ -26,6 +26,7 @@ const vfs = @import("vfs.zig");
 const io_engine = @import("io_engine.zig");
 const clean = @import("clean.zig");
 const batch = @import("batch.zig");
+const out_json = @import("out_json.zig");
 
 const Algo = search.Algo;
 const Mode = scan.Mode;
@@ -71,6 +72,11 @@ const usage =
     \\                    record): match, context, passthru, occurrence, file
     \\                    or count, with path, line, column, byte_start,
     \\                    byte_end and text. Schema zgrep/1, additive only.
+    \\      --json=compact
+    \\                    the same information as --json in ~0.4x the
+    \\                    tokens (schema zgrep/1c): a {"path"} header per
+    \\                    file and one positional row per line,
+    \\                    [t,line,col,byte_start,len,text]; see GUIA §4p
     \\      --provenance  with --json: before the events of each file with
     \\                    output, a provenance event with the sha256 and size
     \\                    of the bytes searched and the file's mtime_ns
@@ -317,6 +323,10 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// M3: `--queries-file FILE` runs every JSONL query in this one process.
     queries_file: ?[]const u8 = null,
+    /// M5: `--json=compact` (schema zgrep/1c), same information, ~0.4x tokens.
+    json_compact: bool = false,
+    /// In a batch, the stream header is written once by the batch, not per query.
+    suppress_stream_header: bool = false,
     /// M4: `--provenance` adds a `provenance` event (sha256, size, mtime) per
     /// file with output. JSON only.
     provenance: bool = false,
@@ -438,10 +448,10 @@ fn scanOne(ctx: *Ctx, idx: usize, scratch: ?[]u8) void {
                 slot.ready.store(true, .release);
                 return;
             };
-            if (ctx.scan_config.json and ctx.scan_config.provenance and slot.buf.items.len > 0) {
+            if (ctx.scan_config.json and (ctx.scan_config.provenance or out_json.compact) and slot.buf.items.len > 0) {
                 // --pre: what was searched is the command's output, so that is
                 // what the hash covers (source "pre"), not the file on disk.
-                scan.insertProvenance(&slot.buf, ctx.gpa, ctx.files[idx], 0, text, .pre, null) catch {
+                scan.insertFileHeader(&slot.buf, ctx.gpa, ctx.files[idx], 0, text, .pre, null, ctx.scan_config.provenance) catch {
                     slot.err = .NOMEM;
                 };
             }
@@ -994,11 +1004,18 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.no_line_number_explicit = true;
             } else if (std.mem.eql(u8, body, "line-number")) {
                 opts.show_line_no = true;
-            } else if (std.mem.eql(u8, body, "json")) {
+            } else if (std.mem.eql(u8, body, "json") or std.mem.eql(u8, body, "json=full")) {
                 // Structured output. The text decoration flags (--color,
                 // --heading, --column, separadores) have no effect here: in
                 // JSON that information is a field, not a prefix.
                 opts.json = true;
+                opts.json_compact = false;
+            } else if (std.mem.eql(u8, body, "json=compact")) {
+                opts.json = true;
+                opts.json_compact = true;
+            } else if (std.mem.startsWith(u8, body, "json=")) {
+                opts.fail = .{ .what = "--json takes full or compact", .arg = a };
+                return error.Usage;
             } else if (std.mem.eql(u8, body, "null")) {
                 opts.null_filename = true;
             } else if (std.mem.startsWith(u8, body, "replace=")) {
@@ -1736,11 +1753,17 @@ fn runCli(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) 
             .gpa = init.gpa,
             .max_results = opts.max_results,
             .max_output_tokens = opts.max_output_tokens,
+            .compact = opts.json_compact,
         };
         defer em.deinit();
         em.install();
         defer em.uninstall();
         const rc = try runSearch(init, arena, args);
+        // The summary always goes out; in compact mode the stream header must
+        // precede it even when the search itself printed nothing.
+        if (opts.json_compact and platform.stdout_prefix_pending.swap(false, .acq_rel)) {
+            _ = platform.writeStdoutRaw(init.io, out_json.compact_stream_header);
+        }
         _ = try em.summary(null);
         return rc;
     }
@@ -1759,13 +1782,18 @@ fn readAllStdin(io: std.Io, arena: Allocator) ![]u8 {
     return buf.items;
 }
 
+/// Set while runBatch drives its queries: the compact stream header is the
+/// batch's, written once, not each query's.
+var batch_running: bool = false;
+
 fn isOperandArg(a: [:0]const u8, operands: []const [:0]const u8) bool {
     for (operands) |op| if (op.ptr == a.ptr) return true;
     return false;
 }
 
 /// Why a query's own argv cannot run inside a batch, or null if it can.
-fn batchQueryProblem(vo: *const Options) ?[]const u8 {
+fn batchQueryProblem(vo: *const Options, gopts: *const Options) ?[]const u8 {
+    if (vo.json_compact != gopts.json_compact) return "the JSON dialect (--json / --json=compact) is per call, not per query";
     if (vo.print_help or vo.print_version or vo.print_type_list) return "informational actions (--help, --version, --type-list) are not queries";
     if (vo.cache) return "--cache is not a query";
     if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
@@ -1837,10 +1865,14 @@ fn runBatch(
         .gpa = init.gpa,
         .max_results = gopts.max_results,
         .max_output_tokens = gopts.max_output_tokens,
+        .compact = gopts.json_compact,
     };
     defer em.deinit();
+    if (gopts.json_compact) _ = platform.writeStdoutRaw(io, out_json.compact_stream_header);
     em.install();
     defer em.uninstall();
+    batch_running = true;
+    defer batch_running = false;
 
     var any_error = false;
     var any_match = false;
@@ -1870,14 +1902,14 @@ fn runBatch(
             }
         }
 
-        em.beginQuery(q.id_json);
+        try em.beginQuery(q.id_json);
         var problem: ?[]const u8 = null;
         if (npaths == 0) problem = "no paths: give \"paths\" or default paths on the command line (a batch never reads stdin)";
         if (stdin_path) problem = "\"-\" (stdin) is not a path in a batch";
         if (problem == null) {
             var vo: Options = .{};
             if (parseArgs(qa, argv.items, &vo)) |_| {
-                problem = batchQueryProblem(&vo);
+                problem = batchQueryProblem(&vo, gopts);
             } else |_| {
                 problem = if (vo.fail) |f| f.what else "invalid flags";
             }
@@ -1908,6 +1940,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     // Per-run globals: a previous run of the same process must not leak them.
     scan.out_sep = '\n';
     scan.heading_mode = false;
+    out_json.compact = false;
 
     var opts: Options = .{};
     const parsed = parseArgs(arena, args, &opts) catch {
@@ -1980,6 +2013,17 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         };
         _ = platform.writeStdout(init.io, buf.items);
         return 0;
+    }
+
+    // From here on it is a search: fix the JSON dialect for this run, and in
+    // compact mode open the stream with its schema header (a batch writes it
+    // once for the whole call).
+    out_json.compact = opts.json and opts.json_compact;
+    platform.stdout_prefix_pending.store(false, .release);
+    if (out_json.compact and !batch_running) {
+        // Lazily: written before the first output line, never on an empty run.
+        platform.stdout_prefix = out_json.compact_stream_header;
+        platform.stdout_prefix_pending.store(true, .release);
     }
 
     if (opts.threads == 0) {
@@ -2176,12 +2220,15 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         // stdin uses the same once-per-file emitter as files: the hand-written
         // copy printed `-c` as text under --json and nothing for
         // --count-matches.
+        const stdin_rows_end = out.items.len;
         if (scan.emitOncePerFile(&out, gpa, path_label, show_p, opts.mode, .{ .matched = br.matched, .lines = br.lines, .matches = br.matches }, opts.null_filename, opts.json)) |_| return 2;
 
-        if (opts.json and opts.provenance and out.items.len > 0) {
+        // Same rule as files (scan.finishFile): compact needs the header only in
+        // front of line rows; -c/-l rows carry their own path.
+        if (opts.json and out.items.len > 0 and (opts.provenance or (opts.json_compact and stdin_rows_end > 0))) {
             // stdin: the hash is of the bytes read (raw, before any UTF-16
             // decode); there is no file, so no mtime.
-            try scan.insertProvenance(&out, gpa, path_label, 0, data, .stdin, null);
+            try scan.insertFileHeader(&out, gpa, path_label, 0, data, .stdin, null, opts.provenance);
         }
         if (out.items.len > 0 and opts.mode != .quiet) {
             _ = platform.writeStdout(init.io, out.items);
