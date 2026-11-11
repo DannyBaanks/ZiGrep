@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly states max_states=3000, flush/reset and re-interning, and the warning not to reuse old ids, but hedges on whether the search continues and whether there is a fallback, where the reference definitively says no error and no NFA fallback.",
+ "cost_usd": 0.006082
+}

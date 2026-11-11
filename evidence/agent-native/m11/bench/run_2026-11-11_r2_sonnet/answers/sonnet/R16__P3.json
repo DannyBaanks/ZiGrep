@@ -1,0 +1,18 @@
+{
+ "qid": "R16",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "8468561dee957464fe79779d8a9a399268981285358e47cb8b089f9b912ef5d4",
+ "answer": "A directory tree is a \"micro-tree\" when the regular files in it add up to less than `micro_tree_max_bytes`, which is `2 * 1024 * 1024` (2 MB) (src/main.zig:38-42).\n\nWhen it is one, zgrep takes a zero-thread fast path (src/main.zig:38-41):\n- The tree is scanned on the calling thread, with no thread pool.\n- The upward `.dataignore`/`.gitignore` walk is skipped.\n\n`--force-swarm` opts out and restores the concurrent swarm (src/main.zig:41). The fast path became the default (< 2 MB) in commit 2c2f69512e on 2026-11-09 (HISTORY).\n\nThe constant is passed, along with `opts.force_swarm`, into a call inside `runSearch` (src/main.zig:2452-2453). The context doesn't show the callee, so I can't confirm exactly where the size comparison happens.",
+ "usage": {
+  "cost_usd": 0.011822,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.86,
+ "headers": {}
+}

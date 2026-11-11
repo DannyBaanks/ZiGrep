@@ -1,0 +1,18 @@
+{
+ "qid": "R08",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6c75a50a36ec5bca58ba45ccf389df4f5330bd08d609e26a43214f6194733ee1",
+ "answer": "**When a cache is ACTIVA:** `add` sets `active` if either `hasLockFile(io, target_path)` or `procsHomeActive(...)` is true (src/clean.zig:283).\n\n`procsHomeActive` works as follows:\n- It returns false on non-Linux systems (src/clean.zig:142), so the check is skipped there (src/clean.zig:135-136).\n- It scans `/proc` (src/clean.zig:144).\n- Per the doc comment, a live `zig` process marks the GLOBAL cache active, since it is shared by all repos (src/clean.zig:137-138).\n- A LOCAL cache is active if some `zig` process has its cwd in the repo containing it (src/clean.zig:139-140). `parent` is computed as the dirname of the cache path (src/clean.zig:143).\n- The comment says Zig leaves no lock files, only the process (src/clean.zig:134).\n\n**How a Zig process is recognised:** the context cuts off at line 149, where the loop begins. It does declare `cwdbuf` and `exebuf` buffers (src/clean.zig:147-148), which suggests it reads the cwd and exe links under `/proc`. The actual matching logic (e.g. exe basename comparison) isn't shown, so I can't confirm it.",
+ "usage": {
+  "cost_usd": 0.012476,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 6.0,
+ "headers": {}
+}

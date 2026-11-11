@@ -1,0 +1,18 @@
+{
+ "qid": "R25",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "b3d8f0a45893690f4165aa78988e8b75d01c7fce9ccd8a7b1bf25853825e8f36",
+ "answer": "**Units:** `--max-filesize` takes a plain byte count, or a number with a K/M/G/T suffix, in upper or lower case. A leading `+` is also accepted and stripped (src/main.zig:712-713, 716, 719-722).\n\n**Powers of 1024:** K = 1024, M = 1024², G = 1024³, T = 1024⁴ (src/main.zig:719-722). A bare number has a multiplier of 1 (src/main.zig:723).\n\n**Default:** The context does not show it. It only shows `parseSize` and the two places in `parseArgs` that set `opts.max_filesize` (src/main.zig:1203, 1213). The default would be in the `Options` struct definition, or in README.md/GUIA.md. The search found no hits in those docs, and the `Options` struct wasn't included.\n\nOne more detail: the value is parsed by `parseCount` and multiplied with saturating arithmetic (`*|`), so overflow clamps rather than wraps (src/main.zig:726). Invalid input gives a \"bad value for --max-filesize\" usage error (src/main.zig:1204).",
+ "usage": {
+  "cost_usd": 0.01429,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.5,
+ "headers": {}
+}

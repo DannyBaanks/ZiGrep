@@ -1,0 +1,3 @@
+src/main.zig:243:pub const BinaryFiles = enum { text, without_match };
+src/main.zig:331:    binary_files: BinaryFiles = .without_match,
+src/main.zig:3182:        try std.testing.expectEqual(BinaryFiles.text, o.binary_files);

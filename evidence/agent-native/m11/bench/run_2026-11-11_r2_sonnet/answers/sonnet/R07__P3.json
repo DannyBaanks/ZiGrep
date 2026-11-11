@@ -1,0 +1,18 @@
+{
+ "qid": "R07",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ab6c95825c36efc3527930c3c8c4c392a98115dbf513a733ed7cc1d7614ff8f6",
+ "answer": "**Result event types:** `isResult` counts four event types: `match`, `occurrence`, `file`, and `count`. It checks whether the line, after the JSON prefix, starts with `\"type\":\"<t>\"` for each of these (src/batch.zig:79-80). The doc comment describes these as \"lo que un agente cuenta como 'hallazgos'\" (src/batch.zig:76).\n\n**Context lines:** The code doesn't list a context type among the four, so context events return false from `isResult` (src/batch.zig:79-82). Only results increment `returned` (src/batch.zig:344-346) and `omitted` (src/batch.zig:335-338). The truncation check also applies only when `result` is true (src/batch.zig:326-330). A test is named \"--max-results corta, sigue contando lo omitido y no cuenta el contexto\" (\"doesn't count context\") (src/batch.zig:568), though its body isn't shown.\n\n**Caveat:** Once the limit is hit (`reason` set), non-result events are also spilled and not emitted (src/batch.zig:333-339). So context lines don't count, but they are cut after truncation.",
+ "usage": {
+  "cost_usd": 0.01687,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.63,
+ "headers": {}
+}

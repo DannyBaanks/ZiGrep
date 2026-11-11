@@ -1,0 +1,18 @@
+{
+ "qid": "R25",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "fb954e14dc66b8a43b9b692527d7f2f1946264ae351adb7b4c32689e10a10151",
+ "answer": "**Units:** a plain byte count, or a number with a single-letter suffix K, M, G or T, in upper or lower case. A leading `+` is accepted and stripped (src/main.zig:712-713, 716, 718-722).\n\n**Base:** powers of 1024. K = 1024, M = 1024², G = 1024³, T = 1024⁴ (src/main.zig:719-722). A value with no suffix has multiplier 1 (src/main.zig:723).\n\n**Default:** the context does not show it. It shows only that `parseSize` assigns `opts.max_filesize` when the flag is given (src/main.zig:1203, 1213). The default would be in the `Options` struct definition or in the README/GUIA docs, and neither appears in these results.\n\nTwo other details:\n- The `+` is stripped and ignored in the parser. The comment says it means \"greater than\" (src/main.zig:713), but the code doesn't act on it here.\n- An empty value, or a number that `parseCount` rejects, returns null and gives a \"bad value\" usage error (src/main.zig:717, 726, 1203-1205).",
+ "usage": {
+  "cost_usd": 0.015102,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.41,
+ "headers": {}
+}

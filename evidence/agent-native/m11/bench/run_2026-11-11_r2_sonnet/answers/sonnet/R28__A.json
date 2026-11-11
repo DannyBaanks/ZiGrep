@@ -1,0 +1,18 @@
+{
+ "qid": "R28",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "22ff93cc529153fd62599f1fb3130315f0f6f2e6064339421550689365a1ff0b",
+ "answer": "The context doesn't say what `--stop-on-nonmatch` does; it only shows where the option is plumbed through. Note that the search matched the identifier `stop_on_nonmatch`, not the flag text or any docs.\n\nWhat the context shows:\n- The option is a boolean field defaulting to false in the options struct (src/main.zig:385).\n- It is set to true when the flag is parsed (src/main.zig:1267).\n- It is copied from `opts` into other structures at src/main.zig:2284, 2432, and 2607.\n- A test asserts it is set (src/main.zig:3234).\n- A matching field is declared in src/scan.zig:78, with the same false default. This is likely where the scanner uses it, but the actual logic isn't shown.\n\nMissing: the code that reads `stop_on_nonmatch` in scan.zig, and any README.md/GUIA.md description. Searching for \"stop-on-nonmatch\" and for uses of the field in scan.zig would answer this.",
+ "usage": {
+  "cost_usd": 0.007438,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.84,
+ "headers": {}
+}

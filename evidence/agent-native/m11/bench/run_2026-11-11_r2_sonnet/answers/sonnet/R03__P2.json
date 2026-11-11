@@ -1,0 +1,18 @@
+{
+ "qid": "R03",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "754aab2cb7ded6f233cc0b44623f2f1390eb76b936a041adbedcc9a575b60be4",
+ "answer": "The context doesn't answer this. It shows that the list is declared as `default_excluded_dirs` at `src/filter.zig:17`, but only the declaration line (`pub const default_excluded_dirs = [_][]const u8{`) was captured. The actual entries are not shown, so I can't say whether `dist` or `build` are in it.\n\nWhat the context does show:\n- `isDirExcluded` skips directories that start with `.` when `skip_hidden` is set (`src/filter.zig:249-251`).\n- It skips names in `default_excluded_dirs` when `use_defaults` is true (`src/filter.zig:253-256`).\n- It also skips user-specified `excluded_dirs` and `ignore_patterns` matches (`src/filter.zig:259-265`).\n\nTo answer, I'd need the contents of `src/filter.zig` from line 17 onward, past the opening brace of the array.",
+ "usage": {
+  "cost_usd": 0.010268,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.06,
+ "headers": {}
+}

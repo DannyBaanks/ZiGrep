@@ -1,0 +1,18 @@
+{
+ "qid": "R08",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "2db6787d6be77fd5d3fed11db05327e325bec01564f016490eb5f418077e1751",
+ "answer": "A cache target is ACTIVA when either `hasLockFile(io, target_path)` or `procsHomeActive(...)` is true (src/clean.zig:283). The context doesn't show `hasLockFile`'s body. The comment says Zig leaves no lock files, only the process (src/clean.zig:134).\n\n`procsHomeActive` (src/clean.zig:141-191):\n- Linux only; on other OSes it returns false (142).\n- It scans numeric `/proc/<pid>` directories (152-157) and reads the `/proc/<pid>/exe` link (158-159).\n- It strips a trailing \" (deleted)\" (163-164).\n- A process counts as a Zig compiler only if the exe basename is exactly `zig` or `zig.exe` (170-172). The old substring match on \"/zig\" was a false positive (165-169).\n\nThen:\n- Global cache: any live zig process makes it active (173-176).\n- Local cache: the zig process's cwd must equal the cache's parent repo or be inside it (177-186). Alternatively, its exe path must start with the cache path (187).",
+ "usage": {
+  "cost_usd": 0.016982,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.81,
+ "headers": {}
+}

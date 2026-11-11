@@ -1,0 +1,18 @@
+{
+ "qid": "R06",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "eb98d25f103fdc9445b91bf7898f23f06d407c61c0ac7491c256e157cd145fc5",
+ "answer": "No, it is not a plain bytes/4. `estimateTokens` (src/batch.zig:49-72) is a weighted heuristic over the text:\n\n- It counts digits, punctuation (ASCII non-alphanumeric, non-underscore), runs of whitespace, and non-ASCII bytes (src/batch.zig:50-66).\n- It combines them linearly: `w_bytes*len + w_digits*digits + w_punct*punct + w_space_runs*space_runs + w_nonascii*nonascii`, then multiplies by `est_scale` (src/batch.zig:68-71).\n\nThe context does not show the values of `w_bytes`, `w_digits`, `w_punct`, `w_space_runs`, `w_nonascii` or `est_scale`, so I can't say how close it is to bytes/4.\n\nHow the budget uses it:\n- Each output line, with its pending header, is estimated (src/batch.zig:276, 323).\n- If `overTokenBudget(est)` is true, the event is spilled instead of emitted and the reason becomes `max_output_tokens` (src/batch.zig:283, 285-286). `overTokenBudget` itself is not shown.\n- The estimate is additive per line (tests, src/batch.zig:601-602).\n\nTests also show that digits and non-ASCII cost more than plain letters (src/batch.zig:599-600).",
+ "usage": {
+  "cost_usd": 0.031244,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.13,
+ "headers": {}
+}

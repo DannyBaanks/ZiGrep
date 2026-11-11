@@ -1,7 +1,9 @@
-# M11 — Agent Context Pack: results of the first evaluation (2026-11-11)
+# M11 — Agent Context Pack: results (2026-11-11, rounds 1 and 2)
 
-Status: **prototype evaluated, hypothesis partly supported, NOT ready for a
-native port.** Nothing in `src/` changed for M11.
+Status: **two rounds evaluated (42 questions). The pack beats a single grep;
+it does not beat `grep -C 8`. Do not port it to Zig as designed.** Nothing in
+`src/` changed for M11. The `--no-ignore` fix (main 8a8bf80) is a separate
+commit. Round 2 is below, after the round-1 findings.
 
 ## What was built
 
@@ -133,7 +135,111 @@ control was misplaced, not because of the pack (`adversarial/run1_c7_misplaced.t
 - Indirect references (aliases, `@field`, comptime): not analysed, and said so
   in every pack.
 
-## Recommendation
+## Round 2 (30 new held-out questions)
+
+Protocol: `bench/PROTOCOL_R2.md` and `bench/questions_r2.json`, committed in
+`94800ad` before the run. The questions were written by reading `src/` with
+grep/sed and running the binary, never by running the pack on those symbols.
+The pack included the round-1 fix (statement-level windows, never narrower
+than ±8). Pre-declared primary comparison: P3 against B, by judge grade.
+
+Evidence is in `bench/run_2026-11-11_r2_sonnet/` (150 contexts, answers,
+judge outputs, `scores.txt`). Cost: reader $2.68, judge $0.98.
+
+| | A grep | B grep -C 8 | P1 blocks | P2 relations | P3 full |
+|---|---:|---:|---:|---:|---:|
+| mean judge grade (0-2) | 0.67 | 1.40 | 1.30 | 1.23 | **1.43** |
+| answers graded wrong (0) | 11 | **0** | 2 | 1 | 1 |
+| wrong claims flagged | 17 | 9 | 11 | 10 | **7** |
+| mean fact score (mechanical) | 0.579 | 0.854 | 0.872 | 0.831 | 0.828 |
+| mean delivered bytes | 664 | 5,965 | 6,435 | 7,824 | 9,110 |
+
+Paired by question (judge grade; wins/ties/losses; two-sided sign test):
+
+| | vs A | vs B |
+|---|---|---|
+| P1 | 17/12/1, p<0.001 | 5/18/7, p=0.77 |
+| P2 | 16/14/0, p<0.001 | 2/21/7, p=0.18 |
+| P3 | 18/12/0, p<0.001 | **4/23/3, p=1.00** (primary) |
+
+What round 2 shows:
+
+1. **The primary hypothesis (P3 > B) is not supported.** On 30 new questions
+   P3 ties `grep -C 8` (4/23/3). Combined with round 1 (2/9/1), that is
+   6/32/4 over 42 questions.
+2. **Against a single grep, the pack wins again, decisively** (18/12/0).
+3. **P2, the relations without history, structure and docs, trends worse than
+   B** (2/21/7, not significant). The relation labels do not, by themselves,
+   help a strong reader.
+4. **Where P3 helped:** R17 (README vs code: probe of 3 vs 4 files) and R23
+   (which options force sorting). In both, the extra sections carried the
+   answer.
+5. **Where the pack failed, with the cause found:**
+   - R03: for an array constant (`default_excluded_dirs = [_][]const u8{...}`)
+     the DEFINITION shows only the declaration line. Only fn/struct/test bodies
+     are shown whole, so P2 and P3 never deliver the list (grade 0).
+   - R21: an ambiguous code comment ("auto degrades to never off a TTY") was
+     delivered without the `--help` line that disambiguates it.
+   - R28, P1: blocks without the "nothing reads it" signal led the reader to
+     assume that the documented behaviour works.
+6. **A delivery defect (G5):** R23's P3 overran its own budget by 312 bytes
+   (the size estimate's margin is too small). The harness cut the end, and the
+   end is the TRUNCATION section. The truncation summary must go at the top,
+   and the budget check must measure the bytes actually rendered.
+7. **The bug questions were hard in every condition.** No condition reached a
+   consistent grade 2 on R18/R20/R24/R28/R29: spotting a bug from one delivery
+   is beyond what the reader did here.
+
+### Bugs and contradictions found while writing round 2 (not by the pack)
+
+These came from reading the code to write the questions; reproduced with the
+binary. They are fixed after this run, in separate commits.
+
+| Id | Kind | What |
+|---|---|---|
+| R18 | bug | `--nav 'v^v'` sets ceiling and trampoline at once and searches nothing, rc 1, no message |
+| R20 | bug | `-S` treats the UTF-8 lead byte 0xC3 as Latin-1 uppercase: `-S ñandú` is case-sensitive (rg finds 2, zgrep 1) |
+| R24 | bug | binary stdin without the pattern prints "Binary file (standard input) matches" and exits 0 (grep: 1) |
+| R28 | bug | `--stop-on-nonmatch` is parsed and documented but never read: no effect |
+| R29 | bug | `-t docker` misses a file named exactly `Dockerfile` (the registry treats it as an extension) |
+| R13 | contradiction | README: `-i` folds Latin-1; true only for literal patterns, the regex engine folds ASCII only |
+| R14 | contradiction | header of `src/regex.zig` says `\b` is not supported; it is |
+| R17 | contradiction | README Design: `-q` probes three files; the code probes up to 4 |
+
+Plus the round-1 bug found through the pack (H3): `--no-ignore` cancelled the
+explicit filters. Fixed in main `8a8bf80`.
+
+## Verdict
+
+Over 42 questions and two independent rounds, a tool-less Sonnet reader
+understands this repository as well with `grep -C 8` as with the context pack,
+and much better with either than with a bare grep. The pack is not worse
+overall (P3 has the fewest wrong claims in round 2), but its machinery
+(relations, tests, structure) did not show a measurable gain for this reader.
+Its measured unique contributions are narrow: HISTORY (round 1, H4) and docs
+next to code for contradiction questions (round 2, R17).
+
+**DISPROVED for this reader and corpus:** "the context pack gives a strong
+model better understanding than grep with context."
+**NOT_DEMONSTRATED:** the same for weaker readers, for an agent with tools, and
+for other repositories.
+
+## Recommendation (after round 2)
+
+Do not port the pack to Zig as designed.
+
+Worth testing next, each pre-registered:
+
+1. **A weaker local reader** (ISyInfer). The pack's structure may matter more
+   when the reader cannot reconstruct it, and that is a different hypothesis.
+2. **A narrower native feature:** `-C` that extends to the enclosing statement,
+   plus an optional history line per file. These are the two pieces with a
+   measured positive case, at a fraction of the complexity.
+3. **M12 (persistent verified review):** the readers failed the bug questions
+   in every condition, so a one-off deep review that leaves verified notes is
+   the part of the design that targets what no single delivery achieved here.
+
+## Recommendation after round 1 (kept as written)
 
 Do not port to Zig yet. Next, in order:
 

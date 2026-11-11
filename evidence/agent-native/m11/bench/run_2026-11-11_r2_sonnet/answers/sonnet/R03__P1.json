@@ -1,0 +1,18 @@
+{
+ "qid": "R03",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "115aeaab0e71fcc1ae61e5d36937abbe37d1ed38a522feefb194fa256cbf0503",
+ "answer": "By default, zgrep skips these directories (`src/filter.zig:17-28`): `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode`.\n\n**`dist` and `build` are not in that list.**\n\nNotes on how it's applied (`src/filter.zig:248-268`):\n- The default list is only checked when `use_defaults` is true (line 253).\n- Separately, if `skip_hidden` is set, any directory whose name starts with `.` is skipped (lines 249-251).\n- User-supplied excluded directories and ignore patterns are also matched (lines 259-265), so `dist`/`build` could be skipped via those, but not by the defaults.\n\nCaveat: the context only covers the matches for `default_excluded_dirs`; I haven't seen how `use_defaults` is set or whether other code excludes directories.",
+ "usage": {
+  "cost_usd": 0.010372,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.27,
+ "headers": {}
+}

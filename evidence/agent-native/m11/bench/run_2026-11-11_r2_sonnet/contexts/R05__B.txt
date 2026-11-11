@@ -1,0 +1,67 @@
+src/batch.zig-491-    id: std.json.Value,
+src/batch.zig-492-    pattern: []const u8,
+src/batch.zig-493-    paths: ?[]const []const u8 = null,
+src/batch.zig-494-    flags: ?[]const []const u8 = null,
+src/batch.zig-495-};
+src/batch.zig-496-
+src/batch.zig-497-/// Parsea el fichero entero antes de ejecutar nada (falla cerrado: una línea
+src/batch.zig-498-/// mala no deja un lote a medias). Las líneas vacías se ignoran.
+src/batch.zig:499:pub fn parseQueries(arena: Allocator, text: []const u8, err_out: *ParseError) error{ Invalid, OutOfMemory }![]Query {
+src/batch.zig-500-    var list: std.ArrayList(Query) = .empty;
+src/batch.zig-501-    var it = std.mem.splitScalar(u8, text, '\n');
+src/batch.zig-502-    var line_no: usize = 0;
+src/batch.zig-503-    while (it.next()) |raw| {
+src/batch.zig-504-        line_no += 1;
+src/batch.zig-505-        const line = std.mem.trim(u8, raw, " \t\r");
+src/batch.zig-506-        if (line.len == 0) continue;
+src/batch.zig-507-        const parsed = std.json.parseFromSliceLeaky(RawQuery, arena, line, .{}) catch {
+--
+src/batch.zig-606-    const gpa = std.testing.allocator;
+src/batch.zig-607-    var e: Emitter = .{ .io = undefined, .gpa = gpa };
+src/batch.zig-608-    defer e.deinit();
+src/batch.zig-609-    try e.feed("zgrep 0.4.0\n");
+src/batch.zig-610-    try std.testing.expectEqual(@as(usize, 0), e.staged.items.len);
+src/batch.zig-611-    try std.testing.expectEqual(@as(usize, 1), e.dropped_non_event);
+src/batch.zig-612-}
+src/batch.zig-613-
+src/batch.zig:614:test "parseQueries: ids string y entero, rechaza duplicados y campos desconocidos" {
+src/batch.zig-615-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+src/batch.zig-616-    defer arena.deinit();
+src/batch.zig-617-    var perr: ParseError = undefined;
+src/batch.zig:618:    const ok = try parseQueries(arena.allocator(),
+src/batch.zig-619-        \\{"id":"a","pattern":"x"}
+src/batch.zig-620-        \\
+src/batch.zig-621-        \\{"id":7,"pattern":"y","paths":["src"],"flags":["-i"]}
+src/batch.zig-622-    , &perr);
+src/batch.zig-623-    try std.testing.expectEqual(@as(usize, 2), ok.len);
+src/batch.zig-624-    try std.testing.expectEqualStrings("\"a\"", ok[0].id_json);
+src/batch.zig-625-    try std.testing.expectEqualStrings("7", ok[1].id_json);
+src/batch.zig-626-    try std.testing.expectEqualStrings("src", ok[1].paths.?[0]);
+src/batch.zig-627-
+src/batch.zig:628:    try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+src/batch.zig-629-        \\{"id":"a","pattern":"x"}
+src/batch.zig-630-        \\{"id":"a","pattern":"y"}
+src/batch.zig-631-    , &perr));
+src/batch.zig-632-    try std.testing.expectEqual(@as(usize, 2), perr.line_no);
+src/batch.zig:633:    try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+src/batch.zig-634-        \\{"id":"a","pattern":"x","path":["typo"]}
+src/batch.zig-635-    , &perr));
+src/batch.zig-636-}
+--
+src/main.zig-1906-    const text: []const u8 = if (std.mem.eql(u8, queries_path, "-"))
+src/main.zig-1907-        try readAllStdin(io, arena)
+src/main.zig-1908-    else
+src/main.zig-1909-        std.Io.Dir.cwd().readFileAlloc(io, queries_path, arena, .limited(64 << 20)) catch |e| {
+src/main.zig-1910-            std.debug.print("zgrep: {s}: {s}\n", .{ queries_path, @errorName(e) });
+src/main.zig-1911-            return 2;
+src/main.zig-1912-        };
+src/main.zig-1913-    var perr: batch.ParseError = undefined;
+src/main.zig:1914:    const queries = batch.parseQueries(arena, text, &perr) catch |e| switch (e) {
+src/main.zig-1915-        error.Invalid => {
+src/main.zig-1916-            std.debug.print("zgrep: {s}:{d}: {s}\n", .{ queries_path, perr.line_no, perr.what });
+src/main.zig-1917-            return 2;
+src/main.zig-1918-        },
+src/main.zig-1919-        error.OutOfMemory => return e,
+src/main.zig-1920-    };
+src/main.zig-1921-
+src/main.zig-1922-    // The global part of every query's argv: the command line minus

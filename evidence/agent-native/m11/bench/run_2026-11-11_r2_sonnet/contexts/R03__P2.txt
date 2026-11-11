@@ -1,0 +1,48 @@
+CONTEXT PACK `default_excluded_dirs`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] const/var `default_excluded_dirs` in file top level
+  src/filter.zig:17-17  sha256:19425494f54412f2  relation: declaration (pattern match, heuristic)
+>   17 | pub const default_excluded_dirs = [_][]const u8{
+
+REFERENCES
+src/filter.zig in fn:isDirExcluded
+  [h2] line 254 `default_excluded_dirs`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/filter.zig:17, no local shadow found)
+  src/filter.zig:248-268  sha256:7fc410ed3fc6dae8
+   248 |     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+   249 |         if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+   250 |             return true;
+   251 |         }
+   252 | 
+   253 |         if (self.use_defaults) {
+>  254 |             for (default_excluded_dirs) |d| {
+   255 |                 if (std.mem.eql(u8, dir_name, d)) return true;
+   256 |             }
+   257 |         }
+   258 | 
+   259 |         for (self.excluded_dirs.items) |ex| {
+   260 |             if (matchPattern(dir_name, ex)) return true;
+   261 |         }
+   262 | 
+   263 |         for (self.ignore_patterns.items) |pat| {
+   264 |             if (matchPattern(dir_name, pat)) return true;
+   265 |         }
+   266 | 
+   267 |         return false;
+   268 |     }
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.default_excluded_dirs), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 580 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 6

@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims that multiple operands that are all files force opts.sort = true (src/main.zig:2362); the reference lists only --exec, --heading and --pre"
+ ],
+ "reason": "It correctly identifies --exec, --heading and --pre but adds a fourth condition (multiple file operands) that the reference does not include, and hedges on the flag mapping.",
+ "cost_usd": 0.00656
+}

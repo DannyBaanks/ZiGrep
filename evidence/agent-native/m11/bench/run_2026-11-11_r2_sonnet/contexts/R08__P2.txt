@@ -1,0 +1,94 @@
+CONTEXT PACK `procsHomeActive`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `procsHomeActive` in fn:procsHomeActive
+  src/clean.zig:132-191  sha256:188c1187c7a53a6c  relation: declaration (pattern match, heuristic)
+   132 | /// �Hay un compilador vivo sobre este árbol?
+   133 | ///
+   134 | /// Medido: Zig no deja ficheros de bloqueo; lo que sí queda es el proceso. Dos
+   135 | /// señales, ambas por /proc (solo en Linux; en otros sistemas se omite y se
+   136 | /// dice):
+   137 | ///   * la caché GLOBAL es compartida por todos los repos: un `zig` vivo en
+   138 | ///     cualquier sitio la deja activa;
+   139 | ///   * una caché LOCAL queda activa si algún `zig` tiene su cwd en el repo que
+   140 | ///     la contiene (que es exactamente lo que hace `zig build`).
+>  141 | fn procsHomeActive(io: std.Io, gpa: Allocator, path: []const u8, kind: Kind) bool {
+   142 |     if (builtin.os.tag != .linux) return false;
+   143 |     const parent = std.fs.path.dirname(path) orelse path;
+   144 |     var stream = vfs.DirStream.open(io, "/proc") catch return false;
+   145 |     defer stream.close();
+   146 |     var buf: [4096]u8 = undefined;
+   147 |     var cwdbuf: [4096]u8 = undefined;
+   148 |     var exebuf: [4096]u8 = undefined;
+   149 |     while (true) {
+   150 |         const entry = stream.next() catch return false;
+   151 |         const e = entry orelse break;
+   152 |         if (e.kind != .directory) continue;
+   153 |         var digits = true;
+   154 |         for (e.name) |c| {
+   155 |             if (c < '0' or c > '9') digits = false;
+   156 |         }
+   157 |         if (!digits) continue;
+   158 |         const exe = std.fmt.bufPrint(&buf, "/proc/{s}/exe", .{e.name}) catch continue;
+   159 |         const exen = std.Io.Dir.cwd().readLink(io, exe, &exebuf) catch continue;
+   160 |         var exe_target = exebuf[0..exen];
+   161 |         // El kernel añade " (deleted)" cuando el binario se reemplazó en
+   162 |         // caliente, que es justo lo que hace `zig build` sobre su caché.
+   163 |         if (std.mem.endsWith(u8, exe_target, " (deleted)"))
+   164 |             exe_target = exe_target[0 .. exe_target.len - " (deleted)".len];
+   165 |         // SOLO cuenta un compilador de Zig. Medido el falso positivo: con
+   166 |         // `indexOf(exe, "/zig")` bastaba ejecutar este programa —su ruta pasa
+   167 |         // por `/zig-out/bin/zigrep`— para marcarse a sí mismo; y en la rama
+   168 |         // local no se miraba el exe en absoluto, así que cualquier shell con
+   169 |         // cwd en el repo también activaba la caché. Ahora: basename exacto.
+   170 |         const base = std.fs.path.basename(exe_target);
+   171 |         const is_zig = std.mem.eql(u8, base, "zig") or std.mem.eql(u8, base, "zig.exe");
+   172 |         if (!is_zig) continue;
+   173 |         if (kind == .global_cache) {
+   174 |             // Cualquier compilador vivo usa la caché global compartida.
+   175 |             return true;
+   176 |         }
+   177 |         const cwdpath = std.fmt.bufPrint(&buf, "/proc/{s}/cwd", .{e.name}) catch continue;
+   178 |         const cwdn = std.Io.Dir.cwd().readLink(io, cwdpath, &cwdbuf) catch continue;
+   179 |         const cwd = cwdbuf[0..cwdn];
+   180 |         // El compilador arranca con cwd = el repo (o un subdirectorio suyo),
+   181 |         // no dentro de la caché.
+   182 |         if (std.mem.eql(u8, cwd, parent)) return true;
+   183 |         var pbuf: [4096]u8 = undefined;
+   184 |         if (std.fmt.bufPrint(&pbuf, "{s}/", .{parent})) |pref| {
+   185 |             if (std.mem.startsWith(u8, cwd, pref)) return true;
+   186 |         } else |_| {}
+   187 |         if (std.mem.startsWith(u8, exe_target, path)) return true;
+   188 |         _ = gpa;
+   189 |     }
+   190 |     return false;
+   191 | }
+
+REFERENCES
+src/clean.zig in fn:add
+  [h2] line 283 `procsHomeActive`: unresolved (lexical_only; 1 declaration(s) named procsHomeActive; none is linked by checkable evidence)
+  src/clean.zig:279-285  sha256:cd7374bec4a0d50b
+   279 | fn add(list: *std.ArrayList(Target), path: [:0]const u8, kind: Kind, io: std.Io, gpa: Allocator, home: []const u8) !void {
+   280 |     const target_path = gpa.dupe(u8, path) catch return error.OutOfMemory;
+   281 |     const size = dirSize(io, path);
+   282 |     const protected = if (kind == .out_dir) hasInstallLink(io, gpa, home, target_path) else false;
+>  283 |     const active = hasLockFile(io, target_path) or procsHomeActive(io, gpa, target_path, kind);
+   284 |     try list.append(gpa, .{ .path = target_path, .kind = kind, .size = size, .protected = protected, .active = active });
+   285 | }
+
+UNCERTAINTY
+- 1 code reference(s) not linked to a declaration: h2
+- not analysed: aliases (const x = y.procsHomeActive), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 605 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 7

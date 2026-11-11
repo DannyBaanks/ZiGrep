@@ -1,0 +1,37 @@
+CONTEXT PACK `visibleLineEnd`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 1 in 1 file(s); by role: code 1
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `visibleLineEnd` in fn:visibleLineEnd
+  src/scan.zig:242-249  sha256:7506d71f3a762428  relation: declaration (pattern match, heuristic)
+   242 | /// The visible end of the line that starts at `from`: the position of the
+   243 | /// `\n`, or the end of the buffer, minus the `\r` when `--crlf` is on.
+   244 | /// Callers must still advance with the RAW end (the byte after `\n`).
+>  245 | fn visibleLineEnd(data: []const u8, from: usize, crlf: bool) usize {
+   246 |     const e = std.mem.findScalarPos(u8, data, from, '\n') orelse data.len;
+   247 |     if (crlf and e > from and data[e - 1] == '\r') return e - 1;
+   248 |     return e;
+   249 | }
+
+STRUCTURE
+src/scan.zig (2043 lines, 81 declarations; '*' = contains a hit; only the 1 with hits shown)
+  *   245-249   fn visibleLineEnd
+
+HISTORY
+[h1] src/scan.zig:245 last changed by 9c6772b894 2026-11-10 "lo que quedaba pendiente: -G (BRE real), -z, --crlf, --heading/--pretty/--vimgrep" (git blame)
+src/scan.zig: last commit 404fd0d	2026-11-11	M5: el experimento (tokens reales) y --json=compact, que salio de sus datos
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.visibleLineEnd), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 626 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 8

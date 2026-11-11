@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: for file-utf16 the sha256 is of the raw file, offsets refer to decoded text, and mtime_ns is null for stdin (no file); it omits the statx and --pre details, which the question does not ask about.",
+ "cost_usd": 0.006316
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R27",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "51661c18dd6ab0fbaf56adac0d9476f83a99afa67a5ba116d1bd4a921288cf3f",
+ "answer": "For a UTF-16 file, the provenance `source` is `file-utf16`. The sha256 is of the **raw file**, and the offsets refer to the **decoded text**. Both facts appear in `src/out_json.zig:203-205` (\"offsets sobre el texto decodificado, hash del fichero crudo\") and in `GUIA.md:829-830`.\n\nFor standard input, `source` is `stdin`. The sha256 is of what was received, and `mtime_ns` is `null`. This is stated in `GUIA.md:830-831`. In code, `mtime_ns` is `?i128` and emitted as `null` when absent (`src/out_json.zig:222-227`). The comment at `src/out_json.zig:202` says it is null when there is no file, e.g. stdin.\n\nThe same applies in `--json=compact` headers (`src/out_json.zig:301-305`).",
+ "usage": {
+  "cost_usd": 0.035476,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.25,
+ "headers": {}
+}

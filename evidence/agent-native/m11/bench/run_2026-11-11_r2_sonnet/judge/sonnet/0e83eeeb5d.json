@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all asked points: raw-file sha256, offsets refer to decoded text, and mtime_ns is null for stdin. The caveat about not seeing the decoding wiring is a hedge but does not contradict anything.",
+ "cost_usd": 0.006388
+}

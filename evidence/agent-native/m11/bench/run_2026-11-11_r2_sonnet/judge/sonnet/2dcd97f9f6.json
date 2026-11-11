@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly notes the protection via symlink in a bin dir but says 'it can delete, with protections' without stating the default is no deletion (only with --include-out), that symlinks are never deleted, or that the default prompt answer is N, and it hedges on what the reference states definitively.",
+ "cost_usd": 0.006522
+}

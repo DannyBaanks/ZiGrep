@@ -1,0 +1,11 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says basename may be `zig` or `zig.exe`; reference says exactly `zig`",
+  "Says it can't say what hasLockFile checks; reference says any name containing 'lock' is checked",
+  "Claims a process is also active if exe path starts with the cache path; not in reference",
+  "Says local cache is active if cwd equals the parent directory of the cache path or inside it; reference says cwd inside the repository containing it (roughly consistent but imprecise)"
+ ],
+ "reason": "Core of procsHomeActive (Linux-only, /proc exe basename, deleted suffix stripped, global vs local cwd) is right, but it adds zig.exe and an exe-path condition, and omits the lock-file check.",
+ "cost_usd": 0.008208
+}

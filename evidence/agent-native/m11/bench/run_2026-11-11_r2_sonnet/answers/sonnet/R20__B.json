@@ -1,0 +1,18 @@
+{
+ "qid": "R20",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "1772de5ec272c32c5a48db3f8fb7ae000ccb8d7569fd4f2173ff824b814163f2",
+ "answer": "Probably yes, but the context is incomplete. Here is what it shows.\n\n- `-S` sets `opts.smart_case` (src/main.zig:1530). The check at src/main.zig:2206 runs only if `-i` isn't already set.\n- The check loops over the pattern bytes and sets `has_upper` for ASCII `A`–`Z` (src/main.zig:2210). It also sets it for bytes `0xC0`–`0xDE` except `0xD7`, labelled \"Latin-1\" (src/main.zig:2211).\n- `ñandú` is lowercase: `ñ` is U+00F1 and `ú` is U+00FA. In UTF-8 these are the byte pairs `C3 B1` and `C3 BA`.\n- The check is per byte, so the lead byte `0xC3` falls in the `0xC0`–`0xDE` range and would set `has_upper = true`. If the pattern is UTF-8, that would make the search case-sensitive. That is probably a bug, since `ñandú` has no uppercase letter.\n\nWhat the context doesn't show:\n\n- The code after line 2214, where `has_upper` is used to turn on `ignore_case`.\n- How the patterns are encoded or decoded.\n\nSo I can't confirm the result. By the visible byte loop, a UTF-8 `ñandú` would be treated as having an uppercase letter, and the search would not be case-insensitive.",
+ "usage": {
+  "cost_usd": 0.018082,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.34,
+ "headers": {}
+}

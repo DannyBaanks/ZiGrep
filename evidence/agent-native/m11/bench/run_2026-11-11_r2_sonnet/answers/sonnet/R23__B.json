@@ -1,0 +1,18 @@
+{
+ "qid": "R23",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "96a7f6b9b1c91895c4dcf1459d74b11804056bf0268929e2b7a2cb179f64499a",
+ "answer": "Four conditions force `opts.sort = true` without `--sort`, all in `src/main.zig`:\n\n- **`--exec`**: `if (opts.exec_cmd != null and !opts.sort) opts.sort = true;` (src/main.zig:2190). It needs to know which files matched, and only the ordered path keeps that (src/main.zig:2186-2189).\n- **`--heading`**: `if (opts.heading and !opts.sort) opts.sort = true;` (src/main.zig:2195). Streaming would interleave groups across files (src/main.zig:2191-2194).\n- **`--pre`**: `if (opts.pre_cmd != null and !opts.sort)` sets sort (src/main.zig:2196-2197).\n- **Several explicit file operands** (no directories): `if (valid_operands.items.len > 1 and all_files) opts.sort = true;` (src/main.zig:2362). This gives GNU grep argument order (src/main.zig:2357-2361).\n\nAlso, `--queries-file` batches run each query with `--json --sort` (src/main.zig:1892, 1925).\n\nThe context was truncated, so other triggers may exist.",
+ "usage": {
+  "cost_usd": 0.058124,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.66,
+ "headers": {}
+}

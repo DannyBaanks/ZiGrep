@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "The likely behavior is no output and a non-match exit code (1) for binary data lacking the pattern; the reference says it prints 'Binary file (standard input) matches' and exits 0."
+ ],
+ "reason": "The answer declines to answer and its tentative guess (no output, non-match exit) contradicts the reference, which says the message is printed and exit code is 0 due to a bug.",
+ "cost_usd": 0.006672
+}

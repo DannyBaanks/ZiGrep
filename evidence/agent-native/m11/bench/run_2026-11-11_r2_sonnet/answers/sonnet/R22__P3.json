@@ -1,0 +1,18 @@
+{
+ "qid": "R22",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "39089cd3a9ffba56e2cebdcf3dd57a084fa9e137e56f339c7e0dffa273d00f76",
+ "answer": "**Ordering:** `--exec` forces `opts.sort = true`, because only the ordered path records which files matched. The command runs after the scan, so only the order of commands changes, not the bytes read (src/main.zig:2186-2190). Matches are collected into an `exec_matched` array (2559-2570), and `runExecAll` runs after output is flushed (2746-2755).\n\n**`-q` early exit:** `--exec` sets `opts.mode = .quiet` (2201), but the early-exit paths are all disabled when `exec_cmd` is set. This covers the sequential loop break (2632), the threaded probe (2652) and the thread-join shortcut (2667). Otherwise the scan would stop at the first match (2198-2201). Exit codes differ too. With `-q`, a match beats an error (exit 0), but `--exec` keeps \"any error is 2\" (2490-2493, 2770). A failing child also yields 2 (2746-2747, 2768).\n\n**`--json`:** Combining them is a usage error, to keep stdout JSONL-only (1721-1727).\n\n**`--queries-file`:** `--exec` inside a batch query's flags is rejected (1882). The context doesn't show whether it's allowed on the command line alongside `--queries-file`.",
+ "usage": {
+  "cost_usd": 0.045717999999999995,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.19,
+ "headers": {}
+}

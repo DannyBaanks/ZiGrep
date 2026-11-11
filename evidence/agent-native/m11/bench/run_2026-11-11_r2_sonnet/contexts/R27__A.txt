@@ -1,0 +1,21 @@
+src/main.zig:87:    \\                    of the bytes searched and the file's mtime_ns
+src/out_json.zig:32:///     (con `--provenance` lleva ademas sha256_b64u/size/mtime_ns/source:
+src/out_json.zig:202:/// verificable con `sha256sum`. `mtime_ns` sale de `statx` (null si no hay
+src/out_json.zig:212:    mtime_ns: ?i128,
+src/out_json.zig:222:    try out.appendSlice(gpa, ",\"mtime_ns\":");
+src/out_json.zig:223:    if (mtime_ns) |m| {
+src/out_json.zig:282:/// `--provenance`, `{"path":P,"sha256":..,"size":..,"mtime_ns":..,"source":..}`.
+src/out_json.zig:287:    prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+src/out_json.zig:301:        try out.appendSlice(gpa, ",\"mtime_ns\":");
+src/out_json.zig:302:        if (p.mtime_ns) |m| {
+src/scan.zig:1325:    mtime_ns: ?i128,
+src/scan.zig:1329:        if (provenance) try insertProvenance(out, gpa, path, start, data, source, mtime_ns);
+src/scan.zig:1337:        try out_json.emitCompactFileHeader(&ev, gpa, path, .{ .sha256 = &digest, .size = data.len, .mtime_ns = mtime_ns, .source = source.name() });
+src/scan.zig:1351:    mtime_ns: ?i128,
+src/scan.zig:1357:    try out_json.emitProvenanceEvent(&ev, gpa, path, &digest, data.len, mtime_ns, source.name());
+src/scan.zig:2026:        \\{"schema":"zgrep/1","type":"provenance","path":"f.txt","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","size":3,"mtime_ns":42,"source":"file"}
+GUIA.md:811:{"schema":"zgrep/1","type":"provenance","path":"a.txt","sha256":"89f3e85d8bd8b4156bafcd5dbef16db596a610cd9707d2097cfaab9e1aebb07b","size":26,"mtime_ns":1794350072429715620,"source":"file"}
+GUIA.md:813:{"schema":"zgrep/1","type":"provenance","path":"b.txt","sha256":"9e011eb2d04d64c73b63643ac869ebf9c786846c11852a94ec831293db2bdce4","size":25,"mtime_ns":1794350072429715620,"source":"file"}
+GUIA.md:828:* `mtime_ns` sale de `statx` sobre el descriptor que se leyó.
+GUIA.md:831:  lo recibido, `mtime_ns` null).
+GUIA.md:908:{"path":"a.txt","sha256_b64u":"ifPoXYvYtBVrr81dvvFttZamEM2XB9IJfPqrnhrrsHs","size":26,"mtime_ns":1794350072429715620,"source":"file"}

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says binary is rejected with a usage error, text is -a, and without-match is the default, but hedges on what without-match does (\"presumably skipping the file\") where the reference is definite that a binary file is treated as not matching.",
+ "cost_usd": 0.006319999999999999
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly says the information is not available, and its mmap_threshold 256 KiB detail matches the reference; the page cache point is stated as paging on demand without RSS inference.",
+ "cost_usd": 0.006085999999999999
+}

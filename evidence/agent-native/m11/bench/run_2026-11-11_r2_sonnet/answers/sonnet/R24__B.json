@@ -1,0 +1,18 @@
+{
+ "qid": "R24",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "51bbc8541c631a4eda94eebad32c8d31d1e57a275f0ae99a3037488cbd7b6eef",
+ "answer": "The context only covers the case where binary data **does** trigger the binary check. It doesn't show what happens when binary data lacks the pattern.\n\nWhat the context shows for stdin (src/main.zig:2292-2301):\n- Binary detection happens before any matching. The probe is the first `binary_probe_bytes` (8192) bytes (src/main.zig:2293, src/scan.zig:91), checked for a NUL byte with no UTF-16 BOM and no `-a`/binary flag (src/main.zig:2295).\n- If it is detected as binary, and the mode is `.lines`, it prints `Binary file (standard input) matches` to stderr via `std.debug.print`, then returns 0 (src/main.zig:2296-2300).\n\nSo for binary stdin (containing a NUL in the first 8192 bytes), the pattern is never searched. Output and exit code come out the same whether or not the pattern is present: the message, exit code 0 (src/main.zig:2296-2300). That's arguably odd for a \"no match\" input, but that's what the code shows.\n\nIf the data has no NUL in the probe window, it's treated as text, and the matching path after line 2301 isn't in the context, so I can't say what it prints or returns. I can't confirm the exit-code behavior for that case.",
+ "usage": {
+  "cost_usd": 0.018468,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.7,
+ "headers": {}
+}

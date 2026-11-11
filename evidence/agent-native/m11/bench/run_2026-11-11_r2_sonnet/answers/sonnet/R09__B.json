@@ -1,0 +1,18 @@
+{
+ "qid": "R09",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "58caa78470b101d45b0676b44e1373f447c71dbdf2554b8d9a47e07607793c1d",
+ "answer": "The context doesn't answer this directly. It never shows a `--cache` flag or any deletion code.\n\nWhat it does show: in `src/clean.zig`, `hasInstallLink` checks whether a symlink in a well-known bin dir points inside a path, which signals that a `zig-out` is actually deployed (src/clean.zig:202-204). In `add`, that check runs only for targets of kind `.out_dir`, and the result is stored as `protected` on the target (src/clean.zig:282, 284). So `zig-out` directories appear to be treated as clean targets, with deployed ones flagged as protected.\n\nMissing: the argument parsing for `--cache`, the code that decides which kinds `--cache` selects, and the code that actually deletes targets or honors `protected`. Also, the search was for `hasInstallLink`, and `zgrep` isn't evidently the same tool as this `clean.zig`.",
+ "usage": {
+  "cost_usd": 0.010812,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.54,
+ "headers": {}
+}

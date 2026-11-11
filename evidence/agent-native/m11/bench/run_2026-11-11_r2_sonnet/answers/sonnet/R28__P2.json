@@ -1,0 +1,18 @@
+{
+ "qid": "R28",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "72cd6def07329ebf5f008d22c9087a35bde45292d44e6b41f651e2924354a3ef",
+ "answer": "The context doesn't show what `--stop-on-nonmatch` actually does behaviorally. The scanning logic that consumes it (presumably in `src/scan.zig`) isn't included, so I can't state its semantics without guessing.\n\nWhat the context does show is the plumbing:\n\n- **Declared** as a `bool = false` field in `Options` (src/main.zig:385) and in `ScanConfig` (src/scan.zig:78).\n- **Parsed** in `parseArgs`: the `--stop-on-nonmatch` flag sets `opts.stop_on_nonmatch = true` (src/main.zig:1266-1267).\n- **Forwarded** into `scan.ScanConfig` in `runSearch` for stdin (src/main.zig:2284), the kamikaze pipeline (src/main.zig:2432), and the general file path (src/main.zig:2607).\n- **Tested** only for parsing (src/main.zig:3232-3234).\n\nMissing: any code in `src/scan.zig` that reads `cfg.stop_on_nonmatch`, plus README/GUIA descriptions. The pack's searched scope shows only declarations and forwarding, and it marks the references as unlinked (lexical only).",
+ "usage": {
+  "cost_usd": 0.026458,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.81,
+ "headers": {}
+}

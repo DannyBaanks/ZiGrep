@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly identifies only `*` and `?` plus trailing `/` stripping, and says `[abc]` is likely literal, but hedges ('can't rule out') where the reference is definite, and omits case-sensitivity.",
+ "cost_usd": 0.00643
+}

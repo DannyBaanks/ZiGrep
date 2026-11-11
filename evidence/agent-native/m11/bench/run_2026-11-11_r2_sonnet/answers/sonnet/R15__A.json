@@ -1,0 +1,18 @@
+{
+ "qid": "R15",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "814b0d4f21e85bedad94fef1c3c90176ae83faf0e4fa36e3c7955a08d0e2c8ef",
+ "answer": "The context doesn't show what happens when the cache fills, so I can't answer fully.\n\nWhat it does show:\n- `src/regex.zig:659` defines `const max_states = 3000;`, which is the cap on cached states.\n- `src/regex.zig:810` checks `if (self.states.items.len >= max_states) {`, so the code tests whether the state list has reached that cap.\n\nThe body of that `if` block isn't included, so I can't tell whether it clears the cache and continues, falls back to another engine, returns an error, or does something else. To answer, I'd need the lines following `src/regex.zig:810` (the branch body), plus any code that handles its result.",
+ "usage": {
+  "cost_usd": 0.005546000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.03,
+ "headers": {}
+}

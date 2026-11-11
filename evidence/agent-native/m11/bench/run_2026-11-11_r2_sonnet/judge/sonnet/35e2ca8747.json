@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims a fourth trigger: several explicit file operands with no directories force the sorted path, which the reference does not list (reference lists only --exec, --heading, --pre)",
+  "Says 'Four things' force the sorted path, contradicting the reference's three options"
+ ],
+ "reason": "The answer correctly lists --exec, --heading and --pre with matching rationales, but adds an extra trigger (multiple file operands) not in the reference, and the question asks for options.",
+ "cost_usd": 0.006914
+}

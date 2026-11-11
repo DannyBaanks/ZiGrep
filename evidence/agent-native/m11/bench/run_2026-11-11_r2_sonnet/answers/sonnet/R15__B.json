@@ -1,0 +1,18 @@
+{
+ "qid": "R15",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "fa7bc0fc45965db4d629d725ba42468a3b79042414091d740732676c807dc603",
+ "answer": "When the cache fills, the DFA flushes it and starts over.\n\n- The cache limit is `max_states = 3000` (src/regex.zig:659).\n- In `intern`, if the state isn't already indexed, it checks whether `self.states.items.len >= max_states` (src/regex.zig:809-810).\n- If so, it copies the incoming node set (`gpa.dupe`), calls `self.reset()`, and then interns the copy as a fresh state (src/regex.zig:812-815). The copy is needed because the reset presumably frees the old storage.\n- The comment warns: \"Callers must not reuse old ids\" (src/regex.zig:811). Any state IDs held before the flush are invalidated.\n\nThe search is not aborted by this, based on what's shown. However, the context doesn't show what `reset()` does internally or how callers handle the invalidated IDs (for example, whether they fall back to another engine), so I can't say more than that.",
+ "usage": {
+  "cost_usd": 0.009578,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.12,
+ "headers": {}
+}

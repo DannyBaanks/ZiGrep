@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "States the information is not available, whereas the reference gives a definite answer: match, occurrence, file and count events count; context, passthru, provenance, query_end and summary do not."
+ ],
+ "reason": "The answer declines to answer and provides none of the event types, while the reference is definite and answerable.",
+ "cost_usd": 0.005922
+}

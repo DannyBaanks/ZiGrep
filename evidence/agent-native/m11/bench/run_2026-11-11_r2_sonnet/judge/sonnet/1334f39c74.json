@@ -1,0 +1,9 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the information is unavailable and that it cannot say what the command searches; the reference definitively says it searches nothing.",
+  "Does not identify that `v^` sets has_ceiling, so subdirectories are never recursed, and that with trampoline at depth 0 no files are scanned."
+ ],
+ "reason": "The answer declines to answer, while the reference definitively states nothing is searched (exit 1, no message), so it misses the central point.",
+ "cost_usd": 0.006912000000000001
+}

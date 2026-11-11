@@ -1,0 +1,18 @@
+{
+ "qid": "R05",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "2f6fae880169f4256baf42a7375162557213ec0c55eb7ec954619f937199e4a5",
+ "answer": "Based on the context (partial; the body of `parseQueries` after line 507 isn't shown):\n\n- **id values**: A string or an integer. The test parses `\"a\"` and `7`, stored as JSON text `\"\\\"a\\\"\"` and `\"7\"` (src/batch.zig:614-625). The field is typed `std.json.Value` (src/batch.zig:491), so the exact accepted set (e.g. floats, null) isn't confirmed here.\n- **Unknown fields**: Rejected as `error.Invalid`; the test uses a typo'd `\"path\"` (src/batch.zig:614, 633-635).\n- **Duplicate ids**: Rejected as `error.Invalid`, reported at the second occurrence's line (line 2) (src/batch.zig:628-632).\n- **Blank lines**: Ignored (src/batch.zig:498, 505-506).\n- **Half-run batch?**: No. The whole file is parsed before anything runs (\"falla cerrado\"), so a bad line doesn't leave a partial batch (src/batch.zig:497-498). On error, main prints `file:line: message` and returns 2 (src/main.zig:1914-1917).\n\nMissing: the validation code itself (after src/batch.zig:507), which would settle the exact id types.",
+ "usage": {
+  "cost_usd": 0.015262000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.33,
+ "headers": {}
+}

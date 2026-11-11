@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The explanation for `a+b` is muddled: it says the converter turns `[[:digit:]]+` into `[[:digit:]]\\+`, which is a different example, though the conclusion that bare `+` is literal is right.",
+  "Hedges on `a\\+b`, saying it is only an inference that `\\+` becomes the ERE `+` quantifier, where the reference states this definitively."
+ ],
+ "reason": "Bare `+` literal and leading `*` literal agree with the reference, but `a\\+b` is only tentatively given as one-or-more and the answer calls itself partially answerable.",
+ "cost_usd": 0.007488
+}

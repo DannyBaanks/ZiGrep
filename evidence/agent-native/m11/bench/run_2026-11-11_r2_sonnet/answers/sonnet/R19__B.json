@@ -1,0 +1,18 @@
+{
+ "qid": "R19",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "0cb7269501b9bd5182006c10b0c27748331ae0ae8947aa1733aa2a1b85acfa65",
+ "answer": "**No, `--binary-files=binary` is rejected.** The parser returns a usage error for it (src/main.zig:3186-3187), with a message containing \"never prints binary content\" (src/main.zig:3189). The reason given: in grep, `binary` means \"print matches but suppress binary content\", which this engine can't do, so it is rejected at parse time rather than silently accepted (src/main.zig:240-242).\n\nThe only accepted values are `text` and `without_match` (src/main.zig:243):\n\n- **`text`**: hunts the file and prints the matches (src/main.zig:239-240). It is equivalent to `-a` (src/main.zig:330). A test confirms `--binary-files=text` parses (src/main.zig:3180-3182).\n- **`without-match`**: pretends the binary file does not match (src/main.zig:240-241). It is the default (src/main.zig:331, 330).\n\nThe context doesn't show the actual string parsing, so I can't confirm whether the hyphenated spelling `without-match` is what the parser accepts. The enum field is `without_match`, and the comment at src/main.zig:330 uses the hyphenated form.",
+ "usage": {
+  "cost_usd": 0.013002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.52,
+ "headers": {}
+}

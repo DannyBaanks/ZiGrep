@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "It correctly says active = lock file or procsHomeActive, but says the process recognition is unavailable, whereas the reference gives it (/proc exe basename exactly 'zig', global vs local cwd rule), so it is incomplete.",
+ "cost_usd": 0.00638
+}

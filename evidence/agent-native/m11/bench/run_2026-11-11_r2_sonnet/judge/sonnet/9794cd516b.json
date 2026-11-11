@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer hedges that `binary` is 'probably not accepted' (the enum has no binary variant) but cannot confirm rejection, and does not state what `text` (same as -a) and `without-match` (the default, binary file treated as non-matching) do, where the reference is definite.",
+ "cost_usd": 0.006354
+}

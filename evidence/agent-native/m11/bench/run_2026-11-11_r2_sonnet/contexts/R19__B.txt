@@ -1,0 +1,53 @@
+src/main.zig-235-/// `--color` tri-state. `auto` is deliberately folded to `never`: deciding
+src/main.zig-236-/// it properly needs isatty(stdout), which is not worth the flag.
+src/main.zig-237-pub const ColorMode = enum { never, always, auto };
+src/main.zig-238-
+src/main.zig-239-/// `--binary-files=TYPE` (grep). zgrep only has two honest answers: hunt the
+src/main.zig-240-/// file and print the matches, or pretend it does not match. `binary` in grep
+src/main.zig-241-/// means "print matches but suppress binary content", which this engine cannot
+src/main.zig-242-/// do, so it is rejected at parse time instead of silently accepted.
+src/main.zig:243:pub const BinaryFiles = enum { text, without_match };
+src/main.zig-244-
+src/main.zig-245-pub const usage_error = error{Usage};
+src/main.zig-246-
+src/main.zig-247-pub const Options = struct {
+src/main.zig-248-    mode: Mode = .lines,
+src/main.zig-249-    algo: Algo = .auto,
+src/main.zig-250-    threads: usize = 0, // 0 = auto (use the CPU count)
+src/main.zig-251-    show_path: ?bool = null,
+--
+src/main.zig-323-    /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+src/main.zig-324-    type_include: [8]types.Type = undefined,
+src/main.zig-325-    type_include_count: usize = 0,
+src/main.zig-326-    type_exclude: [8]types.Type = undefined,
+src/main.zig-327-    type_exclude_count: usize = 0,
+src/main.zig-328-    /// `--type-list`: print the type registry and exit.
+src/main.zig-329-    print_type_list: bool = false,
+src/main.zig-330-    /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+src/main.zig:331:    binary_files: BinaryFiles = .without_match,
+src/main.zig-332-    /// `--exclude-from=FILE` (grep): globs, one per line.
+src/main.zig-333-    exclude_from: [8][]const u8 = undefined,
+src/main.zig-334-    exclude_from_count: usize = 0,
+src/main.zig-335-    /// `--max-depth=N` (rg; long only, `-d` is grep's --directories).
+src/main.zig-336-    max_depth: usize = 0,
+src/main.zig-337-    /// `--max-filesize=N[KMGT]` (rg): 0 = unlimited.
+src/main.zig-338-    max_filesize: usize = 0,
+src/main.zig-339-    /// M3: `--queries-file FILE` runs every JSONL query in this one process.
+--
+src/main.zig-3174-        const a = [_][:0]const u8{ "zgrep", "-b", "pat" };
+src/main.zig-3175-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3176-        try std.testing.expect(o.byte_offset);
+src/main.zig-3177-    }
+src/main.zig-3178-    {
+src/main.zig-3179-        var o: Options = .{};
+src/main.zig-3180-        const a = [_][:0]const u8{ "zgrep", "--binary-files=text", "pat" };
+src/main.zig-3181-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3182:        try std.testing.expectEqual(BinaryFiles.text, o.binary_files);
+src/main.zig-3183-    }
+src/main.zig-3184-    {
+src/main.zig-3185-        var o: Options = .{};
+src/main.zig-3186-        const a = [_][:0]const u8{ "zgrep", "--binary-files=binary", "pat" };
+src/main.zig-3187-        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+src/main.zig-3188-        const f = o.fail orelse return error.TestExpectedEqual;
+src/main.zig-3189-        try std.testing.expect(std.mem.indexOf(u8, f.what, "never prints binary content") != null);
+src/main.zig-3190-    }

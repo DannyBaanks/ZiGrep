@@ -1,0 +1,59 @@
+CONTEXT PACK `walk_max_depth`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] const/var `walk_max_depth` in file top level
+  src/walk.zig:11-11  sha256:d4c8f6c3a8c5da63  relation: declaration (pattern match, heuristic)
+>   11 | pub const walk_max_depth = 512;
+
+REFERENCES
+src/walk.zig in fn:walkOne
+  [h2] line 62 `walk_max_depth`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/walk.zig:11, no local shadow found)
+  src/walk.zig:51-51  sha256:1c9d27723c053692
+    51 | fn walkOne(
+  src/walk.zig:54-70  sha256:a62b336acee42910
+    54 |     dir: [:0]const u8,
+    55 |     out: *std.ArrayList([:0]const u8),
+    56 |     depth: usize,
+    57 |     filter_engine: ?*const FilterEngine,
+    58 |     nav_plan: ?NavPlan,
+    59 |     max_depth: usize,
+    60 |     max_filesize: usize,
+    61 | ) Error!void {
+>   62 |     if (depth > walk_max_depth) return error.TooDeep;
+    63 | 
+    64 |     const metadata = vfs.stat(io, dir, true) orelse return error.OpenFailed;
+    65 |     if (metadata.kind == .file) {
+    66 |         try out.append(gpa, dir);
+    67 |         return;
+    68 |     }
+    69 |     if (metadata.kind != .directory) return;
+    70 | 
+
+STRUCTURE
+src/walk.zig (157 lines, 6 declarations; '*' = contains a hit)
+       20-31    container Item
+       24-26      fn lessThan
+       28-30      fn greaterThan
+       38-49    fn walk
+  *    51-137   fn walkOne
+      139-156   test childPath: no doubled separator and root handled
+
+HISTORY
+[h1] src/walk.zig:11 last changed by 69193b76df 2026-11-10 "paridad con rg: -S, -t/-T/--type-list, --max-depth, --max-filesize, --exclude-from, --binary-files, -b" (git blame)
+src/walk.zig: last commit 69193b7	2026-11-09	paridad con rg: -S, -t/-T/--type-list, --max-depth, --max-filesize, --exclude-from, --binary-files, -b
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.walk_max_depth), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 699 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 9

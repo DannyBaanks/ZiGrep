@@ -1,0 +1,350 @@
+src/main.zig-2216-        if (!has_upper) opts.ignore_case = true;
+src/main.zig-2217-    }
+src/main.zig-2218-    // `--binary-files=text` is exactly `-a`; `without-match` is the default.
+src/main.zig-2219-    if (opts.binary_files == .text) opts.binary = true;
+src/main.zig-2220-
+src/main.zig-2221-    const searcher = search.build(gpa, patterns, .{
+src/main.zig-2222-        .algo = opts.algo,
+src/main.zig-2223-        .fixed = opts.fixed,
+src/main.zig:2224:        .icase = opts.ignore_case,
+src/main.zig-2225-        .word = opts.word,
+src/main.zig-2226-        .line = opts.line_regexp,
+src/main.zig-2227-        .crlf = opts.crlf,
+src/main.zig-2228-        .basic = opts.basic_regexp,
+src/main.zig-2229-        .multiline = opts.multiline,
+src/main.zig-2230-        .dotall = opts.multiline_dotall,
+src/main.zig-2231-        .null_data = opts.null_data,
+src/main.zig-2232-    }) catch |e| switch (e) {
+--
+src/regex.zig-49-    alt: []*Node,
+src/regex.zig-50-    rep: struct { child: *Node, min: u32, max: u32 },
+src/regex.zig-51-};
+src/regex.zig-52-
+src/regex.zig-53-const Parser = struct {
+src/regex.zig-54-    a: Allocator, // arena
+src/regex.zig-55-    src: []const u8,
+src/regex.zig-56-    i: usize = 0,
+src/regex.zig:57:    icase: bool,
+src/regex.zig-58-    dot_newline: bool = false,
+src/regex.zig-59-    depth: u32 = 0,
+src/regex.zig-60-
+src/regex.zig-61-    fn peek(self: *Parser) ?u8 {
+src/regex.zig-62-        return if (self.i < self.src.len) self.src[self.i] else null;
+src/regex.zig-63-    }
+src/regex.zig-64-
+src/regex.zig-65-    fn newNode(self: *Parser, n: Node) CompileError!*Node {
+src/regex.zig-66-        const p = try self.a.create(Node);
+src/regex.zig-67-        p.* = n;
+src/regex.zig-68-        return p;
+src/regex.zig-69-    }
+src/regex.zig-70-
+src/regex.zig-71-    fn byteSet(self: *Parser, c: u8) Set {
+src/regex.zig-72-        var s: Set = @splat(false);
+src/regex.zig-73-        s[c] = true;
+src/regex.zig:74:        if (self.icase) {
+src/regex.zig-75-            if (c >= 'a' and c <= 'z') s[c - 32] = true;
+src/regex.zig-76-            if (c >= 'A' and c <= 'Z') s[c + 32] = true;
+src/regex.zig-77-        }
+src/regex.zig-78-        return s;
+src/regex.zig-79-    }
+src/regex.zig-80-
+src/regex.zig-81-    fn parseAlt(self: *Parser) CompileError!*Node {
+src/regex.zig-82-        self.depth += 1;
+--
+src/regex.zig-269-                    h = try self.escapeByte(e);
+src/regex.zig-270-                }
+src/regex.zig-271-                hi = h;
+src/regex.zig-272-                if (hi < lo) return fail("invalid range in [ class");
+src/regex.zig-273-            }
+src/regex.zig-274-            var k: usize = lo;
+src/regex.zig-275-            while (k <= hi) : (k += 1) set[k] = true;
+src/regex.zig-276-        }
+src/regex.zig:277:        if (self.icase) {
+src/regex.zig-278-            for ('a'..'z' + 1) |ch| {
+src/regex.zig-279-                const l: u8 = @intCast(ch);
+src/regex.zig-280-                if (set[l] or set[l - 32]) {
+src/regex.zig-281-                    set[l] = true;
+src/regex.zig-282-                    set[l - 32] = true;
+src/regex.zig-283-                }
+src/regex.zig-284-            }
+src/regex.zig-285-        }
+--
+src/regex.zig-328-                return self.newNode(.{ .set = self.byteSet(b) });
+src/regex.zig-329-            },
+src/regex.zig-330-            else => return self.newNode(.{ .set = self.byteSet(c) }),
+src/regex.zig-331-        }
+src/regex.zig-332-    }
+src/regex.zig-333-};
+src/regex.zig-334-
+src/regex.zig-335-pub const ParseOptions = struct {
+src/regex.zig:336:    icase: bool = false,
+src/regex.zig-337-    word: bool = false,
+src/regex.zig-338-    /// `--null-data`: a record may contain \n, so `.` and the character
+src/regex.zig-339-    /// classes must not exclude it (grep -z semantics).
+src/regex.zig-340-    dot_newline: bool = false,
+src/regex.zig-341-};
+src/regex.zig-342-
+src/regex.zig-343-/// Parses `pattern` into an AST allocated in `arena`.
+src/regex.zig-344-pub fn parse(arena: Allocator, pattern: []const u8, o: ParseOptions) CompileError!*Node {
+src/regex.zig:345:    var p: Parser = .{ .a = arena, .src = pattern, .icase = o.icase, .dot_newline = o.dot_newline };
+src/regex.zig-346-    const n = try p.parseAlt();
+src/regex.zig-347-    if (p.i != pattern.len) return fail("unmatched )");
+src/regex.zig-348-    return n;
+src/regex.zig-349-}
+src/regex.zig-350-
+src/regex.zig-351-/// AST of a fixed string (every byte literal, optionally case-folded).
+src/regex.zig:352:pub fn literalNode(arena: Allocator, text: []const u8, icase: bool) CompileError!*Node {
+src/regex.zig:353:    var p: Parser = .{ .a = arena, .src = text, .icase = icase };
+src/regex.zig-354-    var items: std.ArrayList(*Node) = .empty;
+src/regex.zig-355-    for (text) |c| try items.append(arena, try p.newNode(.{ .set = p.byteSet(c) }));
+src/regex.zig-356-    if (items.items.len == 0) return p.newNode(.empty);
+src/regex.zig-357-    if (items.items.len == 1) return items.items[0];
+src/regex.zig-358-    return p.newNode(.{ .cat = items.items });
+src/regex.zig-359-}
+src/regex.zig-360-
+src/regex.zig-361-fn nonWordSet() Set {
+--
+src/regex.zig-458-            if (found != null) return null;
+src/regex.zig-459-            found = @intCast(k);
+src/regex.zig-460-        }
+src/regex.zig-461-    }
+src/regex.zig-462-    return found;
+src/regex.zig-463-}
+src/regex.zig-464-
+src/regex.zig-465-/// Longest run of required literal bytes at the top level of the AST. With
+src/regex.zig:466:/// `icase`, a letter pair {a,A} counts and the run is returned lower-cased.
+src/regex.zig:467:pub fn requiredLiteral(arena: Allocator, n: *const Node, icase: bool) CompileError!?[]u8 {
+src/regex.zig-468-    const kids: []const *Node = switch (n.*) {
+src/regex.zig-469-        .cat => |k| k,
+src/regex.zig-470-        .set => blk: {
+src/regex.zig-471-            const one = try arena.alloc(*Node, 1);
+src/regex.zig-472-            one[0] = @constCast(n);
+src/regex.zig-473-            break :blk one;
+src/regex.zig-474-        },
+src/regex.zig-475-        else => return null,
+src/regex.zig-476-    };
+src/regex.zig-477-    var best: []u8 = &.{};
+src/regex.zig-478-    var cur: std.ArrayList(u8) = .empty;
+src/regex.zig-479-    for (kids) |k| {
+src/regex.zig-480-        var byte: ?u8 = null;
+src/regex.zig-481-        switch (k.*) {
+src/regex.zig:482:            .set => |s| byte = litByte(s, icase),
+src/regex.zig-483-            else => {},
+src/regex.zig-484-        }
+src/regex.zig-485-        if (byte) |b| {
+src/regex.zig-486-            try cur.append(arena, b);
+src/regex.zig-487-        } else {
+src/regex.zig-488-            if (cur.items.len > best.len) best = cur.items;
+src/regex.zig-489-            cur = .empty;
+src/regex.zig-490-        }
+src/regex.zig-491-    }
+src/regex.zig-492-    if (cur.items.len > best.len) best = cur.items;
+src/regex.zig-493-    if (best.len == 0) return null;
+src/regex.zig-494-    return best;
+src/regex.zig-495-}
+src/regex.zig-496-
+src/regex.zig:497:fn litByte(s: Set, icase: bool) ?u8 {
+src/regex.zig-498-    var first: ?u8 = null;
+src/regex.zig-499-    var second: ?u8 = null;
+src/regex.zig-500-    for (0..256) |k| {
+src/regex.zig-501-        if (!s[k]) continue;
+src/regex.zig-502-        if (first == null) {
+src/regex.zig-503-            first = @intCast(k);
+src/regex.zig-504-        } else if (second == null) {
+src/regex.zig-505-            second = @intCast(k);
+src/regex.zig-506-        } else return null;
+src/regex.zig-507-    }
+src/regex.zig-508-    const f = first orelse return null;
+src/regex.zig:509:    if (second == null) return if (icase) std.ascii.toLower(f) else f;
+src/regex.zig:510:    if (!icase) return null;
+src/regex.zig-511-    const sc = second.?;
+src/regex.zig-512-    if (std.ascii.isAlphabetic(f) and std.ascii.isAlphabetic(sc) and std.ascii.toLower(f) == std.ascii.toLower(sc)) return std.ascii.toLower(f);
+src/regex.zig-513-    return null;
+src/regex.zig-514-}
+src/regex.zig-515-
+src/regex.zig-516-// ---------------------------------------------------------------------------
+src/regex.zig-517-// NFA program
+src/regex.zig-518-// ---------------------------------------------------------------------------
+--
+src/regex.zig-1140-    try std.testing.expect(!try testMatch("^abc", "xabc", plain));
+src/regex.zig-1141-    try std.testing.expect(try testMatch("abc$", "xxabc", plain));
+src/regex.zig-1142-    try std.testing.expect(!try testMatch("abc$", "abcx", plain));
+src/regex.zig-1143-    try std.testing.expect(try testMatch("^$", "a\n\nb", plain));
+src/regex.zig-1144-    try std.testing.expect(try testMatch("^a.*z$", "abcz", plain));
+src/regex.zig-1145-}
+src/regex.zig-1146-
+src/regex.zig-1147-test "regex: case-insensitive and whole word" {
+src/regex.zig:1148:    try std.testing.expect(try testMatch("hello", "Say HeLLo", .{ .icase = true }));
+src/regex.zig-1149-    try std.testing.expect(!try testMatch("hello", "Say HeLLo", plain));
+src/regex.zig:1150:    try std.testing.expect(try testMatch("[a-c]x", "BX", .{ .icase = true }));
+src/regex.zig-1151-    try std.testing.expect(try testMatch("cat", "a cat sat", .{ .word = true }));
+src/regex.zig-1152-    try std.testing.expect(!try testMatch("cat", "concatenate", .{ .word = true }));
+src/regex.zig-1153-    try std.testing.expect(try testMatch("cat", "cat", .{ .word = true }));
+src/regex.zig-1154-    try std.testing.expect(try testMatch("cat", "(cat)", .{ .word = true }));
+src/regex.zig-1155-}
+src/regex.zig-1156-
+src/regex.zig-1157-test "regex: multiline buffer returns the first matching line start" {
+src/regex.zig-1158-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+--
+src/search.zig-113-
+src/search.zig-114-pub const Searcher = struct {
+src/search.zig-115-    needle: []const u8,
+src/search.zig-116-    algo: Algo,
+src/search.zig-117-    /// `.literal` (default, the original fast path) or `.regex` (lazy DFA).
+src/search.zig-118-    kind: Kind = .literal,
+src/search.zig-119-    /// Literal kinds only: `needle` is stored lower-cased and matched ASCII
+src/search.zig-120-    /// case-insensitively.
+src/search.zig:121:    icase: bool = false,
+src/search.zig-122-    /// Literal kinds only: a match must be delimited by non-word bytes (-w).
+src/search.zig-123-    word: bool = false,
+src/search.zig-124-    /// `--crlf`: `$` also accepts before the CR of a CRLF pair.
+src/search.zig-125-    crlf: bool = false,
+src/search.zig-126-    /// `-U`: matches may span newlines.
+src/search.zig-127-    multiline: bool = false,
+src/search.zig-128-    /// `--null-data`: NUL separates records, so a record may contain `\n`.
+src/search.zig-129-    null_data: bool = false,
+--
+src/search.zig-213-        const sp = span orelse return null;
+src/search.zig-214-        return .{ .start = sp.start, .end = sp.end };
+src/search.zig-215-    }
+src/search.zig-216-
+src/search.zig-217-    fn findRaw(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+src/search.zig-218-        const n = self.needle.len;
+src/search.zig-219-        if (n == 0) return if (start <= hay.len) start else null;
+src/search.zig-220-        if (start >= hay.len or hay.len - start < n) return null;
+src/search.zig:221:        if (self.icase) return self.findCi(hay, start);
+src/search.zig-222-        return switch (self.effectiveAlgo()) {
+src/search.zig-223-            .bmh => self.findBmh(hay, start),
+src/search.zig-224-            .memchr => self.findMemchr(hay, start),
+src/search.zig-225-            .auto => unreachable,
+src/search.zig-226-        };
+src/search.zig-227-    }
+src/search.zig-228-
+src/search.zig-229-    fn isWordByte(c: u8) bool {
+--
+src/search.zig-344-        return null;
+src/search.zig-345-    }
+src/search.zig-346-};
+src/search.zig-347-
+src/search.zig-348-pub const BuildOptions = struct {
+src/search.zig-349-    algo: Algo = .auto,
+src/search.zig-350-    /// Treat every pattern as a fixed string (-F).
+src/search.zig-351-    fixed: bool = false,
+src/search.zig:352:    icase: bool = false,
+src/search.zig-353-    word: bool = false,
+src/search.zig-354-    /// The pattern must match a whole line (-x).
+src/search.zig-355-    line: bool = false,
+src/search.zig-356-    /// `--crlf`: `$` also accepts before the CR of a CRLF pair.
+src/search.zig-357-    crlf: bool = false,
+src/search.zig-358-    /// `--null-data`: NUL separates records, so a record may contain `\n`.
+src/search.zig-359-    null_data: bool = false,
+src/search.zig-360-    /// `-G`: BRE patterns, translated to ERE before compiling.
+--
+src/search.zig-391-            patterns[0]
+src/search.zig-392-        else blk: {
+src/search.zig-393-            const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+src/search.zig-394-            const n = try regex.parse(arena, src, .{});
+src/search.zig-395-            break :blk try regex.asPureLiteral(arena, n);
+src/search.zig-396-        };
+src/search.zig-397-        if (pure) |lit| {
+src/search.zig-398-            const text = try gpa.dupe(u8, lit);
+src/search.zig:399:            if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+src/search.zig:400:            if (o.icase) for (text) |*c| {
+src/search.zig-401-                c.* = toLowerByte(c.*);
+src/search.zig-402-            };
+src/search.zig-403-            var s = Searcher.init(text, o.algo);
+src/search.zig:404:            s.icase = o.icase;
+src/search.zig-405-            s.word = o.word;
+src/search.zig-406-            return s;
+src/search.zig-407-        }
+src/search.zig-408-    }
+src/search.zig-409-
+src/search.zig-410-    const nodes = try arena.alloc(*regex.Node, patterns.len);
+src/search.zig-411-    for (patterns, 0..) |p, idx| {
+src/search.zig-412-        const src = if (o.basic) bre.breToEre(arena, p) else p;
+src/search.zig-413-        var n = if (o.fixed)
+src/search.zig:414:            try regex.literalNode(arena, src, o.icase)
+src/search.zig-415-        else
+src/search.zig:416:            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+src/search.zig-417-        if (o.line) n = try regex.lineWrap(arena, n);
+src/search.zig-418-        if (o.word) n = try regex.wordWrap(arena, n);
+src/search.zig-419-        nodes[idx] = n;
+src/search.zig-420-    }
+src/search.zig-421-    const root = try regex.altOf(arena, nodes);
+src/search.zig-422-    const prog = try regex.compile(gpa, root);
+src/search.zig-423-
+src/search.zig-424-    var s = Searcher.init("", o.algo);
+src/search.zig-425-    s.kind = .regex;
+src/search.zig-426-    s.prog = prog;
+src/search.zig:427:    s.icase = o.icase;
+src/search.zig-428-    s.crlf = o.crlf;
+src/search.zig-429-    s.multiline = o.multiline;
+src/search.zig-430-    s.null_data = o.null_data;
+src/search.zig-431-    if (patterns.len == 1) {
+src/search.zig:432:        if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
+src/search.zig-433-            if (lit.len >= 3) {
+src/search.zig-434-                const text = try gpa.dupe(u8, lit);
+src/search.zig-435-                const pf = try gpa.create(Searcher);
+src/search.zig-436-                pf.* = Searcher.init(text, o.algo);
+src/search.zig:437:                pf.icase = o.icase;
+src/search.zig-438-                s.prefilter = pf;
+src/search.zig-439-            }
+src/search.zig-440-        }
+src/search.zig-441-    }
+src/search.zig-442-    return s;
+src/search.zig-443-}
+src/search.zig-444-
+src/search.zig-445-fn naiveFind(hay: []const u8, needle: []const u8, start: usize) ?usize {
+--
+src/search.zig-560-    _ = a;
+src/search.zig-561-    // build() allocations are process-lifetime; use page_allocator here.
+src/search.zig-562-    const pa = std.heap.page_allocator;
+src/search.zig-563-    const lit = try build(pa, &.{"const"}, .{});
+src/search.zig-564-    try std.testing.expectEqual(Kind.literal, lit.kind);
+src/search.zig-565-    const dotted = try build(pa, &.{"a\\.b"}, .{});
+src/search.zig-566-    try std.testing.expectEqual(Kind.literal, dotted.kind);
+src/search.zig-567-    try std.testing.expectEqualStrings("a.b", dotted.needle);
+src/search.zig:568:    const ci = try build(pa, &.{"HeLLo"}, .{ .icase = true });
+src/search.zig-569-    try std.testing.expectEqual(@as(?usize, 4), ci.find("say hello", 0));
+src/search.zig-570-    try std.testing.expectEqual(@as(?usize, null), lit.find("say CONST", 0));
+src/search.zig-571-    const wd = try build(pa, &.{"cat"}, .{ .word = true });
+src/search.zig-572-    try std.testing.expectEqual(@as(?usize, null), wd.find("concatenate", 0));
+src/search.zig-573-    try std.testing.expectEqual(@as(?usize, 2), wd.find("a cat", 0));
+src/search.zig-574-    const re = try build(pa, &.{"fo+bar"}, .{});
+src/search.zig-575-    try std.testing.expectEqual(Kind.regex, re.kind);
+src/search.zig-576-    try std.testing.expectEqual(@as(?usize, 4), re.find("xxx\nfoobar\n", 0));
+src/search.zig-577-    const multi = try build(pa, &.{ "zzz", "bar" }, .{ .fixed = true });
+src/search.zig-578-    try std.testing.expectEqual(Kind.regex, multi.kind);
+src/search.zig-579-    try std.testing.expectEqual(@as(?usize, 4), multi.find("foo\nbar\n", 0));
+src/search.zig-580-    try std.testing.expectError(error.BadRegex, build(pa, &.{"a(b"}, .{}));
+src/search.zig-581-
+src/search.zig-582-    // Unicode Latin-1 case-folding test (ñ, á, é, í, ó, ú)
+src/search.zig:583:    const latin_ci = try build(pa, &.{"ñandú"}, .{ .icase = true, .fixed = true });
+src/search.zig-584-    try std.testing.expectEqual(@as(?usize, 3), latin_ci.find("El ÑANDÚ veloz", 0));
+src/search.zig:585:    const latin_upper = try build(pa, &.{"ÁRBOL"}, .{ .icase = true, .fixed = true });
+src/search.zig-586-    try std.testing.expectEqual(@as(?usize, 3), latin_upper.find("un árbol verde", 0));
+src/search.zig-587-}
+src/search.zig-588-
+src/search.zig-589-// ---------------------------------------------------------------------------
+src/search.zig-590-// Tests: -x whole-line matching and the empty-pattern-list (-f with an empty
+src/search.zig-591-// file) case.
+src/search.zig-592-// ---------------------------------------------------------------------------
+src/search.zig-593-
+--
+src/search.zig-600-    try std.testing.expectEqual(@as(?usize, null), s.find("cat ", 0));
+src/search.zig-601-    try std.testing.expectEqual(@as(?usize, null), s.find("a cat", 0));
+src/search.zig-602-    // works over a whole buffer: only the exact line answers
+src/search.zig-603-    try std.testing.expectEqual(@as(?usize, 0), s.find("cat\ndog\n", 0));
+src/search.zig-604-}
+src/search.zig-605-
+src/search.zig-606-test "build: -x with -i folds the whole line" {
+src/search.zig-607-    const pa = std.heap.page_allocator;
+src/search.zig:608:    const s = try build(pa, &.{"CAT"}, .{ .line = true, .icase = true });
+src/search.zig-609-    try std.testing.expectEqual(@as(?usize, 0), s.find("cat", 0));
+src/search.zig-610-    try std.testing.expectEqual(@as(?usize, 0), s.find("CaT", 0));
+src/search.zig-611-    try std.testing.expectEqual(@as(?usize, null), s.find("scat", 0));
+src/search.zig-612-}
+src/search.zig-613-
+src/search.zig-614-test "build: -x with -F is a real whole line" {
+src/search.zig-615-    const pa = std.heap.page_allocator;
+src/search.zig-616-    const s = try build(pa, &.{"a.b"}, .{ .line = true, .fixed = true });

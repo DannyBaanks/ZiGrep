@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer does not give the definite 'not by default, only with --include-out' reply, but it correctly identifies hasInstallLink and that deployed zig-out dirs are protected; it is hedged and incomplete.",
+ "cost_usd": 0.00602
+}

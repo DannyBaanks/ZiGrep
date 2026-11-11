@@ -1,0 +1,180 @@
+CONTEXT PACK `registry`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 10 in 2 file(s); by role: code 4, comment 1, doc_comment 5
+  declarations found by pattern: 1
+
+DEFINITION
+[h7] const/var `registry` in file top level
+  src/types.zig:14-14  sha256:2e003e59da2ed951  relation: declaration (pattern match, heuristic)
+>   14 | pub const registry = [_]Type{
+
+REFERENCES
+src/types.zig in fn:lookup
+  [h8] line 67 `registry`: same_file_top_level -> h7 (heuristic; single top-level declaration in src/types.zig:14, no local shadow found)
+  src/types.zig:66-71  sha256:9ce882efdbf5c226
+    66 | pub fn lookup(name: []const u8) ?Type {
+>   67 |     for (registry) |t| {
+    68 |         if (std.ascii.eqlIgnoreCase(t.name, name)) return t;
+    69 |     }
+    70 |     return null;
+    71 | }
+src/types.zig in fn:writeList
+  [h9] line 75 `registry`: same_file_top_level -> h7 (heuristic; single top-level declaration in src/types.zig:14, no local shadow found)
+  src/types.zig:74-85  sha256:dffbcef82eaa9335
+    74 | pub fn writeList(buf: *std.ArrayList(u8), gpa: Allocator) Allocator.Error!void {
+>   75 |     for (registry) |t| {
+    76 |         try buf.appendSlice(gpa, t.name);
+    77 |         try buf.append(gpa, ':');
+    78 |         for (t.exts, 0..) |ext, i| {
+    79 |             if (i != 0) try buf.append(gpa, ',');
+    80 |             try buf.append(gpa, ' ');
+    81 |             try buf.appendSlice(gpa, ext);
+    82 |         }
+    83 |         try buf.append(gpa, '\n');
+    84 |     }
+    85 | }
+mentions inside comments or strings (6): textual only, not a dependency
+  [h1] src/main.zig:328 (doc_comment) /// `--type-list`: print the type registry and exit.
+  [h2] src/main.zig:695 (doc_comment) /// `-t py` / `--type-not py`: adds the registry's extensions to the include
+  [h3] src/main.zig:729 (doc_comment) /// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+  [h4] src/main.zig:2101 (comment) // `--type-list` is an answer too: the registry, on stdout, exit 0.
+  [h5] src/types.zig:1 (doc_comment) //! Static type registry for `-t` / `--type-not` / `--type-list`.
+  [h6] src/types.zig:3 (doc_comment) //! Mirrors the rg registry in spirit (name -> extensions) with a curated
+src/main.zig in container:Options: textual mention(s) only, not a code reference: [h1] line 328 (doc_comment)
+  src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+  src/main.zig:320-336  sha256:32147991fa4b12c2
+   320 |     basic_regexp: bool = false,
+   321 |     /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
+   322 |     smart_case: bool = false,
+   323 |     /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+   324 |     type_include: [8]types.Type = undefined,
+   325 |     type_include_count: usize = 0,
+   326 |     type_exclude: [8]types.Type = undefined,
+   327 |     type_exclude_count: usize = 0,
+>  328 |     /// `--type-list`: print the type registry and exit.
+   329 |     print_type_list: bool = false,
+   330 |     /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+   331 |     binary_files: BinaryFiles = .without_match,
+   332 |     /// `--exclude-from=FILE` (grep): globs, one per line.
+   333 |     exclude_from: [8][]const u8 = undefined,
+   334 |     exclude_from_count: usize = 0,
+   335 |     /// `--max-depth=N` (rg; long only, `-d` is grep's --directories).
+   336 |     max_depth: usize = 0,
+src/main.zig in file: textual mention(s) only, not a code reference: [h2] line 695 (doc_comment), [h3] line 729 (doc_comment)
+  src/main.zig:687-703  sha256:d0ecc57a371068bc
+   687 |         } else {
+   688 |             if (!no_messages) std.debug.print("zgrep: could not run: {s}\n", .{argv.items[0]});
+   689 |             ok = false;
+   690 |         }
+   691 |     }
+   692 |     return ok;
+   693 | }
+   694 | 
+>  695 | /// `-t py` / `--type-not py`: adds the registry's extensions to the include
+   696 | /// or exclude lists. An unknown name is a usage error, like rg.
+   697 | fn addType(opts: *Options, name: []const u8, include: bool) usage_error!void {
+   698 |     const t = types.lookup(name) orelse {
+   699 |         opts.fail = .{ .what = "unknown type name (see --type-list)", .arg = name };
+   700 |         return error.Usage;
+   701 |     };
+   702 |     const list = if (include) &opts.type_include else &opts.type_exclude;
+   703 |     const count = if (include) &opts.type_include_count else &opts.type_exclude_count;
+  src/main.zig:721-737  sha256:8b2cc329a43372ec
+   721 |         'g', 'G' => 1024 * 1024 * 1024,
+   722 |         't', 'T' => 1024 * 1024 * 1024 * 1024,
+   723 |         else => 1,
+   724 |     };
+   725 |     if (mult != 1) v = v[0 .. v.len - 1];
+   726 |     return (parseCount(v) orelse return null) *| mult;
+   727 | }
+   728 | 
+>  729 | /// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+   730 | fn applyTypes(filter_engine: *filter.FilterEngine, opts: *const Options) void {
+   731 |     for (opts.type_include[0..opts.type_include_count]) |t| {
+   732 |         for (t.exts) |ext| filter_engine.addIncludedExts(ext) catch {};
+   733 |     }
+   734 |     for (opts.type_exclude[0..opts.type_exclude_count]) |t| {
+   735 |         for (t.exts) |ext| filter_engine.addExcludedExts(ext) catch {};
+   736 |     }
+   737 | }
+src/main.zig in fn:runSearch: textual mention(s) only, not a code reference: [h4] line 2101 (comment)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2093-2109  sha256:9c64542c5e15b89f
+  2093 |             .include_out = opts.cache_include_out,
+  2094 |             .depth = opts.cache_depth,
+  2095 |             .dry_run = opts.cache_dry_run,
+  2096 |             .force = opts.cache_force,
+  2097 |         });
+  2098 |         return code;
+  2099 |     }
+  2100 | 
+> 2101 |     // `--type-list` is an answer too: the registry, on stdout, exit 0.
+  2102 |     if (opts.print_type_list) {
+  2103 |         var buf: std.ArrayList(u8) = .empty;
+  2104 |         defer buf.deinit(gpa);
+  2105 |         types.writeList(&buf, gpa) catch {
+  2106 |             std.debug.print("zgrep: out of memory\n", .{});
+  2107 |             return 2;
+  2108 |         };
+  2109 |         _ = platform.writeStdout(init.io, buf.items);
+src/types.zig in file: textual mention(s) only, not a code reference: [h5] line 1 (doc_comment), [h6] line 3 (doc_comment)
+  src/types.zig:1-11  sha256:1d9136a47455fa5a
+>    1 | //! Static type registry for `-t` / `--type-not` / `--type-list`.
+     2 | //!
+>    3 | //! Mirrors the rg registry in spirit (name -> extensions) with a curated
+     4 | //! subset: enough for everyday source trees, not the 150 languages rg lists.
+     5 | //! Unknown type names are a usage error, exactly like rg.
+     6 | const std = @import("std");
+     7 | const Allocator = std.mem.Allocator;
+     8 | 
+     9 | pub const Type = struct {
+    10 |     name: []const u8,
+    11 |     exts: []const []const u8,
+
+TESTS
+src/types.zig in test:types: --type-list prints every type  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h10] line 104 `registry`: same_file_top_level -> h7 (heuristic; single top-level declaration in src/types.zig:14, no local shadow found)
+  src/types.zig:94-105  sha256:d346a71146d076a5
+    94 | test "types: --type-list prints every type" {
+    95 |     var buf: std.ArrayList(u8) = .empty;
+    96 |     defer buf.deinit(std.testing.allocator);
+    97 |     try writeList(&buf, std.testing.allocator);
+    98 |     const out = buf.items;
+    99 |     var count: usize = 0;
+   100 |     var it = std.mem.splitScalar(u8, out, '\n');
+   101 |     while (it.next()) |line| {
+   102 |         if (line.len > 0) count += 1;
+   103 |     }
+>  104 |     try std.testing.expectEqual(registry.len, count);
+   105 | }
+
+STRUCTURE
+src/main.zig (3648 lines, 70 declarations; '*' = contains a hit; only the 2 with hits shown)
+  *   247-402   container Options
+  *  2029-2774  fn runSearch
+src/types.zig (106 lines, 5 declarations; '*' = contains a hit)
+        9-12    container Type
+  *    66-71    fn lookup
+  *    74-85    fn writeList
+       87-92    test types: lookup and case-insensitive names
+  *    94-105   test types: --type-list prints every type
+
+HISTORY
+[h7] src/types.zig:14 last changed by 69193b76df 2026-11-10 "paridad con rg: -S, -t/-T/--type-list, --max-depth, --max-filesize, --exclude-from, --binary-files, -b" (git blame)
+src/main.zig: last commit 53c34ef	2026-11-11	fix(M9): la ventana leia text[len] al llegar al final de la linea
+src/types.zig: last commit 69193b7	2026-11-09	paridad con rg: -S, -t/-T/--type-list, --max-depth, --max-filesize, --exclude-from, --binary-files, -b
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.registry), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 714 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 18

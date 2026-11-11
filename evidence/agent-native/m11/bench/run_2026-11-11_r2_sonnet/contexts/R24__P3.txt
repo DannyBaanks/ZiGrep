@@ -1,0 +1,202 @@
+CONTEXT PACK `binary_probe_bytes`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 3 file(s); by role: code 6
+  declarations found by pattern: 1
+
+DEFINITION
+[h2] const/var `binary_probe_bytes` in file top level
+  src/scan.zig:89-91  sha256:6acf3ed3544d4327  relation: declaration (pattern match, heuristic)
+    89 | /// NUL probe window used to decide a file is binary, aligned with GNU grep's
+    90 | /// first-block check and ripgrep's default heuristic.
+>   91 | pub const binary_probe_bytes = 8192;
+
+REFERENCES
+src/main.zig in fn:runSearch
+  [h1] line 2293 `scan.binary_probe_bytes`: import_qualified -> h2 (heuristic; src/main.zig: const scan = @import("scan.zig"))
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2285-2301  sha256:aaeba7e124f17669
+  2285 |             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+  2286 |             .json = opts.json,
+  2287 |             .provenance = opts.provenance,
+  2288 |         };
+  2289 |         const path_label = "(standard input)";
+  2290 |         const show_p = opts.show_path orelse false;
+  2291 | 
+  2292 |         const data = stdin_buf.items;
+> 2293 |         const probe = @min(data.len, scan.binary_probe_bytes);
+  2294 |         const utf16_bom = scan.isUtf16Bom(data);
+  2295 |         const is_bin = !opts.binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+  2296 |         if (is_bin) {
+  2297 |             if (opts.mode == .lines) {
+  2298 |                 std.debug.print("Binary file (standard input) matches\n", .{});
+  2299 |             }
+  2300 |             return 0;
+  2301 |         }
+src/scan.zig in fn:processBuffer
+  [h3] line 953 `binary_probe_bytes`: same_file_top_level -> h2 (heuristic; single top-level declaration in src/scan.zig:91, no local shadow found)
+  src/scan.zig:941-994  sha256:85dce18b603446ca
+   941 | fn processBuffer(
+   942 |     gpa: Allocator,
+   943 |     searcher: *const Searcher,
+   944 |     data: []const u8,
+   945 |     path: []const u8,
+   946 |     show_path: bool,
+   947 |     mode: Mode,
+   948 |     binary: bool,
+   949 |     config: ScanConfig,
+   950 |     out: *std.ArrayList(u8),
+   951 |     res: *FileScan,
+   952 | ) void {
+>  953 |     const probe = @min(data.len, binary_probe_bytes);
+   954 |     const utf16_bom = if (config.encoding == .none)
+   955 |         null
+   956 |     else if (forcedBom(config.encoding)) |f|
+   957 |         f
+   958 |     else if (config.encoding == .utf16)
+   959 |         isUtf16Bom(data) orelse .le
+   960 |     else
+   961 |         isUtf16Bom(data);
+   962 |     // `--null-data` makes NUL the separator, so it can no longer mean
+   963 |     // "binary": that probe is off (rg does the same).
+   964 |     const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+   965 |     if (is_binary) return;
+   966 | 
+   967 |     if (utf16_bom) |bom| {
+   968 |         const decoded = decodeUtf16ToUtf8(gpa, data, bom == .le) catch {
+   969 |             res.err = .NOMEM;
+   970 |             return;
+   971 |         };
+   972 |         defer gpa.free(decoded);
+   973 |         const match = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
+   974 |             res.err = .NOMEM;
+   975 |             return;
+   976 |         };
+   977 |         res.matched = match.matched;
+   978 |         res.lines = match.lines;
+   979 |         res.matches = match.matches;
+   980 |         res.bytes = data.len;
+   981 |         return;
+   982 |     }
+   983 | 
+   984 |     const match = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
+   985 |         res.err = .NOMEM;
+   986 |         return;
+   987 |     };
+   988 |     res.matched = match.matched;
+   989 |     res.lines = match.lines;
+   990 |     // `--count-matches` counts MATCHES, not lines: without this the count
+   991 |     // was always 0 on this path (the UTF-16 branch above already had it).
+   992 |     res.matches = match.matches;
+   993 |     res.bytes = data.len;
+   994 | }
+src/scan.zig in fn:scanFileLinux
+  [h4] line 1081 `binary_probe_bytes`: same_file_top_level -> h2 (heuristic; single top-level declaration in src/scan.zig:91, no local shadow found)
+  [h5] line 1186 `binary_probe_bytes`: same_file_top_level -> h2 (heuristic; single top-level declaration in src/scan.zig:91, no local shadow found)
+  src/scan.zig:1006-1006  sha256:cd75acc62d4e5470
+  1006 | fn scanFileLinux(
+  src/scan.zig:1073-1089  sha256:4d1bf13955ff5035
+  1073 | 
+  1074 |         // Did the entire file fit in the scratch buffer?
+  1075 |         if (got < sbuf.len) {
+  1076 |             if (got == 0) {
+  1077 |                 if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, "", .file, .{ .fd = fd })) |e| res.err = e;
+  1078 |                 return res;
+  1079 |             }
+  1080 |             const data = sbuf[0..got];
+> 1081 |             const probe = @min(data.len, binary_probe_bytes);
+  1082 |             const utf16_bom = if (config.encoding == .none)
+  1083 |         null
+  1084 |     else if (forcedBom(config.encoding)) |f|
+  1085 |         f
+  1086 |     else if (config.encoding == .utf16)
+  1087 |         isUtf16Bom(data) orelse .le
+  1088 |     else
+  1089 |         isUtf16Bom(data);
+  src/scan.zig:1178-1194  sha256:ce8cb7e44ca3938d
+  1178 |         } else if (owned) |b| {
+  1179 |             gpa.free(b);
+  1180 |         }
+  1181 |     }
+  1182 | 
+  1183 |     // --- binary probe ------------------------------------------------------
+  1184 |     // `-a` disables it; otherwise a NUL in the first block means the file is
+  1185 |     // skipped entirely (grep `-I`, ripgrep default).
+> 1186 |     const probe = @min(data.len, binary_probe_bytes);
+  1187 |     const utf16_bom = if (config.encoding == .none)
+  1188 |         null
+  1189 |     else if (forcedBom(config.encoding)) |f|
+  1190 |         f
+  1191 |     else if (config.encoding == .utf16)
+  1192 |         isUtf16Bom(data) orelse .le
+  1193 |     else
+  1194 |         isUtf16Bom(data);
+src/uring_linux.zig in fn:scanAsyncBatch
+  [h6] line 189 `scan.binary_probe_bytes`: import_qualified -> h2 (heuristic; src/uring_linux.zig: const scan = @import("scan.zig"))
+  src/uring_linux.zig:80-80  sha256:cc64fe25edfeddea
+    80 |     pub fn scanAsyncBatch(
+  src/uring_linux.zig:181-209  sha256:d1fbad2356c49e1f
+   181 |                     }
+   182 |                     continue;
+   183 |                 }
+   184 | 
+   185 |                 // Normal file <= BUFFER_SIZE: scanned completely in the io_uring buffer!
+   186 |                 var fs = scan.FileScan{};
+   187 |                 if (n > 0) {
+   188 |                     const data = self.buffers[slot_idx][0..n];
+>  189 |                     const probe = @min(data.len, scan.binary_probe_bytes);
+   190 |                     const utf16_bom = scan.isUtf16Bom(data);
+   191 |                     const is_bin = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+   192 |                     if (!is_bin) {
+   193 |                         // Solo los bytes que de verdad se escanean (mismo
+   194 |                         // criterio que el camino síncrono: un binario no suma).
+   195 |                         result.bytes_scanned += n;
+   196 |                         if (utf16_bom) |bom| {
+   197 |                             if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
+   198 |                                 defer gpa.free(decoded);
+   199 |                                 const br = scan.scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch continue;
+   200 |                                 fs.matched = br.matched;
+   201 |                                 fs.lines = br.lines;
+   202 |                             } else |_| {}
+   203 |                         } else {
+   204 |                             const br = scan.scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch continue;
+   205 |                             fs.matched = br.matched;
+   206 |                             fs.lines = br.lines;
+   207 |                         }
+   208 |                     }
+   209 |                 }
+
+STRUCTURE
+src/main.zig (3648 lines, 70 declarations; '*' = contains a hit; only the 1 with hits shown)
+  *  2029-2774  fn runSearch
+src/scan.zig (2043 lines, 81 declarations; '*' = contains a hit; only the 2 with hits shown)
+  *   941-994   fn processBuffer
+  *  1006-1226  fn scanFileLinux
+src/uring_linux.zig (259 lines, 8 declarations; '*' = contains a hit)
+       24-33    fn isSupported
+  *    47-226   container UringScanner
+       54-62      fn create
+       64-67      fn destroy
+       69-77      fn deinit
+  *    80-225     fn scanAsyncBatch
+      228-231   test io_uring isSupported check
+      233-258   test io_uring UringScanner lifecycle and batch read
+
+HISTORY
+[h2] src/scan.zig:91 last changed by 1c293c2920 2026-11-08 "zgrep: grep-compatible fixed-string search in Zig + benchmark evidence pack" (git blame)
+src/main.zig: last commit 53c34ef	2026-11-11	fix(M9): la ventana leia text[len] al llegar al final de la linea
+src/scan.zig: last commit 404fd0d	2026-11-11	M5: el experimento (tokens reales) y --json=compact, que salio de sus datos
+src/uring_linux.zig: last commit 297be94	2026-11-10	M4: --provenance (sha256, size, mtime_ns por fichero) verificado contra sha256sum/stat
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.binary_probe_bytes), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 689 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 16

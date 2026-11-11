@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: `binary` is rejected at parse time with a usage error, `text` is equivalent to -a, and `without-match` is the default where a binary file is treated as not matching.",
+ "cost_usd": 0.006108000000000001
+}

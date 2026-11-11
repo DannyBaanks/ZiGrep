@@ -1,0 +1,250 @@
+CONTEXT PACK `breToEre`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 13 in 2 file(s); by role: code 10, string 3
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `breToEre` in fn:breToEre
+  src/bre.zig:11-43  sha256:f543dbe8a0255518  relation: declaration (pattern match, heuristic)
+    11 | /// Translates a BRE pattern into ERE, allocating in `arena`.
+    12 | ///
+    13 | /// The mapping (outside a bracket expression):
+    14 | ///   BRE        ERE          meaning
+    15 | ///   `\(`  ->   `(`          group open
+    16 | ///   `\)`  ->   `)`          group close
+    17 | ///   `\{`  ->   `{`          repeat open
+    18 | ///   `\}`  ->   `}`          repeat close
+    19 | ///   `\|`  ->   `|`          alternation
+    20 | ///   `\+`  ->   `+`          one or more
+    21 | ///   `\?`  ->   `?`          zero or one
+    22 | ///   `(`   ->   `\(`         literal parenthesis
+    23 | ///   `)`   ->   `\)`
+    24 | ///   `{`   ->   `\{`         literal brace
+    25 | ///   `}`   ->   `\}`
+    26 | ///   `|`   ->   `\|`         literal pipe
+    27 | ///   `+`   ->   `\+`         literal plus
+    28 | ///   `?`   ->   `\?`         literal question
+    29 | ///   `*` at the start of a pattern, branch or group is a LITERAL in BRE
+    30 | ///
+    31 | /// Inside `[...]` both dialects agree except for `[[:class:]]`, which is POSIX
+    32 | /// and works in both.
+>   33 | pub fn breToEre(arena: std.mem.Allocator, pattern: []const u8) []const u8 {
+    34 |     var out: std.ArrayList(u8) = .empty;
+    35 |     // Zgrep runs are bounded; a failed allocation just returns the pattern
+    36 |     // unchanged, which then fails parsing with a clear message.
+    37 |     breToEreInto(arena, pattern, &out) catch {
+    38 |         out.deinit(arena);
+    39 |         return pattern;
+    40 |     };
+    41 |     if (out.items.len == 0) return "";
+    42 |     return out.toOwnedSlice(arena) catch pattern;
+    43 | }
+
+REFERENCES
+src/search.zig in fn:build
+  [h12] line 393 `bre.breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  [h13] line 412 `bre.breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  src/search.zig:376-376  sha256:b32002d9bfec3936
+   376 | pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) BuildError!Searcher {
+  src/search.zig:385-420  sha256:9844a4d83cd246a2
+   385 |         s.kind = .never;
+   386 |         return s;
+   387 |     }
+   388 | 
+   389 |     if (patterns.len == 1 and !o.line) {
+   390 |         const pure: ?[]const u8 = if (o.fixed)
+   391 |             patterns[0]
+   392 |         else blk: {
+>  393 |             const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+   394 |             const n = try regex.parse(arena, src, .{});
+   395 |             break :blk try regex.asPureLiteral(arena, n);
+   396 |         };
+   397 |         if (pure) |lit| {
+   398 |             const text = try gpa.dupe(u8, lit);
+   399 |             if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+   400 |             if (o.icase) for (text) |*c| {
+   401 |                 c.* = toLowerByte(c.*);
+   402 |             };
+   403 |             var s = Searcher.init(text, o.algo);
+   404 |             s.icase = o.icase;
+   405 |             s.word = o.word;
+   406 |             return s;
+   407 |         }
+   408 |     }
+   409 | 
+   410 |     const nodes = try arena.alloc(*regex.Node, patterns.len);
+   411 |     for (patterns, 0..) |p, idx| {
+>  412 |         const src = if (o.basic) bre.breToEre(arena, p) else p;
+   413 |         var n = if (o.fixed)
+   414 |             try regex.literalNode(arena, src, o.icase)
+   415 |         else
+   416 |             try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+   417 |         if (o.line) n = try regex.lineWrap(arena, n);
+   418 |         if (o.word) n = try regex.wordWrap(arena, n);
+   419 |         nodes[idx] = n;
+   420 |     }
+mentions inside comments or strings (3): textual only, not a dependency
+  [h2] src/bre.zig:152 (string) test "breToEre: the inverted escapes" {
+  [h4] src/bre.zig:175 (string) test "breToEre: a leading * stays literal" {
+  [h8] src/bre.zig:183 (string) test "breToEre: classes are left alone" {
+
+TESTS
+src/bre.zig in test:breToEre: the inverted escapes  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h3] line 170 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  src/bre.zig:152-173  sha256:5647ec75309d3c88
+   152 | test "breToEre: the inverted escapes" {
+   153 |     const a = std.testing.allocator;
+   154 |     const cases = [_][2][]const u8{
+   155 |         .{ "a\\(b\\)c", "a(b)c" },
+   156 |         .{ "a\\{2\\}", "a{2}" },
+   157 |         .{ "a\\|b", "a|b" },
+   158 |         .{ "a\\+", "a+" },
+   159 |         .{ "a\\?", "a?" },
+   160 |         .{ "a(b)c", "a\\(b\\)c" },
+   161 |         .{ "a{2}", "a\\{2\\}" },
+   162 |         .{ "a|b", "a\\|b" },
+   163 |         .{ "a+b", "a\\+b" },
+   164 |         .{ "a?b", "a\\?b" },
+   165 |         .{ "a*", "a*" },
+   166 |     };
+   167 |     for (cases) |c| {
+   168 |         var arena = std.heap.ArenaAllocator.init(a);
+   169 |         defer arena.deinit();
+>  170 |         const got = breToEre(arena.allocator(), c[0]);
+   171 |         try std.testing.expectEqualStrings(c[1], got);
+   172 |     }
+   173 | }
+src/bre.zig in test:breToEre: a leading * stays literal  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h5] line 178 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  [h6] line 179 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  [h7] line 180 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  src/bre.zig:175-181  sha256:fee3ad9458c19ac4
+   175 | test "breToEre: a leading * stays literal" {
+   176 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   177 |     defer arena.deinit();
+>  178 |     try std.testing.expectEqualStrings("\\*ab", breToEre(arena.allocator(), "*ab"));
+>  179 |     try std.testing.expectEqualStrings("a*b", breToEre(arena.allocator(), "a*b"));
+>  180 |     try std.testing.expectEqualStrings("(ab)*c", breToEre(arena.allocator(), "\\(ab\\)*c"));
+   181 | }
+src/bre.zig in test:breToEre: classes are left alone  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h9] line 186 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  [h10] line 188 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  [h11] line 190 `breToEre`: unresolved (lexical_only; 1 declaration(s) named breToEre; none is linked by checkable evidence)
+  src/bre.zig:183-191  sha256:8c0cab12ec430ca2
+   183 | test "breToEre: classes are left alone" {
+   184 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   185 |     defer arena.deinit();
+>  186 |     try std.testing.expectEqualStrings("[abc]", breToEre(arena.allocator(), "[abc]"));
+   187 |     // In BRE a `+` after a class is a LITERAL plus, so it must be escaped.
+>  188 |     try std.testing.expectEqualStrings("[[:digit:]]\\+", breToEre(arena.allocator(), "[[:digit:]]+"));
+   189 |     // A `(` inside a class is a literal in both dialects.
+>  190 |     try std.testing.expectEqualStrings("[(]", breToEre(arena.allocator(), "[(]"));
+   191 | }
+src/bre.zig in test:breToEre: the inverted escapes: textual mention(s) only, not a code reference: [h2] line 152 (string)
+  src/bre.zig:152-173  sha256:5647ec75309d3c88
+>  152 | test "breToEre: the inverted escapes" {
+   153 |     const a = std.testing.allocator;
+   154 |     const cases = [_][2][]const u8{
+   155 |         .{ "a\\(b\\)c", "a(b)c" },
+   156 |         .{ "a\\{2\\}", "a{2}" },
+   157 |         .{ "a\\|b", "a|b" },
+   158 |         .{ "a\\+", "a+" },
+   159 |         .{ "a\\?", "a?" },
+   160 |         .{ "a(b)c", "a\\(b\\)c" },
+   161 |         .{ "a{2}", "a\\{2\\}" },
+   162 |         .{ "a|b", "a\\|b" },
+   163 |         .{ "a+b", "a\\+b" },
+   164 |         .{ "a?b", "a\\?b" },
+   165 |         .{ "a*", "a*" },
+   166 |     };
+   167 |     for (cases) |c| {
+   168 |         var arena = std.heap.ArenaAllocator.init(a);
+   169 |         defer arena.deinit();
+   170 |         const got = breToEre(arena.allocator(), c[0]);
+   171 |         try std.testing.expectEqualStrings(c[1], got);
+   172 |     }
+   173 | }
+src/bre.zig in test:breToEre: a leading * stays literal: textual mention(s) only, not a code reference: [h4] line 175 (string)
+  src/bre.zig:175-181  sha256:fee3ad9458c19ac4
+>  175 | test "breToEre: a leading * stays literal" {
+   176 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   177 |     defer arena.deinit();
+   178 |     try std.testing.expectEqualStrings("\\*ab", breToEre(arena.allocator(), "*ab"));
+   179 |     try std.testing.expectEqualStrings("a*b", breToEre(arena.allocator(), "a*b"));
+   180 |     try std.testing.expectEqualStrings("(ab)*c", breToEre(arena.allocator(), "\\(ab\\)*c"));
+   181 | }
+src/bre.zig in test:breToEre: classes are left alone: textual mention(s) only, not a code reference: [h8] line 183 (string)
+  src/bre.zig:183-191  sha256:8c0cab12ec430ca2
+>  183 | test "breToEre: classes are left alone" {
+   184 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   185 |     defer arena.deinit();
+   186 |     try std.testing.expectEqualStrings("[abc]", breToEre(arena.allocator(), "[abc]"));
+   187 |     // In BRE a `+` after a class is a LITERAL plus, so it must be escaped.
+   188 |     try std.testing.expectEqualStrings("[[:digit:]]\\+", breToEre(arena.allocator(), "[[:digit:]]+"));
+   189 |     // A `(` inside a class is a literal in both dialects.
+   190 |     try std.testing.expectEqualStrings("[(]", breToEre(arena.allocator(), "[(]"));
+   191 | }
+
+STRUCTURE
+src/bre.zig (192 lines, 5 declarations; '*' = contains a hit)
+  *    33-43    fn breToEre
+       45-150   fn breToEreInto
+  *   152-173   test breToEre: the inverted escapes
+  *   175-181   test breToEre: a leading * stays literal
+  *   183-191   test breToEre: classes are left alone
+src/search.zig (641 lines, 36 declarations; '*' = contains a hit)
+       21-21    container Algo
+       92-94    fn isCaseFoldable
+       96-100   fn toLowerByte
+      102-102   container Kind
+      105-112   container Match
+      109-111     fn slice
+      114-346   container Searcher
+      142-167     fn init
+      170-175     fn effectiveAlgo
+      183-188     fn find
+      198-200     fn findSpan
+      202-215     fn matchSpan
+      217-227     fn findRaw
+      229-231     fn isWordByte
+      233-244     fn findWord
+      247-264     fn scanCi
+      266-286     fn findCi
+      288-311     fn findRegex
+      313-329     fn findBmh
+      331-345     fn findMemchr
+      348-366   container BuildOptions
+  *   376-443   fn build
+      445-453   fn naiveFind
+      455-464   test skip table: pattern length and per-byte shift
+      466-487   test find: known positions
+      489-493   test find: needle longer than haystack
+      495-500   test find: single byte needle degenerates to a scalar scan
+      502-509   test find: repeated pattern does not loop forever
+      511-516   test find: empty needle matches at every position
+      518-553   test find: differential against naive for random haystacks
+      555-587   test build: plain string keeps the literal fast path, flags select kernels
+      594-604   test build: -x matches whole lines only
+      606-612   test build: -x with -i folds the whole line
+      614-620   test build: -x with -F is a real whole line
+      622-628   test build: -x with several patterns ORs the anchors
+      630-640   test build: no patterns selects nothing (-f with an empty file)
+
+HISTORY
+[h1] src/bre.zig:33 last changed by 9c6772b894 2026-11-10 "lo que quedaba pendiente: -G (BRE real), -z, --crlf, --heading/--pretty/--vimgrep" (git blame)
+src/bre.zig: last commit 9c6772b	2026-11-09	lo que quedaba pendiente: -G (BRE real), -z, --crlf, --heading/--pretty/--vimgrep
+src/search.zig: last commit c9758f3	2026-11-09	las cinco que quedaban de "no vale": \b, -U, --pre, --encoding, --heading
+
+UNCERTAINTY
+- 9 code reference(s) not linked to a declaration: h3, h5, h6, h7, h9, h10, h11, h12, h13
+- not analysed: aliases (const x = y.breToEre), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 586 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 19

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Ordering, quiet mode with early exits disabled, and batch rejection match the reference, but the answer says it cannot determine the --json behavior (reference: usage error) and omits the {} path placement detail.",
+ "cost_usd": 0.006482
+}

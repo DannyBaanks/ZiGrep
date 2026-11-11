@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The list of accepted values is correct, but the answer says it cannot determine what utf-16 does with a BOM-less file, whereas the reference says the BOM decides and it falls back to little-endian; it also omits the semantics of the other values.",
+ "cost_usd": 0.006503999999999999
+}

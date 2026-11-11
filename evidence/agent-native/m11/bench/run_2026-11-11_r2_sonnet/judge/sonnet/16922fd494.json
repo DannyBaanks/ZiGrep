@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three cases: `\\+` becomes the ERE `+` quantifier, a bare `+` is a literal plus, and a leading `*` is a literal. It also adds the source locations and notes that `*` elsewhere stays a quantifier, and neither addition contradicts the reference.",
+ "cost_usd": 0.006558
+}

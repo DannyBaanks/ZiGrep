@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: with --crlf visibleLineEnd drops the \\r so it isn't printed, and lines split on \\n so CRLF is a single terminator; it only omits the past-bug detail, which is not required.",
+ "cost_usd": 0.006448000000000001
+}

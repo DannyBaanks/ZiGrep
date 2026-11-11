@@ -1,0 +1,18 @@
+{
+ "qid": "R02",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "90975b6e4bd1de2bc4476a1139fd2571a34bccdc7c82afb40a54ce6ad6c388cc",
+ "answer": "Based on `matchesExt` (src/filter.zig:84-92), with ext = \"log\" (no leading dot):\n\n- **`a.log`: excluded.** Name length 5 > 4, and `name[name.len - ext.len - 1]` is `.`, so it passes the check and `endsWith(\"log\")` is true (lines 89-90).\n- **`catalog`: not excluded.** It ends with \"log\", but the character before it is `a`, not `.` (line 89), so it returns false (line 92).\n- **`.log`: not excluded by this function.** Its length of 4 is not greater than ext.len + 1 = 4 (line 89), so it falls through to false. However, `isFileExcluded` excludes it anyway if `skip_hidden` is set, because it starts with `.` (src/filter.zig:271). I can't see whether that flag is enabled by default.\n- **`A.LOG`: not excluded.** `endsWith` is a byte-exact comparison (line 90), so it's case-sensitive. \"LOG\" ≠ \"log\". Nothing in the context shows case folding.\n\nOther exclusion paths (patterns, ignore patterns) could also apply. The context doesn't show how `--exclude-ext` populates `excluded_exts`.",
+ "usage": {
+  "cost_usd": 0.014620000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.04,
+ "headers": {}
+}

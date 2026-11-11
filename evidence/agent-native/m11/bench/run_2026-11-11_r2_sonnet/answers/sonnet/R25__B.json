@@ -1,0 +1,18 @@
+{
+ "qid": "R25",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ee480b17f22d7fcc8011b5a5aacca0d954581aa59ecf2ba5f729c7aa11adc905",
+ "answer": "**Units:** `--max-filesize` takes plain bytes or a K/M/G/T suffix, in either upper or lower case. A leading `+` is also accepted and stripped (src/main.zig:712-717, 718-722).\n\n**Powers of 1024:** K = 1024, M = 1024·1024, G = 1024³, T = 1024⁴ (src/main.zig:719-722).\n\n**Default:** The context doesn't show it. It only shows `parseSize` and where it assigns `opts.max_filesize` (src/main.zig:1203, 1213). The default value of `opts.max_filesize` would be in the options struct definition, which isn't in the output. The README and GUIA.md matches aren't shown either.\n\nAlso, the `parseSize` listing is cut off after the `'t', 'T'` case (line 722). I can't see how the numeric part is parsed or what happens with an unsuffixed value.",
+ "usage": {
+  "cost_usd": 0.011224000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.35,
+ "headers": {}
+}

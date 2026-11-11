@@ -1,0 +1,18 @@
+{
+ "qid": "R05",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "d1c7f2904cb089c4f736a67ff09078e2c815c9a3cc6334a1266ae1639d1e145c",
+ "answer": "Based on the context (partial; only the parser's doc comment and one test are shown):\n\n- **id values:** the test is named \"ids string y entero\", so ids may be strings or integers (src/batch.zig:614). The test shows `\"id\":\"a\"` stored as `\"\\\"a\\\"\"` and `\"id\":7` stored as `7` (src/batch.zig:624-625). Whether other JSON types are accepted isn't shown.\n- **Unknown fields:** rejected with `error.Invalid`. A line with `\"path\"` instead of `\"paths\"` fails (src/batch.zig:633-635).\n- **Duplicate ids:** rejected with `error.Invalid`, and `perr.line_no` is 2, the line of the second occurrence (src/batch.zig:628-632).\n- **Blank lines:** ignored (src/batch.zig:498). The test includes one between two queries and still gets 2 queries (src/batch.zig:620, 623).\n- **Half-run batch:** no. The whole file is parsed before anything runs, so a bad line doesn't leave a partial batch (src/batch.zig:497-498). `runBatch` prints `file:line: reason` and returns 2 on `Invalid` (src/main.zig:1914-1917).\n\nNot shown: the parser body, so the exact rules for other id types and other validation errors, and any README/GUIA wording.",
+ "usage": {
+  "cost_usd": 0.019112,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.57,
+ "headers": {}
+}

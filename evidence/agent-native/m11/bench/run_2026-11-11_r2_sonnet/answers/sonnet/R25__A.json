@@ -1,0 +1,18 @@
+{
+ "qid": "R25",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "2c90542d8ed9c2daf4b534492006acd0a3240ae6983c9e29a97667039132ed75",
+ "answer": "The context doesn't answer this. The search only matched the name `parseSize`, so it shows where the function is defined and used, not what it does.\n\n- `parseSize` is defined at src/main.zig:714 and takes a string, returning `?usize`.\n- It is called to set `opts.max_filesize` at src/main.zig:1203 (the `--max-filesize=` form) and src/main.zig:1213 (the separate-argument form).\n\nMissing from the context:\n- The body of `parseSize` (from line 714 on), which would show the accepted suffixes (K, M, G, etc.) and whether it multiplies by 1000 or 1024.\n- The default value of `opts.max_filesize`, which would be in the options struct definition.\n- Any help text or documentation. README.md and GUIA.md produced no matches for this search.\n\nTo answer, I'd need to see src/main.zig around line 714 and the options struct declaration.",
+ "usage": {
+  "cost_usd": 0.006684000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.27,
+ "headers": {}
+}

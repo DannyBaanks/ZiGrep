@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three points: raw-file hash, offsets on decoded text, and null mtime_ns for stdin (from statx). It omits the --pre detail, which the question did not ask about.",
+ "cost_usd": 0.006508
+}

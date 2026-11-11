@@ -1,0 +1,160 @@
+CONTEXT PACK `has_trampoline`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 7 in 2 file(s); by role: code 7
+  declarations found by pattern: 1
+
+DEFINITION
+[h3] field `has_trampoline` in container:NavPlan
+  src/nav.zig:37-37  sha256:da9f8c488a09d67b  relation: declaration (pattern match, heuristic)
+>   37 |     has_trampoline: bool = false,   // "^v" or "ud"
+
+REFERENCES
+src/nav.zig in fn:parse
+  [h4] line 65 `plan.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'plan' was not checked)
+  src/nav.zig:40-74  sha256:d6705003fcd6f682
+    40 |     pub fn parse(spec: []const u8) !NavPlan {
+    41 |         var plan = NavPlan{};
+    42 |         for (spec) |c| {
+    43 |             const op: NavOp = switch (c) {
+    44 |                 'v', 'd', 'D' => .down,
+    45 |                 '^', 'u', 'U' => .up,
+    46 |                 '>', 'r', 'R' => .right,
+    47 |                 '<', 'l', 'L' => .left,
+    48 |                 ' ', '\t', ',' => continue,
+    49 |                 else => return error.InvalidNavOp,
+    50 |             };
+    51 |             if (plan.len < plan.ops.len) {
+    52 |                 plan.ops[plan.len] = op;
+    53 |                 plan.len += 1;
+    54 |             }
+    55 |         }
+    56 | 
+    57 |         // Detect 2D vector contraposition combos
+    58 |         var i: usize = 0;
+    59 |         while (i + 1 < plan.len) : (i += 1) {
+    60 |             const a = plan.ops[i];
+    61 |             const b = plan.ops[i + 1];
+    62 |             if (a == .down and b == .up) {
+    63 |                 plan.has_ceiling = true;
+    64 |             } else if (a == .up and b == .down) {
+>   65 |                 plan.has_trampoline = true;
+    66 |             }
+    67 |         }
+    68 | 
+    69 |         for (plan.ops[0..plan.len]) |op| {
+    70 |             if (op == .left) plan.reverse_siblings = true;
+    71 |         }
+    72 | 
+    73 |         return plan;
+    74 |     }
+src/nav.zig in fn:shouldScanFiles
+  [h5] line 80 `self.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'self' was not checked)
+  src/nav.zig:77-82  sha256:7aedb9b298fb054c
+    77 |     pub inline fn shouldScanFiles(self: NavPlan, depth: usize) bool {
+    78 |         if (self.len == 0) return true;
+    79 |         // Trampoline (^v / ud): Skip files in the root level (depth 0), but scan deeper.
+>   80 |         if (self.has_trampoline and depth == 0) return false;
+    81 |         return true;
+    82 |     }
+
+TESTS
+src/main.zig in test:parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h1] line 2997 `nav_plan.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'nav_plan' was not checked)
+  [h2] line 3005 `nav_plan.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'nav_plan' was not checked)
+  src/main.zig:2956-3014  sha256:a2878048b6c11f37
+  2956 | test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+  2957 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  2958 |     defer arena.deinit();
+  2959 |     const alloc = arena.allocator();
+  2960 |     {
+  2961 |         var o: Options = .{};
+  2962 |         const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
+  2963 |         _ = try parseArgs(alloc, &a, &o);
+  2964 |         try std.testing.expect(o.kamikaze);
+  2965 |     }
+  2966 |     {
+  2967 |         var o: Options = .{};
+  2968 |         const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+  2969 |         _ = try parseArgs(alloc, &a, &o);
+  2970 |         try std.testing.expect(o.kamikaze);
+  2971 |         try std.testing.expect(o.skip_hidden);
+  2972 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+  2973 |         try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+  2974 |     }
+  2975 |     {
+  2976 |         var o: Options = .{};
+  2977 |         const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+  2978 |         _ = try parseArgs(alloc, &a, &o);
+  2979 |         try std.testing.expect(o.no_ignore);
+  2980 |         try std.testing.expect(o.no_default_ignore);
+  2981 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+  2982 |         try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+  2983 |         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+  2984 |         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+  2985 |     }
+  2986 |     {
+  2987 |         var o: Options = .{};
+  2988 |         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+  2989 |         _ = try parseArgs(alloc, &a, &o);
+  2990 |         try std.testing.expect(o.sort);
+  2991 |         try std.testing.expect(!o.kamikaze);
+  2992 |     }
+  2993 |     {
+  2994 |         var o: Options = .{};
+  2995 |         const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+  2996 |         _ = try parseArgs(alloc, &a, &o);
+> 2997 |         try std.testing.expect(o.nav_plan.has_trampoline);
+  2998 |         try std.testing.expect(!o.nav_plan.has_ceiling);
+  2999 |     }
+  3000 |     {
+  3001 |         var o: Options = .{};
+  3002 |         const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+  3003 |         _ = try parseArgs(alloc, &a, &o);
+  3004 |         try std.testing.expect(o.nav_plan.has_ceiling);
+> 3005 |         try std.testing.expect(!o.nav_plan.has_trampoline);
+  3006 |     }
+  3007 |     {
+  3008 |         var o: Options = .{};
+  3009 |         const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+  3010 |         _ = try parseArgs(alloc, &a, &o);
+  3011 |         try std.testing.expect(o.sort);
+  3012 |         try std.testing.expect(!o.kamikaze);
+  3013 |     }
+  3014 | }
+src/nav.zig in test:nav: contraposition combos: ceiling and trampoline  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h6] line 113 `ceiling.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'ceiling' was not checked)
+  [h7] line 120 `trampoline.has_trampoline`: unique_field_candidate -> h3 (heuristic; the only field named has_trampoline in scope is src/nav.zig:37; the type of 'trampoline' was not checked)
+  src/nav.zig:109-128  sha256:a79a865c28849f7a
+   109 | test "nav: contraposition combos: ceiling and trampoline" {
+   110 |     // Ceiling: v^ or du (depth limit = 0 subdirs)
+   111 |     const ceiling = try NavPlan.parse("v^");
+   112 |     try std.testing.expect(ceiling.has_ceiling);
+>  113 |     try std.testing.expect(!ceiling.has_trampoline);
+   114 |     try std.testing.expect(ceiling.shouldScanFiles(0));
+   115 |     try std.testing.expect(!ceiling.shouldRecurseSubdirs(0));
+   116 | 
+   117 |     // Trampoline: ^v or ud (leapfrog root files, dive into subdirs)
+   118 |     const trampoline = try NavPlan.parse("^v");
+   119 |     try std.testing.expect(!trampoline.has_ceiling);
+>  120 |     try std.testing.expect(trampoline.has_trampoline);
+   121 |     try std.testing.expect(!trampoline.shouldScanFiles(0)); // root files skipped!
+   122 |     try std.testing.expect(trampoline.shouldScanFiles(1));  // subfolder files scanned!
+   123 |     try std.testing.expect(trampoline.shouldRecurseSubdirs(0));
+   124 | 
+   125 |     // Reverse sibling flag
+   126 |     const rev = try NavPlan.parse("dl");
+   127 |     try std.testing.expect(rev.reverse_siblings);
+   128 | }
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.has_trampoline), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 655 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 9

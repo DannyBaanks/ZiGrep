@@ -1,0 +1,18 @@
+{
+ "qid": "R19",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "14b038347b80445d5f35ff7581a982b549351280bf4e724c7ba098e430f9a9c1",
+ "answer": "The context suggests `--binary-files=binary` is probably not accepted, but it doesn't show the option parsing, so I can't confirm it.\n\n- The `BinaryFiles` enum has only two variants: `text` and `without_match` (src/main.zig:243). There is no `binary` variant.\n- The option field defaults to `.without_match` (src/main.zig:331).\n- A test checks that `o.binary_files` equals `BinaryFiles.text` (src/main.zig:3182), which implies `text` can be set.\n\nWhat's missing: the argument-parsing code that maps strings like `\"binary\"`, `\"text\"`, and `\"without-match\"` to the enum, and any code that uses `binary_files` to change matching behavior. Without those, I can't say what `text` and `without-match` actually do, or whether `binary` is rejected or aliased. The README and GUIA.md had no matches for `BinaryFiles`. A search for `binary-files` or `binary_files` would likely find the parsing and usage code.",
+ "usage": {
+  "cost_usd": 0.0069700000000000005,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.39,
+ "headers": {}
+}

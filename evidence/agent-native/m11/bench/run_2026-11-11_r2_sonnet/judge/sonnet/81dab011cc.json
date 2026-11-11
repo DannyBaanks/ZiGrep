@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer leans toward the correct conclusion (No) but hedges with 'probably not' and says it cannot confirm that a docker type exists or how matchesExt handles names, whereas the reference is definite.",
+ "cost_usd": 0.006200000000000001
+}

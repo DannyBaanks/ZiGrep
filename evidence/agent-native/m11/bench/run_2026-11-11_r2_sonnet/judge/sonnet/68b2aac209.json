@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer gives none of the accepted values or the utf-16 no-BOM behavior (falls back to little-endian), and the reference says this is answerable, so declining earns at most 1; it only correctly notes that unrecognized values fall back to auto.",
+ "cost_usd": 0.006396
+}

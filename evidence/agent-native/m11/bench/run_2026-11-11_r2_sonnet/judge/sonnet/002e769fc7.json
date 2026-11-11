@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists --exec, --heading and --pre with the same rationale as the reference; the extra operand case is explicitly labeled as not an option, so it doesn't contradict the reference.",
+ "cost_usd": 0.006244
+}

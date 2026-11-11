@@ -1,0 +1,18 @@
+{
+ "qid": "R17",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "68d94522c87d7696f718c9f291a018b949d248229fe95dc161a5cab03266d881",
+ "answer": "It probes up to **4 regular files**, and it does so **in the root directory, on the main thread**, before the thread pool is created.\n\n- The doc comment says it \"Scans up to 4 regular files in root on the main thread prior to thread pool creation,\" with 0 thread spawns on an instant match (src/kamikaze.zig:743-745).\n- The loop is bounded by `while (probed < 4)` (src/kamikaze.zig:764). It reads entries from a directory stream opened on `root` (src/kamikaze.zig:755).\n- Non-files (`kind != .file`) and excluded files are skipped with `continue` (src/kamikaze.zig:773-774). They don't increment `probed`, which only increments after a file is scanned without a match (src/kamikaze.zig:798).\n- `quietProbeHit` calls the probe once for each root in `roots` (src/kamikaze.zig:814-815). So the limit of 4 applies per root, not globally.\n\nThe context does not show the caller that runs this before the worker threads start.",
+ "usage": {
+  "cost_usd": 0.014790000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.12,
+ "headers": {}
+}

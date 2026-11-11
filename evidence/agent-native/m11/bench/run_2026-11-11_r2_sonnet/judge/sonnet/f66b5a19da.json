@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The conditions for file-utf16 are correct, but the answer doesn't give the full value list (pre, stdin missing) and hedges on the strings, whereas the reference is definite.",
+ "cost_usd": 0.006444
+}

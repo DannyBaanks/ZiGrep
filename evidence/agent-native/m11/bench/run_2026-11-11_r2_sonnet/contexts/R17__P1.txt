@@ -1,0 +1,89 @@
+CONTEXT PACK `tryQuickQuietProbe`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+BLOCKS
+src/kamikaze.zig:746-801  sha256:e2a6de46ae865f60
+>  746 | fn tryQuickQuietProbe(
+   747 |     io: std.Io,
+   748 |     gpa: Allocator,
+   749 |     searcher: *const Searcher,
+   750 |     root: [:0]const u8,
+   751 |     filter_engine: *const FilterEngine,
+   752 |     binary: bool,
+   753 |     scan_config: scan.ScanConfig,
+   754 | ) bool {
+   755 |     var stream = vfs.DirStream.open(io, root) catch return false;
+   756 |     defer stream.close();
+   757 | 
+   758 |     var probed: usize = 0;
+   759 |     var scratch: [64 * 1024]u8 = undefined;
+   760 |     var out: std.ArrayList(u8) = .empty;
+   761 |     defer out.deinit(gpa);
+   762 | 
+   763 |     var path_buf: [platform.path_max]u8 = undefined;
+   764 |     while (probed < 4) {
+   765 |         const maybe_entry = stream.next() catch return false;
+   766 |         const entry = maybe_entry orelse break;
+   767 |         var kind = entry.kind;
+   768 |         if (kind == .unknown) {
+   769 |             const probe_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+   770 |             defer gpa.free(probe_path);
+   771 |             kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
+   772 |         }
+   773 |         if (kind != .file) continue;
+   774 |         if (filter_engine.isFileExcluded(entry.name)) continue;
+   775 | 
+   776 |         const stack_path = formatPathBuf(&path_buf, root, entry.name);
+   777 |         var heap_path: ?[:0]const u8 = null;
+   778 |         const full_path: [:0]const u8 = stack_path orelse blk: {
+   779 |             heap_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+   780 |             break :blk heap_path.?;
+   781 |         };
+   782 |         defer if (heap_path) |hp| gpa.free(hp);
+   783 | 
+   784 |         const res = scan.scanFile(
+   785 |             io,
+   786 |             gpa,
+   787 |             searcher,
+   788 |             full_path,
+   789 |             false,
+   790 |             .quiet,
+   791 |             binary,
+   792 |             scan_config,
+   793 |             &out,
+   794 |             &scratch,
+   795 |             null, // sonda temprana de -q: no decide el motor de la corrida
+   796 |         );
+   797 |         if (res.matched) return true;
+   798 |         probed += 1;
+   799 |     }
+   800 |     return false;
+   801 | }
+src/kamikaze.zig:804-821  sha256:9e385e5fa01e1e10
+   804 | fn quietProbeHit(
+   805 |     io: std.Io,
+   806 |     gpa: Allocator,
+   807 |     searcher: *const Searcher,
+   808 |     roots: []const [:0]const u8,
+   809 |     filter_engine: *const FilterEngine,
+   810 |     binary: bool,
+   811 |     scan_config: scan.ScanConfig,
+   812 |     stats: *KamikazeStats,
+   813 | ) bool {
+   814 |     for (roots) |root| {
+>  815 |         if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {
+   816 |             stats.early_aborted = true;
+   817 |             return true;
+   818 |         }
+   819 |     }
+   820 |     return false;
+   821 | }
+
+TRUNCATION
+  truncated: false   items: 2

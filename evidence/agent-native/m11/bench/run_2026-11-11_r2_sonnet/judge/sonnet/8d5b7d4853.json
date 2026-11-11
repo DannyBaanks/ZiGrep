@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states the information is not available and accurately notes mmap_threshold is 256 KiB with files above it memory-mapped, consistent with the reference.",
+ "cost_usd": 0.006144
+}

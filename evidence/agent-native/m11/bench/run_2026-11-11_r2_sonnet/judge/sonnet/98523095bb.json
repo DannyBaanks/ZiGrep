@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "The Latin-1 test only covers `-F` (`.fixed = true`) — the reference says folding is in the literal search path generally, not specifically -F (minor/uncertain)"
+ ],
+ "reason": "Correctly concludes no match because regex folds ASCII only and literal path has Latin-1 folding, but hedges ('very likely', 'can't be confirmed') and doesn't definitively state the README claim holds only for literal patterns.",
+ "cost_usd": 0.00761
+}

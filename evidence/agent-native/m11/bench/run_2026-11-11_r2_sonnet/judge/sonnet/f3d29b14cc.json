@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: the stdin path detects NUL in the first 8192 bytes, prints the 'Binary file (standard input) matches' message, and returns 0 without searching. It adds that the message goes to stderr and appears only in lines mode, which the reference does not contradict.",
+ "cost_usd": 0.00676
+}

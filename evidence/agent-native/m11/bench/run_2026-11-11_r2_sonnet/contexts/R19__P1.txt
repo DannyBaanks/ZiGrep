@@ -1,0 +1,55 @@
+CONTEXT PACK `BinaryFiles`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 3 in 1 file(s); by role: code 3
+  declarations found by pattern: 1
+
+BLOCKS
+src/main.zig:243-243  sha256:a19fc78f737b2f71
+>  243 | pub const BinaryFiles = enum { text, without_match };
+src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+src/main.zig:323-339  sha256:58f781884635d571
+   323 |     /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+   324 |     type_include: [8]types.Type = undefined,
+   325 |     type_include_count: usize = 0,
+   326 |     type_exclude: [8]types.Type = undefined,
+   327 |     type_exclude_count: usize = 0,
+   328 |     /// `--type-list`: print the type registry and exit.
+   329 |     print_type_list: bool = false,
+   330 |     /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+>  331 |     binary_files: BinaryFiles = .without_match,
+   332 |     /// `--exclude-from=FILE` (grep): globs, one per line.
+   333 |     exclude_from: [8][]const u8 = undefined,
+   334 |     exclude_from_count: usize = 0,
+   335 |     /// `--max-depth=N` (rg; long only, `-d` is grep's --directories).
+   336 |     max_depth: usize = 0,
+   337 |     /// `--max-filesize=N[KMGT]` (rg): 0 = unlimited.
+   338 |     max_filesize: usize = 0,
+   339 |     /// M3: `--queries-file FILE` runs every JSONL query in this one process.
+src/main.zig:3071-3071  sha256:d9cfc947b06b3622
+  3071 | test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b" {
+src/main.zig:3174-3190  sha256:f2916e9a6bafc3cb
+  3174 |         const a = [_][:0]const u8{ "zgrep", "-b", "pat" };
+  3175 |         _ = try parseArgs(alloc, &a, &o);
+  3176 |         try std.testing.expect(o.byte_offset);
+  3177 |     }
+  3178 |     {
+  3179 |         var o: Options = .{};
+  3180 |         const a = [_][:0]const u8{ "zgrep", "--binary-files=text", "pat" };
+  3181 |         _ = try parseArgs(alloc, &a, &o);
+> 3182 |         try std.testing.expectEqual(BinaryFiles.text, o.binary_files);
+  3183 |     }
+  3184 |     {
+  3185 |         var o: Options = .{};
+  3186 |         const a = [_][:0]const u8{ "zgrep", "--binary-files=binary", "pat" };
+  3187 |         try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+  3188 |         const f = o.fail orelse return error.TestExpectedEqual;
+  3189 |         try std.testing.expect(std.mem.indexOf(u8, f.what, "never prints binary content") != null);
+  3190 |     }
+
+TRUNCATION
+  truncated: false   items: 5

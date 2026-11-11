@@ -1,0 +1,18 @@
+{
+ "qid": "R06",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "0cb4c7c8b91e3d2f8b9406744428a5bed4a2a8b1344b425f66ae3450c89e08b1",
+ "answer": "No, it isn't a plain bytes/4. It uses a weighted heuristic named `\"zgrep-classes-v1\"` (src/batch.zig:41), implemented in `estimateTokens` (src/batch.zig:49).\n\nWhat the context shows:\n- The estimate combines per-class counts with weights: bytes (0.2413), digits (1.0526), punctuation (0.0954), space runs (0.1128) and non-ASCII (0.4598) (src/batch.zig:43-47). It is multiplied by a scale of `1.112 * 1.01` (src/batch.zig:42).\n- The function counts digits, punctuation, space runs and non-ASCII bytes (src/batch.zig:50-54). Whitespace is space, tab, `\\n` or `\\r` (src/batch.zig:56).\n- The test says digits and non-ASCII count for more, and the estimate is additive per line (src/batch.zig:594-602).\n- The estimate is computed per output line (src/batch.zig:276, 323) and checked with `overTokenBudget(est)`. If it is over budget, the reason is set to `max_output_tokens` (src/batch.zig:283, 331).\n\nThe context doesn't show how the weights combine, because the function body is truncated after line 57. It also doesn't show `overTokenBudget`.",
+ "usage": {
+  "cost_usd": 0.019988,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.83,
+ "headers": {}
+}

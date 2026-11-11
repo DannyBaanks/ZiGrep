@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says it is not plain bytes/4 and describes the weighted features and scale, but omits the estimator name, the calibration against a real BPE, the scale value, and that it replaced bytes/4 because that underestimated.",
+ "cost_usd": 0.006786
+}

@@ -1,0 +1,81 @@
+CONTEXT PACK `matchesExt`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 9 in 1 file(s); by role: code 8, string 1
+  declarations found by pattern: 1
+
+BLOCKS
+src/filter.zig:84-93  sha256:3fbe3594b6d50ff4
+>   84 | pub fn matchesExt(name: []const u8, ext: []const u8) bool {
+    85 |     if (ext.len == 0) return false;
+    86 |     if (ext[0] == '.') {
+    87 |         return std.mem.endsWith(u8, name, ext);
+    88 |     }
+    89 |     if (name.len > ext.len + 1 and name[name.len - ext.len - 1] == '.') {
+    90 |         return std.mem.endsWith(u8, name, ext);
+    91 |     }
+    92 |     return false;
+    93 | }
+src/filter.zig:270-318  sha256:8ae29162c3259610
+   270 |     pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+   271 |         if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+   272 |             return true;
+   273 |         }
+   274 | 
+   275 |         if (self.use_defaults) {
+   276 |             for (default_excluded_exts) |ext| {
+>  277 |                 if (matchesExt(file_name, ext)) return true;
+   278 |             }
+   279 |         }
+   280 | 
+   281 |         for (self.excluded_exts.items) |ext| {
+>  282 |             if (matchesExt(file_name, ext)) return true;
+   283 |         }
+   284 | 
+   285 |         for (self.excluded_patterns.items) |pat| {
+   286 |             if (matchPattern(file_name, pat)) return true;
+   287 |         }
+   288 | 
+   289 |         for (self.ignore_patterns.items) |pat| {
+   290 |             if (matchPattern(file_name, pat)) return true;
+   291 |         }
+   292 | 
+   293 |         // If specific extensions or patterns were requested via --include,
+   294 |         // any file not matching at least one is excluded:
+   295 |         if (self.included_exts.items.len > 0) {
+   296 |             var matched = false;
+   297 |             for (self.included_exts.items) |ext| {
+>  298 |                 if (matchesExt(file_name, ext)) {
+   299 |                     matched = true;
+   300 |                     break;
+   301 |                 }
+   302 |             }
+   303 |             if (!matched) return true;
+   304 |         }
+   305 | 
+   306 |         if (self.included_patterns.items.len > 0) {
+   307 |             var matched = false;
+   308 |             for (self.included_patterns.items) |pat| {
+   309 |                 if (matchPattern(file_name, pat)) {
+   310 |                     matched = true;
+   311 |                     break;
+   312 |                 }
+   313 |             }
+   314 |             if (!matched) return true;
+   315 |         }
+   316 | 
+   317 |         return false;
+   318 |     }
+src/filter.zig:330-335  sha256:926637135c253982
+>  330 | test "matchesExt" {
+>  331 |     try std.testing.expect(matchesExt("main.zig", "zig"));
+>  332 |     try std.testing.expect(matchesExt("main.zig", ".zig"));
+>  333 |     try std.testing.expect(matchesExt("bundle.min.js", "min.js"));
+>  334 |     try std.testing.expect(!matchesExt("zig.txt", "zig"));
+   335 | }
+
+TRUNCATION
+  truncated: false   items: 3

@@ -1,0 +1,18 @@
+{
+ "qid": "R11",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "44ba4e3fb77e06f9a5cb7b857931579271eb100852bc11d3b0592ad31b2ce9b8",
+ "answer": "The context doesn't answer this. It only shows where `provSourceOf` is called and its signature:\n\n- `src/scan.zig:1230` declares `fn provSourceOf(data: []const u8, config: ScanConfig) ProvSource`.\n- It is called at `src/scan.zig:905`, `:918`, and `:937`, once per read path (buffered read, memory map, and a third path), with the file data and config.\n\nThe function body and the `ProvSource` enum definition are not in the output, so I can't list the possible values of \"source\" or say when it is \"file-utf16\". The README and GUIA matches also don't appear to mention it.\n\nTo answer, I'd need the body of `provSourceOf` (starting at `src/scan.zig:1230`) and the `ProvSource` type definition, plus any `--provenance` documentation in README.md or GUIA.md.",
+ "usage": {
+  "cost_usd": 0.0071660000000000005,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.03,
+ "headers": {}
+}

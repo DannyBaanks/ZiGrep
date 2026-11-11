@@ -1,0 +1,18 @@
+{
+ "qid": "R07",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a27d0bc26a9b1fa6d10eac7b8180070d17b855befb0c9095940eaf93641061b4",
+ "answer": "Per the context, four event types count as results: `match`, `occurrence`, `file`, and `count`. `isResult` checks whether a line's JSON `\"type\"` field starts with one of those (src/batch.zig:76-83). The comment says these are what an agent counts as \"hallazgos\" (findings) (src/batch.zig:76).\n\nContext lines: the context doesn't say. `context` isn't in the list of result types (src/batch.zig:79), so a context event would return false from `isResult`, if such an event type exists. However, the context never shows a context event type, and it never shows `--max-results` itself or where `isResult`'s return value (`result`, src/batch.zig:311) is compared against a limit. So I can't confirm the limit's behavior. To confirm, I'd need the code that uses `result` after line 319 and the `--max-results` option handling.",
+ "usage": {
+  "cost_usd": 0.009724,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.43,
+ "headers": {}
+}

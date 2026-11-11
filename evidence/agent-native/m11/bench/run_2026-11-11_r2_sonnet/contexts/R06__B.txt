@@ -1,0 +1,106 @@
+src/batch.zig-41-pub const token_estimator_name = "zgrep-classes-v1";
+src/batch.zig-42-const est_scale: f64 = 1.112 * 1.01;
+src/batch.zig-43-const w_bytes: f64 = 0.2413;
+src/batch.zig-44-const w_digits: f64 = 1.0526;
+src/batch.zig-45-const w_punct: f64 = 0.0954;
+src/batch.zig-46-const w_space_runs: f64 = 0.1128;
+src/batch.zig-47-const w_nonascii: f64 = 0.4598;
+src/batch.zig-48-
+src/batch.zig:49:pub fn estimateTokens(b: []const u8) f64 {
+src/batch.zig-50-    var digits: usize = 0;
+src/batch.zig-51-    var punct: usize = 0;
+src/batch.zig-52-    var space_runs: usize = 0;
+src/batch.zig-53-    var nonascii: usize = 0;
+src/batch.zig-54-    var in_space = false;
+src/batch.zig-55-    for (b) |c| {
+src/batch.zig-56-        const is_space = c == ' ' or c == '\t' or c == '\n' or c == '\r';
+src/batch.zig-57-        if (is_space) {
+--
+src/batch.zig-111-    /// Bytes de una línea que llegó partida entre dos escrituras.
+src/batch.zig-112-    carry: std.ArrayList(u8) = .empty,
+src/batch.zig-113-    staged: std.ArrayList(u8) = .empty,
+src/batch.zig-114-
+src/batch.zig-115-    // Totales de la llamada.
+src/batch.zig-116-    returned: usize = 0,
+src/batch.zig-117-    omitted: usize = 0,
+src/batch.zig-118-    output_bytes: usize = 0,
+src/batch.zig:119:    /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+src/batch.zig-120-    output_tokens_est: f64 = 0,
+src/batch.zig-121-    /// Linea de salida armada antes de decidir si cabe en el presupuesto.
+src/batch.zig-122-    line_buf: std.ArrayList(u8) = .empty,
+src/batch.zig-123-
+src/batch.zig-124-    // --- M8: spill (el "tee" de RTK, pero verificable) --------------------
+src/batch.zig-125-    /// Directorio y nombre del fichero de spill; `null` = sin `--spill`. El
+src/batch.zig-126-    /// fichero se crea al omitir el PRIMER evento (sin truncado, coste cero).
+src/batch.zig-127-    spill_dir: ?[]const u8 = null,
+--
+src/batch.zig-268-        const tag = line[2..tag_end];
+src/batch.zig-269-        const result = !(tag.len > 0 and (tag[0] == 'c' or tag[0] == 'p'));
+src/batch.zig-270-        self.line_buf.clearRetainingCapacity();
+src/batch.zig-271-        try self.line_buf.appendSlice(self.gpa, self.pending_header.items);
+src/batch.zig-272-        try self.line_buf.appendSlice(self.gpa, line);
+src/batch.zig-273-        try self.line_buf.append(self.gpa, '\n');
+src/batch.zig-274-        // Siempre: summary.output_tokens_est es un dato del contrato, no un
+src/batch.zig-275-        // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+src/batch.zig:276:        const est = estimateTokens(self.line_buf.items);
+src/batch.zig-277-        if (self.reason == null) {
+src/batch.zig-278-            if (result) {
+src/batch.zig-279-                if (self.max_results) |m| {
+src/batch.zig-280-                    if (self.returned >= m) self.reason = .max_results;
+src/batch.zig-281-                }
+src/batch.zig-282-            }
+src/batch.zig-283-            if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
+src/batch.zig-284-        }
+--
+src/batch.zig-315-            try self.line_buf.appendSlice(self.gpa, "\"query_id\":");
+src/batch.zig-316-            try self.line_buf.appendSlice(self.gpa, id);
+src/batch.zig-317-            try self.line_buf.append(self.gpa, ',');
+src/batch.zig-318-        }
+src/batch.zig-319-        try self.line_buf.appendSlice(self.gpa, line[json_prefix.len..]);
+src/batch.zig-320-        try self.line_buf.append(self.gpa, '\n');
+src/batch.zig-321-        // Siempre: summary.output_tokens_est es un dato del contrato, no un
+src/batch.zig-322-        // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+src/batch.zig:323:        const est = estimateTokens(self.line_buf.items);
+src/batch.zig-324-
+src/batch.zig-325-        if (self.reason == null) {
+src/batch.zig-326-            if (result) {
+src/batch.zig-327-                if (self.max_results) |m| {
+src/batch.zig-328-                    if (self.returned >= m) self.reason = .max_results;
+src/batch.zig-329-                }
+src/batch.zig-330-            }
+src/batch.zig-331-            if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
+--
+src/batch.zig-577-    try std.testing.expectEqual(@as(usize, 2), e.omitted);
+src/batch.zig-578-    try std.testing.expectEqual(Reason.max_results, e.reason.?);
+src/batch.zig-579-}
+src/batch.zig-580-
+src/batch.zig-581-test "Emitter: --max-output-tokens nunca parte un evento" {
+src/batch.zig-582-    const gpa = std.testing.allocator;
+src/batch.zig-583-    const m = "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n";
+src/batch.zig-584-    // presupuesto = lo que estima UN evento: cabe uno entero, el segundo no.
+src/batch.zig:585:    const one: usize = @intFromFloat(@ceil(estimateTokens(m)));
+src/batch.zig-586-    var e: Emitter = .{ .io = undefined, .gpa = gpa, .max_output_tokens = one };
+src/batch.zig-587-    defer e.deinit();
+src/batch.zig-588-    try e.feed(m ++ m);
+src/batch.zig-589-    try std.testing.expectEqualStrings(m, e.staged.items);
+src/batch.zig-590-    try std.testing.expectEqual(@as(usize, 1), e.omitted);
+src/batch.zig-591-    try std.testing.expectEqual(Reason.max_output_tokens, e.reason.?);
+src/batch.zig-592-}
+src/batch.zig-593-
+src/batch.zig:594:test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+src/batch.zig:595:    try std.testing.expectEqual(@as(f64, 0), estimateTokens(""));
+src/batch.zig:596:    const a = estimateTokens("abcdef ");
+src/batch.zig:597:    const b = estimateTokens("123456 ");
+src/batch.zig:598:    const c = estimateTokens("ñññ ");
+src/batch.zig-599-    try std.testing.expect(b > a); // un BPE parte los numeros mucho mas que las palabras
+src/batch.zig:600:    try std.testing.expect(c > estimateTokens("nnn "));
+src/batch.zig-601-    // aditivo por lineas (lo que usa el presupuesto: suma de eventos)
+src/batch.zig:602:    try std.testing.expectApproxEqAbs(estimateTokens("ab 12\n") + estimateTokens("cd 34\n"), estimateTokens("ab 12\ncd 34\n"), 1e-9);
+src/batch.zig-603-}
+src/batch.zig-604-
+src/batch.zig-605-test "Emitter: lo que no es evento zgrep/1 no entra al stream" {
+src/batch.zig-606-    const gpa = std.testing.allocator;
+src/batch.zig-607-    var e: Emitter = .{ .io = undefined, .gpa = gpa };
+src/batch.zig-608-    defer e.deinit();
+src/batch.zig-609-    try e.feed("zgrep 0.4.0\n");
+src/batch.zig-610-    try std.testing.expectEqual(@as(usize, 0), e.staged.items.len);

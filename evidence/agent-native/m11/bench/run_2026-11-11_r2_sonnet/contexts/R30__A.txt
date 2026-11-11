@@ -1,0 +1,3 @@
+src/scan.zig:157:pub const mmap_threshold = 256 * 1024;
+src/scan.zig:910:    if (size >= mmap_threshold) {
+src/scan.zig:1143:    if (size < mmap_threshold) {

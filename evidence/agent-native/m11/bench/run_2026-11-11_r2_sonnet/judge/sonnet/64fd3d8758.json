@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Ordering, quiet mode with early exits off, and --json usage error match the reference, but the answer hedges on whether --exec is rejected in a batch (reference says definitively not allowed) and omits the {} placeholder/append behavior.",
+ "cost_usd": 0.006546
+}

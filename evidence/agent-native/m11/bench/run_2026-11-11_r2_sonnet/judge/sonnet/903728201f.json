@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Opens with \"Probably yes\", which contradicts the reference's definite \"No\"; the answer is hedged and says it cannot confirm the result",
+  "Calls the byte check \"probably a bug\"; the reference treats it as the intended behavior, and rg -S also finds ÑANDÚ"
+ ],
+ "reason": "The mechanism is correctly identified (lead byte 0xC3 in the 0xC0–0xDE range sets has_upper, making the search case-sensitive), but the answer leads with \"Probably yes\" and hedges instead of stating a definite No.",
+ "cost_usd": 0.008068
+}

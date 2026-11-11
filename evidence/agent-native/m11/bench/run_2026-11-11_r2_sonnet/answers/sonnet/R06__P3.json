@@ -1,0 +1,18 @@
+{
+ "qid": "R06",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "0bb15fba1da99a9c6258e98f3c13a8fb018883b7dde987b2e78885d42a49acaf",
+ "answer": "No, it is not plain bytes/4. `estimateTokens` is a weighted character-class estimator (src/batch.zig:49-72).\n\nIt scans the bytes and counts:\n- digits (src/batch.zig:61-62)\n- punctuation, meaning ASCII that is not a letter, digit, or `_` (src/batch.zig:63-64)\n- runs of whitespace (src/batch.zig:56-58)\n- non-ASCII bytes, `>= 0x80` (src/batch.zig:59-60)\n\nIt then combines these with the total byte length, using weights `w_bytes`, `w_digits`, `w_punct`, `w_space_runs` and `w_nonascii`. The sum is multiplied by `est_scale` (src/batch.zig:68-71). The weight values are not in the context, so I can't give the exact formula or say how close it comes to bytes/4.\n\nThe commit message says it is a \"class-based estimator calibrated against a BPE\" (src/batch.zig:49, history). Tests check that digits and non-ASCII count more, and that the estimate is additive per line (src/batch.zig:594-603).\n\nThe budget is applied per emitted event line, which is never split (src/batch.zig:276-283, 581-592).",
+ "usage": {
+  "cost_usd": 0.03396,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.65,
+ "headers": {}
+}

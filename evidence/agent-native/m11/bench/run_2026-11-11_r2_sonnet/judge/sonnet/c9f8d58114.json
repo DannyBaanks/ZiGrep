@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims a fourth case: several explicit file operands (all regular files) forces opts.sort = true; the reference lists only --exec, --heading and --pre."
+ ],
+ "reason": "The answer correctly names --exec, --heading and --pre with matching rationales, but it adds a fourth trigger (multiple file operands) that the reference does not include, so the answer is not fully accurate.",
+ "cost_usd": 0.006742000000000001
+}

@@ -1,0 +1,6 @@
+src/main.zig:322:    smart_case: bool = false,
+src/main.zig:1070:                opts.smart_case = true;
+src/main.zig:1530:                'S' => opts.smart_case = true,
+src/main.zig:2206:    if (opts.smart_case and !opts.ignore_case) {
+src/main.zig:3079:        try std.testing.expect(o.smart_case);
+src/main.zig:3085:        try std.testing.expect(o.smart_case);

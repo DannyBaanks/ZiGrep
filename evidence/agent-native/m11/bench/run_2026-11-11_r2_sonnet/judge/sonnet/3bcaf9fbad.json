@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly identifies `*`, `?`, and trailing `/` handling from tests, but says it cannot determine whether `[abc]` is a character class, whereas the reference definitively says it is not (literal match) and that matching is case-sensitive.",
+ "cost_usd": 0.006304
+}

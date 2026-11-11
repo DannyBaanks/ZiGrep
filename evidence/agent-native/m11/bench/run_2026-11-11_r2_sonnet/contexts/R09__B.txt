@@ -1,0 +1,35 @@
+src/clean.zig-196-const z = struct {
+src/clean.zig-197-    fn f(p: []const u8) [:0]const u8 {
+src/clean.zig-198-        return @ptrCast(p.ptr[0..p.len :0]);
+src/clean.zig-199-    }
+src/clean.zig-200-}.f;
+src/clean.zig-201-
+src/clean.zig-202-/// Does a symlink in a well-known bin dir point inside `path`?
+src/clean.zig-203-/// That is the signal that a `zig-out` is actually deployed.
+src/clean.zig:204:fn hasInstallLink(io: std.Io, gpa: Allocator, home: []const u8, target: []const u8) bool {
+src/clean.zig-205-    for (install_dirs) |rel| {
+src/clean.zig-206-        const is_abs = rel.len > 0 and rel[0] == '/';
+src/clean.zig-207-        const dir = if (is_abs)
+src/clean.zig-208-            gpa.dupeZ(u8, rel) catch continue
+src/clean.zig-209-        else
+src/clean.zig-210-            std.fs.path.joinZ(gpa, &.{ home, rel }) catch continue;
+src/clean.zig-211-        defer if (is_abs) gpa.free(dir) else gpa.free(dir);
+src/clean.zig-212-        var stream = vfs.DirStream.open(io, dir) catch continue;
+--
+src/clean.zig-274-        const dup = gpa.dupeZ(u8, root) catch return;
+src/clean.zig-275-        add(list, dup, .out_dir, io, gpa, home) catch gpa.free(dup);
+src/clean.zig-276-    }
+src/clean.zig-277-}
+src/clean.zig-278-
+src/clean.zig-279-fn add(list: *std.ArrayList(Target), path: [:0]const u8, kind: Kind, io: std.Io, gpa: Allocator, home: []const u8) !void {
+src/clean.zig-280-    const target_path = gpa.dupe(u8, path) catch return error.OutOfMemory;
+src/clean.zig-281-    const size = dirSize(io, path);
+src/clean.zig:282:    const protected = if (kind == .out_dir) hasInstallLink(io, gpa, home, target_path) else false;
+src/clean.zig-283-    const active = hasLockFile(io, target_path) or procsHomeActive(io, gpa, target_path, kind);
+src/clean.zig-284-    try list.append(gpa, .{ .path = target_path, .kind = kind, .size = size, .protected = protected, .active = active });
+src/clean.zig-285-}
+src/clean.zig-286-
+src/clean.zig-287-/// `du`-style: 1.5G, 367M, 79K, 512. One decimal below 10.
+src/clean.zig-288-pub fn humanSize(out: []u8, bytes: u64) []const u8 {
+src/clean.zig-289-    const units = [_]struct { s: []const u8, v: f64 }{ .{ .s = "T", .v = 1e12 }, .{ .s = "G", .v = 1e9 }, .{ .s = "M", .v = 1e6 }, .{ .s = "K", .v = 1e3 } };
+src/clean.zig-290-    for (units) |u| {

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly gives the 2 MiB threshold, calling-thread scan, skipped ignore-file walk, and --force-swarm opt-out, but omits the 2048 files/512 dirs/depth 32 limits and the no-io_uring detail, and hedges about the decision logic.",
+ "cost_usd": 0.006512
+}

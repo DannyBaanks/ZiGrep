@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The conditions for file-utf16 match the reference, but the answer lists only file and file_utf16 and says it cannot confirm pre and stdin, so the enumeration of possible values is incomplete.",
+ "cost_usd": 0.006544
+}

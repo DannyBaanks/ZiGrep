@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly traces parsing and copying into ScanConfig and notes no reader was found, but it hedges and does not definitively state the flag has no effect (unimplemented), which the reference asserts.",
+ "cost_usd": 0.006574
+}

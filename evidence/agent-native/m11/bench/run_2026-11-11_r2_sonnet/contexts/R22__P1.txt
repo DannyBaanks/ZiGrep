@@ -1,0 +1,341 @@
+CONTEXT PACK `exec_cmd`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 20 in 1 file(s); by role: code 20
+  declarations found by pattern: 1
+
+BLOCKS
+src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+src/main.zig:308-324  sha256:98edcace0d03e371
+   308 |     color: ColorMode = .never,
+   309 |     /// `--replace=TEXT` (rg): substitute every match with TEXT. The rest of
+   310 |     /// the line survives (rg); with `-o` the record is just the replacement.
+   311 |     replace: ?[]const u8 = null,
+   312 |     /// `--passthru`: also print lines that do not match.
+   313 |     passthru: bool = false,
+   314 |     /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
+   315 |     /// Turns off the normal output; the command's streams are inherited.
+>  316 |     exec_cmd: ?[]const u8 = null,
+   317 |     /// `--vimgrep`: one output line per match, with column (rg).
+   318 |     vimgrep: bool = false,
+   319 |     /// `-G`: the patterns are BRE, translated to ERE before compiling.
+   320 |     basic_regexp: bool = false,
+   321 |     /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
+   322 |     smart_case: bool = false,
+   323 |     /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+   324 |     type_include: [8]types.Type = undefined,
+src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+src/main.zig:1051-1076  sha256:67f36cb0e95ed4bc
+  1051 |             } else if (std.mem.eql(u8, body, "replace")) {
+  1052 |                 i += 1;
+  1053 |                 if (i >= args.len) {
+  1054 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1055 |                     return error.Usage;
+  1056 |                 }
+  1057 |                 opts.replace = args[i];
+  1058 |             } else if (std.mem.startsWith(u8, body, "exec=")) {
+> 1059 |                 opts.exec_cmd = body["exec=".len..];
+  1060 |             } else if (std.mem.startsWith(u8, body, "execute=")) {
+> 1061 |                 opts.exec_cmd = body["execute=".len..];
+  1062 |             } else if (std.mem.eql(u8, body, "exec") or std.mem.eql(u8, body, "execute")) {
+  1063 |                 i += 1;
+  1064 |                 if (i >= args.len) {
+  1065 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1066 |                     return error.Usage;
+  1067 |                 }
+> 1068 |                 opts.exec_cmd = args[i];
+  1069 |             } else if (std.mem.eql(u8, body, "smart-case")) {
+  1070 |                 opts.smart_case = true;
+  1071 |             } else if (std.mem.startsWith(u8, body, "type=")) {
+  1072 |                 const v = body["type=".len..];
+  1073 |                 addType(opts, v, true) catch return error.Usage;
+  1074 |             } else if (std.mem.eql(u8, body, "type")) {
+  1075 |                 i += 1;
+  1076 |                 if (i >= args.len) {
+src/main.zig:1552-1570  sha256:41352c2e67e79418
+  1552 |                 'X' => {
+  1553 |                     const rest = chars[ci + 1 ..];
+  1554 |                     const value: []const u8 = if (rest.len > 0) rest else blk: {
+  1555 |                         i += 1;
+  1556 |                         if (i >= args.len) {
+  1557 |                             opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1558 |                             return error.Usage;
+  1559 |                         }
+  1560 |                         break :blk args[i];
+  1561 |                     };
+> 1562 |                     opts.exec_cmd = value;
+  1563 |                     ci = chars.len;
+  1564 |                 },
+  1565 |                 'Z', '0' => opts.null_filename = true,
+  1566 |                 'F' => opts.fixed = true,
+  1567 |                 'i', 'y' => opts.ignore_case = true,
+  1568 |                 'v' => opts.invert_match = true,
+  1569 |                 'w' => opts.word = true,
+  1570 |                 'm' => {
+src/main.zig:1716-1732  sha256:99092b1ddcf13fa1
+  1716 |     }
+  1717 | 
+  1718 |     // rg: `--column` implies `--line-number`; a column alone ("6:beta") is
+  1719 |     // indistinguishable from a line number for a machine reader.
+  1720 |     if (opts.column and !opts.no_line_number_explicit) opts.show_line_no = true;
+  1721 |     // `--json` promises stdout carries ONLY zgrep/1 events. `--exec` hands the
+  1722 |     // child our stdout, so the two cannot be honoured together: refuse instead
+  1723 |     // of mixing free text into the event stream (contract.md §8).
+> 1724 |     if (opts.json and opts.exec_cmd != null) {
+  1725 |         opts.fail = .{ .what = "--json cannot be combined with --exec (the command's output would break the JSONL stream)", .arg = "--exec" };
+  1726 |         return error.Usage;
+  1727 |     }
+  1728 | 
+  1729 |     if (opts.spill and opts.max_results == null and opts.max_output_tokens == null) {
+  1730 |         opts.fail = .{ .what = "--spill needs --max-results or --max-output-tokens (without a budget nothing is omitted)", .arg = "" };
+  1731 |         return error.Usage;
+  1732 |     }
+src/main.zig:1878-1889  sha256:bf3444a217a222f3
+  1878 | fn batchQueryProblem(vo: *const Options, gopts: *const Options) ?[]const u8 {
+  1879 |     if (vo.json_compact != gopts.json_compact) return "the JSON dialect (--json / --json=compact) is per call, not per query";
+  1880 |     if (vo.print_help or vo.print_version or vo.print_type_list) return "informational actions (--help, --version, --type-list) are not queries";
+  1881 |     if (vo.cache) return "--cache is not a query";
+> 1882 |     if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
+  1883 |     if (vo.pattern_files_count > 0 or vo.patterns_count != 1) return "a query has exactly one pattern: use \"pattern\", not -e / -f in \"flags\"";
+  1884 |     if (vo.queries_file != null) return "--queries-file cannot nest";
+  1885 |     if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
+  1886 |     if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+  1887 |     if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
+  1888 |     return null;
+  1889 | }
+src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+src/main.zig:2182-2209  sha256:7d2ac75f4fb55daa
+  2182 |         v
+  2183 |     else
+  2184 |         !(operands.len == 1 and isRegularFile(init.io, operands[0]));
+  2185 | 
+  2186 |     // `--exec` needs to know WHICH files matched, which only the ordered
+  2187 |     // path keeps; the streaming pipeline reports a single boolean. For v1 the
+  2188 |     // exec therefore runs on the sorted path, after the scan. This changes
+  2189 |     // nothing about the bytes read, only the order the commands run in.
+> 2190 |     if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+  2191 |     // `--heading` groups by file, and the streaming path emits in completion
+  2192 |     // order: two files' groups would interleave and a header would point at
+  2193 |     // the wrong cluster. rg keeps the argument order, which is what --sort
+  2194 |     // reproduces.
+  2195 |     if (opts.heading and !opts.sort) opts.sort = true;
+  2196 |     // --pre also runs per file, so it needs the ordered path.
+  2197 |     if (opts.pre_cmd != null and !opts.sort) opts.sort = true;
+  2198 |     // find -exec has no normal output. The quiet early-exits below are what
+  2199 |     // make `-q` fast, but they would stop the scan at the FIRST match and the
+  2200 |     // command would never reach the other files, so they stay off with --exec.
+> 2201 |     if (opts.exec_cmd != null) opts.mode = .quiet;
+  2202 | 
+  2203 |     const t0 = nowMonotonicNs(init.io);
+  2204 | 
+  2205 |     // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+  2206 |     if (opts.smart_case and !opts.ignore_case) {
+  2207 |         var has_upper = false;
+  2208 |         for (patterns) |pat| {
+  2209 |             for (pat) |c| {
+src/main.zig:2485-2501  sha256:caf5bb60c62e72da
+  2485 |                     mb_s,
+  2486 |                 },
+  2487 |             );
+  2488 |         }
+  2489 | 
+  2490 |         // POSIX/GNU grep (and rg): with -q a match wins over an error, so
+  2491 |         // `zgrep -q pat present missing` is 0, not 2. --exec also runs in
+  2492 |         // quiet mode but keeps "any error is 2".
+> 2493 |         if (matched and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+  2494 |         if (had_error) return 2;
+  2495 |         if (matched) return 0;
+  2496 |         return 1;
+  2497 |     }
+  2498 | 
+  2499 |     // --- collect the file list (deterministic sorted walk with filter engine) -
+  2500 |     var filter_engine = filter.FilterEngine.init(gpa);
+  2501 |     defer filter_engine.deinit();
+src/main.zig:2555-2571  sha256:0784b3ca20fcf6ae
+  2555 |     const slots: []Slot = try gpa.alloc(Slot, files.items.len);
+  2556 |     defer gpa.free(slots);
+  2557 |     for (slots) |*s| s.* = .{};
+  2558 | 
+  2559 |     // `--exec`: which files matched, so the command can run on them.
+  2560 |     var exec_matched: []bool = &.{};
+  2561 |     var exec_buf: []bool = &.{};
+  2562 |     defer if (exec_buf.len > 0) gpa.free(exec_buf);
+> 2563 |     if (opts.exec_cmd) |_| {
+  2564 |         const allocd: ?[]bool = gpa.alloc(bool, files.items.len) catch null;
+  2565 |         if (allocd) |m| {
+  2566 |             @memset(m, false);
+  2567 |             exec_buf = m;
+  2568 |             exec_matched = m;
+  2569 |         }
+  2570 |     }
+  2571 | 
+src/main.zig:2581-2622  sha256:2530eab730396a8f
+  2581 |     var ctx: Ctx = .{
+  2582 |         .io = init.io,
+  2583 |         .files = files.items,
+  2584 |         .slots = slots,
+  2585 |         .searcher = &searcher,
+  2586 |         .mode = opts.mode,
+  2587 |         .show_path = show_path,
+  2588 |         .binary = opts.binary,
+  2589 |         .scan_config = .{
+  2590 |             .invert = opts.invert_match,
+  2591 |             .max_count = opts.max_count,
+  2592 |             .before_context = opts.before_context,
+  2593 |             .after_context = opts.after_context,
+  2594 |             .show_line_no = opts.show_line_no,
+  2595 |             .null_filename = opts.null_filename,
+  2596 |             .only_matching = opts.only_matching,
+  2597 |             .column = opts.column,
+  2598 |             .color = opts.color == .always,
+  2599 |             .replace = opts.replace,
+  2600 |             .passthru = opts.passthru,
+  2601 |             .byte_offset = opts.byte_offset,
+  2602 |             .crlf = opts.crlf,
+  2603 |             .heading = heading_on,
+  2604 |             .vimgrep = opts.vimgrep,
+  2605 |             .null_data = opts.null_data,
+  2606 |             .multiline = opts.multiline,
+  2607 |             .stop_on_nonmatch = opts.stop_on_nonmatch,
+  2608 |             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+  2609 |             .json = opts.json,
+  2610 |             .provenance = opts.provenance,
+  2611 |         },
+  2612 |         .gpa = gpa,
+  2613 |         .window = window,
+> 2614 |         .exec_mode = opts.exec_cmd != null,
+  2615 |         .pre_cmd = opts.pre_cmd orelse "",
+  2616 |         .pre_glob = opts.pre_glob orelse "",
+  2617 |         .arena = arena,
+  2618 |     };
+  2619 | 
+  2620 |     var out: Out = .{ .io = init.io };
+  2621 |     const main_scratch = gpa.alloc(u8, default_scratch_bytes) catch null;
+  2622 |     defer if (main_scratch) |s| gpa.free(s);
+src/main.zig:2624-2675  sha256:94db2588b3a7933e
+  2624 |     // GNU grep and ripgrep separate disjoint context groups from different
+  2625 |     // files with a `--' line; keep that so context output is identical.
+  2626 |     const context_mode = opts.mode == .lines and (opts.before_context > 0 or opts.after_context > 0);
+  2627 |     var prev_emitted = false;
+  2628 | 
+  2629 |     if (!use_threads) {
+  2630 |         var idx: usize = 0;
+  2631 |         while (idx < files.items.len) : (idx += 1) {
+> 2632 |             if (opts.mode == .quiet and opts.exec_cmd == null and ctx.found.load(.acquire)) break;
+  2633 |             scanOne(&ctx, idx, main_scratch);
+  2634 |             if (idx < exec_matched.len) exec_matched[idx] = slots[idx].matched;
+  2635 |             if (opts.mode != .quiet) {
+  2636 |                 if (slots[idx].buf.items.len > 0) {
+  2637 |                     // Igual que en el camino con hilos: separador de grupos y
+  2638 |                     // blanco de heading son decoracion de texto, no de JSON.
+  2639 |                     if (context_mode and prev_emitted and !opts.json) out.writeAll("--\n");
+  2640 |                     if (heading_on and prev_emitted and !opts.json) out.writeAll("\n");
+  2641 |                     out.writeAll(slots[idx].buf.items);
+  2642 |                     prev_emitted = true;
+  2643 |                 }
+  2644 |                 slots[idx].buf.deinit(gpa);
+  2645 |                 slots[idx].buf = .empty;
+  2646 |             }
+  2647 |         }
+  2648 |         out.flush();
+  2649 |     } else {
+  2650 |         // -q probe: scan the first few files on this thread while nothing
+  2651 |         // else exists yet; a hit exits without ever spawning a worker.
+> 2652 |         if (opts.mode == .quiet and opts.exec_cmd == null) {
+  2653 |             const probe = @min(@as(usize, 3), files.items.len);
+  2654 |             var k: usize = 0;
+  2655 |             while (k < probe and !ctx.found.load(.acquire)) : (k += 1) scanOne(&ctx, k, main_scratch);
+  2656 |             ctx.next.store(k, .release);
+  2657 |             if (ctx.found.load(.acquire)) return 0;
+  2658 |         }
+  2659 |         var threads: std.ArrayList(std.Thread) = .empty;
+  2660 |         defer threads.deinit(gpa);
+  2661 |         var spawned: usize = 0;
+  2662 |         while (spawned < worker_count) : (spawned += 1) {
+  2663 |             const t = std.Thread.spawn(.{}, worker, .{&ctx}) catch break;
+  2664 |             threads.append(gpa, t) catch break;
+  2665 |         }
+  2666 | 
+> 2667 |         if (opts.mode == .quiet and opts.exec_cmd == null) {
+  2668 |             for (threads.items) |t| t.join();
+  2669 |         } else {
+  2670 |             // Emit in file order while workers run ahead, helping with the
+  2671 |             // work instead of idling.
+  2672 |             var w: usize = 0;
+  2673 |             var miss: usize = 0;
+  2674 |             while (w < slots.len) {
+  2675 |                 if (slots[w].ready.load(.acquire)) {
+src/main.zig:2741-2757  sha256:6227b1b87644f620
+  2741 |         }
+  2742 |         s.buf.deinit(gpa);
+  2743 |         s.buf = .empty;
+  2744 |     }
+  2745 | 
+  2746 |     // `--exec`: run the command on every file that matched. A non-zero child
+  2747 |     // exit is an error (grep's exit 2 slot), never a "no match".
+  2748 |     var exec_failed = false;
+> 2749 |     if (opts.exec_cmd) |tmpl| {
+  2750 |         if (exec_matched.len > 0) {
+  2751 |             if (!runExecAll(init.io, gpa, files.items, exec_matched, tmpl, opts.no_messages)) {
+  2752 |                 exec_failed = true;
+  2753 |             }
+  2754 |         }
+  2755 |     }
+  2756 | 
+  2757 |     const t1 = nowMonotonicNs(init.io);
+src/main.zig:2762-2778  sha256:9c523032a6043edf
+  2762 |         std.debug.print(
+  2763 |             "zgrep-stats: files={d} bytes={d} matched_files={d} matched_lines={d} errors={d} threads={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
+  2764 |             .{ stats_files, stats_bytes, stats_matched_files, stats_matched_lines, stats_err, worker_count, secs, mbps },
+  2765 |         );
+  2766 |     }
+  2767 | 
+  2768 |     if (exec_failed) return 2;
+  2769 |     // -q: a match wins over an error (GNU grep, rg); see the streaming path.
+> 2770 |     if (stats_matched_files > 0 and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+  2771 |     if (had_error or stats_err > 0) return 2;
+  2772 |     if (stats_matched_files > 0) return 0;
+  2773 |     return 1;
+  2774 | }
+  2775 | 
+  2776 | fn walkErrName(err: walk.Error) []const u8 {
+  2777 |     return switch (err) {
+  2778 |         error.OutOfMemory => eName(.NOMEM),
+src/main.zig:3042-3069  sha256:b0dd0f58ec869dbe
+  3042 | test "parseArgs: --exec, --execute, -X" {
+  3043 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  3044 |     defer arena.deinit();
+  3045 |     const alloc = arena.allocator();
+  3046 |     {
+  3047 |         var o: Options = .{};
+  3048 |         const a = [_][:0]const u8{ "zgrep", "--exec", "echo {}", "pat", "dir" };
+  3049 |         _ = try parseArgs(alloc, &a, &o);
+> 3050 |         try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+  3051 |     }
+  3052 |     {
+  3053 |         var o: Options = .{};
+  3054 |         const a = [_][:0]const u8{ "zgrep", "--execute=echo {}", "pat" };
+  3055 |         _ = try parseArgs(alloc, &a, &o);
+> 3056 |         try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+  3057 |     }
+  3058 |     {
+  3059 |         var o: Options = .{};
+  3060 |         const a = [_][:0]const u8{ "zgrep", "-X", "echo {}", "pat" };
+  3061 |         _ = try parseArgs(alloc, &a, &o);
+> 3062 |         try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+  3063 |     }
+  3064 |     {
+  3065 |         var o: Options = .{};
+  3066 |         const a = [_][:0]const u8{ "zgrep", "--exec" };
+  3067 |         try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+  3068 |     }
+  3069 | }
+
+TRUNCATION
+  truncated: false   items: 16

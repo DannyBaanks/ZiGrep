@@ -1,0 +1,18 @@
+{
+ "qid": "R06",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "dc461a1cc72bcce4b8994e047f9a409a94dbe1797f64c36aa786a2539320c3f4",
+ "answer": "Probably not a plain bytes/4, but the context doesn't show the formula, so I can't confirm it.\n\nWhat the context does show:\n\n- `estimateTokens(b: []const u8) f64` is defined at `src/batch.zig:49`. It takes a byte slice and returns a float.\n- The test at `src/batch.zig:594` is named \"vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII\". So the estimate is 0 for empty input, is additive across concatenated input (`src/batch.zig:602`), and weights digits and non-ASCII characters more heavily. `ñññ ` is estimated higher than `nnn ` (`src/batch.zig:600`). A flat bytes/4 would not make digits or non-ASCII count more, though the test could still hold if it counted bytes, since `ñ` is 2 bytes in UTF-8.\n- It's used at `src/batch.zig:276` and `src/batch.zig:323` on `line_buf` contents. The comment at `src/batch.zig:119` says the estimate covers emitted search events.\n\nMissing: the body of `estimateTokens` (line 49 onward), and any place where `--max-output-tokens` is parsed or compared against this estimate. The grep only matched the `estimateTokens` identifier, so I can't confirm the flag is tied to it.",
+ "usage": {
+  "cost_usd": 0.009658,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.35,
+ "headers": {}
+}

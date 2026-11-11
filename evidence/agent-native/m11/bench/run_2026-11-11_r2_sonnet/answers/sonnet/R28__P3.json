@@ -1,0 +1,18 @@
+{
+ "qid": "R28",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "977793ad17db52e2b39e028d23dcf47cc30e5eadadecaf40729a990ca4278b63",
+ "answer": "**What it does:** The context does not show the actual behavior. The scanning logic that consumes `stop_on_nonmatch` is not in the pack, and no README/GUIA text describing the flag appeared. The name suggests it stops scanning at a non-matching line, but that is an inference, not something the context confirms.\n\n**What the context does show:**\n- The CLI flag is parsed in `parseArgs`, which sets `opts.stop_on_nonmatch = true` on `--stop-on-nonmatch` (src/main.zig:1266-1267).\n- The field is declared in `Options` (src/main.zig:385) and in `scan.ScanConfig` (src/scan.zig:78), both defaulting to `false`.\n- `runSearch` copies it into `ScanConfig` in three places: stdin (src/main.zig:2284), the kamikaze pipeline (src/main.zig:2432), and the general path (src/main.zig:2607).\n- A test checks only that the flag is parsed (src/main.zig:3232-3234).\n\n**Missing:** the code in `src/scan.zig` that reads `config.stop_on_nonmatch`. The search matched only the declaration there (src/scan.zig:78), so the implementation was not found.",
+ "usage": {
+  "cost_usd": 0.028301999999999997,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.68,
+ "headers": {}
+}

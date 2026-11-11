@@ -1,0 +1,71 @@
+src/main.zig-2277-            .passthru = opts.passthru,
+src/main.zig-2278-            .byte_offset = opts.byte_offset,
+src/main.zig-2279-            .crlf = opts.crlf,
+src/main.zig-2280-            .heading = false, // stdin is a single stream: no header ever
+src/main.zig-2281-            .vimgrep = opts.vimgrep,
+src/main.zig-2282-            .null_data = opts.null_data,
+src/main.zig-2283-            .multiline = opts.multiline,
+src/main.zig-2284-            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:2285:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2286-            .json = opts.json,
+src/main.zig-2287-            .provenance = opts.provenance,
+src/main.zig-2288-        };
+src/main.zig-2289-        const path_label = "(standard input)";
+src/main.zig-2290-        const show_p = opts.show_path orelse false;
+src/main.zig-2291-
+src/main.zig-2292-        const data = stdin_buf.items;
+src/main.zig-2293-        const probe = @min(data.len, scan.binary_probe_bytes);
+--
+src/main.zig-2425-            .crlf = opts.crlf,
+src/main.zig-2426-            // `--heading` forces the ordered path (see above), so it can never
+src/main.zig-2427-            // be on here.
+src/main.zig-2428-            .heading = false,
+src/main.zig-2429-            .vimgrep = opts.vimgrep,
+src/main.zig-2430-            .null_data = opts.null_data,
+src/main.zig-2431-            .multiline = opts.multiline,
+src/main.zig-2432-            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:2433:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2434-            .json = opts.json,
+src/main.zig-2435-            .provenance = opts.provenance,
+src/main.zig-2436-        };
+src/main.zig-2437-
+src/main.zig-2438-        const matched = kamikaze.runKamikazePipeline(
+src/main.zig-2439-            init.io,
+src/main.zig-2440-            gpa,
+src/main.zig-2441-            &searcher,
+--
+src/main.zig-2600-            .passthru = opts.passthru,
+src/main.zig-2601-            .byte_offset = opts.byte_offset,
+src/main.zig-2602-            .crlf = opts.crlf,
+src/main.zig-2603-            .heading = heading_on,
+src/main.zig-2604-            .vimgrep = opts.vimgrep,
+src/main.zig-2605-            .null_data = opts.null_data,
+src/main.zig-2606-            .multiline = opts.multiline,
+src/main.zig-2607-            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:2608:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2609-            .json = opts.json,
+src/main.zig-2610-            .provenance = opts.provenance,
+src/main.zig-2611-        },
+src/main.zig-2612-        .gpa = gpa,
+src/main.zig-2613-        .window = window,
+src/main.zig-2614-        .exec_mode = opts.exec_cmd != null,
+src/main.zig-2615-        .pre_cmd = opts.pre_cmd orelse "",
+src/main.zig-2616-        .pre_glob = opts.pre_glob orelse "",
+--
+src/scan.zig-99-///   * `utf-16` -> BOM decides, else LE (rg does the same)
+src/scan.zig-100-///   * `utf-8` / `latin1` -> bytes as-is
+src/scan.zig-101-pub const Encoding = enum { auto, none, utf8, utf16, utf16le, utf16be, latin1 };
+src/scan.zig-102-
+src/scan.zig-103-/// Byte-order mark flavour, named so both the sniffer and the forced value
+src/scan.zig-104-/// return the SAME type.
+src/scan.zig-105-pub const BomKind = enum { le, be };
+src/scan.zig-106-
+src/scan.zig:107:pub fn parseEncoding(name: []const u8) ?Encoding {
+src/scan.zig-108-    if (std.mem.eql(u8, name, "auto")) return .auto;
+src/scan.zig-109-    if (std.mem.eql(u8, name, "none")) return .none;
+src/scan.zig-110-    if (std.mem.eql(u8, name, "utf-8")) return .utf8;
+src/scan.zig-111-    if (std.mem.eql(u8, name, "utf-16")) return .utf16;
+src/scan.zig-112-    if (std.mem.eql(u8, name, "utf-16le")) return .utf16le;
+src/scan.zig-113-    if (std.mem.eql(u8, name, "utf-16be")) return .utf16be;
+src/scan.zig-114-    if (std.mem.eql(u8, name, "latin1")) return .latin1;
+src/scan.zig-115-    return null;

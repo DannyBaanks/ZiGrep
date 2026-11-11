@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Units, base 1024, and saturation match the reference, but the answer fails to give the default (0 = unlimited), which the reference states definitively.",
+ "cost_usd": 0.00602
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer declines to give a definite answer (no default deletion, only with --include-out), though it correctly describes hasInstallLink protection, so it is incomplete rather than wrong.",
+ "cost_usd": 0.005972
+}

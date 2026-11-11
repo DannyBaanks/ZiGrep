@@ -1,0 +1,38 @@
+src/kamikaze.zig:721:            null, // el camino ordenado (`--sort`) no tiene muestra de motor
+src/main.zig:188:    \\      --sort, --deterministic
+src/main.zig:255:    sort: bool = false,
+src/main.zig:946:                opts.sort = false;
+src/main.zig:968:            } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+src/main.zig:969:                opts.sort = true;
+src/main.zig:1608:                    opts.sort = false;
+src/main.zig:1892:/// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+src/main.zig:1895:/// matched, else 1. `--sort` makes the batch deterministic, so it is
+src/main.zig:1925:    try base.appendSlice(arena, &.{ args[0], "--json", "--sort" });
+src/main.zig:2190:    if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+src/main.zig:2193:    // the wrong cluster. rg keeps the argument order, which is what --sort
+src/main.zig:2195:    if (opts.heading and !opts.sort) opts.sort = true;
+src/main.zig:2197:    if (opts.pre_cmd != null and !opts.sort) opts.sort = true;
+src/main.zig:2361:    // streaming path (rg does not promise an order there either; --sort does).
+src/main.zig:2362:    if (valid_operands.items.len > 1 and all_files) opts.sort = true;
+src/main.zig:2377:    if (!opts.sort) {
+src/main.zig:2405:        // ignored unless `--sort` was passed.
+src/main.zig:2988:        const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+src/main.zig:2990:        try std.testing.expect(o.sort);
+src/main.zig:3011:        try std.testing.expect(o.sort);
+src/main.zig:3320:        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "--max-columns=40", "-e", "pat", "--", "f.txt" };
+src/main.zig:3329:        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "-e", "pat", "--", "f.txt" };
+src/regex.zig:782:        std.mem.sort(u32, self.work.items, {}, std.sort.asc(u32));
+src/walk.zig:119:        std.sort.pdq(Item, items.items, {}, Item.greaterThan);
+src/walk.zig:121:        std.sort.pdq(Item, items.items, {}, Item.lessThan);
+README.md:25:zigrep --sort "pattern" .               # deterministic, GNU grep traversal order
+README.md:113:- **ZiGrep-specific:** `--sort`, `--io-engine=sync|uring|auto`, `--algo`,
+README.md:216:  arrive, unless `--sort` is given. `--sort` keeps the GNU grep order through
+GUIA.md:294:zigrep --sort "const" workspace/assembly
+GUIA.md:383:enjambre (árbol ≥ 2 MB, varias rutas, `--sort`, `--force-swarm`, …).
+GUIA.md:719:orden fijo, `--sort`. `-N` es la navegación Befunge, no el `--no-line-number`
+GUIA.md:752:* Cada consulta corre como `zgrep --json --sort <flags globales> <"flags"> -e
+GUIA.md:757:* Orden determinista (`--sort`): el lote es byte a byte lo mismo que N procesos
+GUIA.md:758:  separados con `--json --sort` (`evidence/agent-native/batch_conformance.py`).
+GUIA.md:996:zgrep --json=compact --sort --max-columns 40 HIT evidence/agent-native/m9/fix/multi.txt
+GUIA.md:1160:* necesites rendimiento extremo en escaneo de archivos con enjambre de hilos Kamikaze o salida determinista (`--sort`);
+GUIA.md:1350:Trampas: `--sort` hace determinista el orden; la CLI muestra separadores

@@ -1,0 +1,18 @@
+{
+ "qid": "R15",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "2b0ac49cf266da0cb761ff59a23b97d764a99da0bce216d054f49d771cf40c81",
+ "answer": "When the lazy DFA's state cache fills up, it is flushed and rebuilt from scratch.\n\n- The cache limit is `max_states = 3000` (src/regex.zig:659).\n- In `Dfa.intern`, if the state isn't already indexed, and `self.states.items.len >= max_states`, the cache is considered full (src/regex.zig:809-810).\n- The code comment says: \"Cache full: flush and start over. Callers must not reuse old ids.\" (src/regex.zig:811)\n- It first duplicates the incoming `nodes` into a temporary copy, which is freed after use (src/regex.zig:812-813). It then calls `self.reset()` (src/regex.zig:814) and interns the copied nodes as a fresh state with `internFresh` (src/regex.zig:815).\n\nThe search continues, but any previously held state ids become invalid. The context doesn't show what `reset()` does internally, or how callers handle the invalidated ids.",
+ "usage": {
+  "cost_usd": 0.010048000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.59,
+ "headers": {}
+}

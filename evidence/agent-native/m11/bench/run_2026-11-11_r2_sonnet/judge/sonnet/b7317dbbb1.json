@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all four files (only a.log excluded, with the same matchesExt reasoning); the extra skip_hidden caveat for .log is hedged and doesn't contradict the reference.",
+ "cost_usd": 0.0067
+}

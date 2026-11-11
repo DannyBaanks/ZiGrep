@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says it is not bytes/4 and describes the weighted class-based estimator with a scale, but omits the estimator name, the concrete scale (1.112*1.01), the no-underestimate calibration, and that it replaced bytes/4 because that underestimated.",
+ "cost_usd": 0.006742000000000001
+}

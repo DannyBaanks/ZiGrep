@@ -1,0 +1,18 @@
+{
+ "qid": "R17",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9a927ba7da7b5909103e68aa5947442cfba5f3e0ffd8f392e5e15c349c635c85",
+ "answer": "The context shows zgrep probes up to **4 files per root directory**, and it does so in `tryQuickQuietProbe` in `src/kamikaze.zig`.\n\n- The loop `while (probed < 4)` caps the probe at 4 files (`src/kamikaze.zig:764`). The counter increments only after a file is scanned without a match (`src/kamikaze.zig:798`). Entries that are not regular files, or that the filter excludes, are skipped and don't count (`src/kamikaze.zig:773-774`).\n- It reads entries directly from the root directory via `vfs.DirStream.open(io, root)` (`src/kamikaze.zig:755`). The files are scanned in quiet mode (`src/kamikaze.zig:790`). If any file matches, it returns true immediately (`src/kamikaze.zig:797`).\n- `quietProbeHit` calls this probe once for each root, so the total across all roots can exceed 4 (`src/kamikaze.zig:814-815`). On a hit it sets `stats.early_aborted` (`src/kamikaze.zig:816`).\n\nThe context doesn't show the caller that starts the worker threads, so I can't confirm that this runs before they start.",
+ "usage": {
+  "cost_usd": 0.013672,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.32,
+ "headers": {}
+}

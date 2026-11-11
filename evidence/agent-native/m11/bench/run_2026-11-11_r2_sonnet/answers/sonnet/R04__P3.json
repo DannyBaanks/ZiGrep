@@ -1,0 +1,18 @@
+{
+ "qid": "R04",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "091898d2cb6feaaf5fb0d592e378df535a87eff742c0241f25493200bb4bddb5",
+ "answer": "With `-G`, the pattern goes through `breToEre` (src/search.zig:393, 412), which translates BRE to ERE (src/bre.zig:11-43).\n\n- **`a\\+b`** means \"one or more `a`, then `b`\": `\\+` becomes the ERE `+` (src/bre.zig:20). The test shows `a\\+` → `a+` (src/bre.zig:158).\n- **`a+b`** means the literal text \"a+b\": a bare `+` becomes `\\+` (src/bre.zig:27). The test confirms `a+b` → `a\\+b` (src/bre.zig:163).\n- **A leading `*`** is a literal asterisk, at the start of a pattern, branch or group (src/bre.zig:29). The test shows `*ab` → `\\*ab` (src/bre.zig:178). A non-leading `*`, as in `a*b`, stays a quantifier (src/bre.zig:179).",
+ "usage": {
+  "cost_usd": 0.030626,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.99,
+ "headers": {}
+}

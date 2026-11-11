@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three points: `\\+` becomes ERE `+`, bare `+` becomes a literal plus, and a leading `*` is literal at the start of a pattern, branch or group. The extra file and line citations do not contradict the reference.",
+ "cost_usd": 0.006408
+}

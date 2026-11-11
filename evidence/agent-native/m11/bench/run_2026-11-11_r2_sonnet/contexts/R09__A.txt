@@ -1,0 +1,2 @@
+src/clean.zig:204:fn hasInstallLink(io: std.Io, gpa: Allocator, home: []const u8, target: []const u8) bool {
+src/clean.zig:282:    const protected = if (kind == .out_dir) hasInstallLink(io, gpa, home, target_path) else false;

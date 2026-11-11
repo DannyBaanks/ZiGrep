@@ -1,0 +1,6 @@
+{
+ "grade": 0,
+ "wrong_claims": [],
+ "reason": "The answer declines to say what auto does, while the reference says it degrades to never (no TTY check); the question is not answered, and the reference treats it as answerable.",
+ "cost_usd": 0.005548
+}

@@ -1,0 +1,9 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims --stop-on-nonmatch makes the search stop once a non-matching line follows a match; in reality it has no effect because nothing reads it.",
+  "Suggests the implementation that reads cfg.stop_on_nonmatch is likely elsewhere in src/scan.zig; the reference says no code reads it."
+ ],
+ "reason": "The answer asserts the flag works as documented, whereas the reference says it is parsed and copied but never read, so it does nothing.",
+ "cost_usd": 0.007228
+}

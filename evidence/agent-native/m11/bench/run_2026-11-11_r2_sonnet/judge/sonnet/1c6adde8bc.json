@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states that auto is effectively never with no TTY detection, matching the reference; the extra hedging about unseen parsing code doesn't contradict it.",
+ "cost_usd": 0.0056500000000000005
+}

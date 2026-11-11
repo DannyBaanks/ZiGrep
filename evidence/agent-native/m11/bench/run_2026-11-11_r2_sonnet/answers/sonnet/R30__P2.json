@@ -1,0 +1,18 @@
+{
+ "qid": "R30",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "053f5f246a0ec9f245019dc2dca6e5a0d4d495a24c9ab493405e8db02c824480",
+ "answer": "The context does not answer this. It contains no measurements of peak RSS or timing for a 4 GB file on NVMe, and no benchmark output.\n\nWhat it does show is how zgrep chooses between reading and memory-mapping a file:\n- `mmap_threshold` is `256 * 1024` (src/scan.zig:157).\n- In the portable path, files with `size >= mmap_threshold` are memory-mapped read-only (src/scan.zig:910-917). If the mapping fails, the code falls through to another path (src/scan.zig:920).\n- In the Linux path, files below the threshold are read fully into an allocated buffer (src/scan.zig:1143-1155). The `else` branch (src/scan.zig:1156) is cut off in the context.\n\nSince the whole file is mapped, memory behavior depends on page-cache and kernel handling. The context does not quantify it.\n\nTo answer, I would need benchmark results (e.g., the bench run directory or README/GUIA performance sections) that were not in the search output, or the cut-off `else` branch.",
+ "usage": {
+  "cost_usd": 0.013596,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.24,
+ "headers": {}
+}

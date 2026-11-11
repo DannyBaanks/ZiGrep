@@ -1,0 +1,35 @@
+src/walk.zig-3-const std = @import("std");
+src/walk.zig-4-const Allocator = std.mem.Allocator;
+src/walk.zig-5-const filter = @import("filter.zig");
+src/walk.zig-6-const vfs = @import("vfs.zig");
+src/walk.zig-7-const FilterEngine = filter.FilterEngine;
+src/walk.zig-8-const nav = @import("nav.zig");
+src/walk.zig-9-const NavPlan = nav.NavPlan;
+src/walk.zig-10-
+src/walk.zig:11:pub const walk_max_depth = 512;
+src/walk.zig-12-
+src/walk.zig-13-pub const Error = error{
+src/walk.zig-14-    OutOfMemory,
+src/walk.zig-15-    OpenFailed,
+src/walk.zig-16-    ReadFailed,
+src/walk.zig-17-    TooDeep,
+src/walk.zig-18-};
+src/walk.zig-19-
+--
+src/walk.zig-54-    dir: [:0]const u8,
+src/walk.zig-55-    out: *std.ArrayList([:0]const u8),
+src/walk.zig-56-    depth: usize,
+src/walk.zig-57-    filter_engine: ?*const FilterEngine,
+src/walk.zig-58-    nav_plan: ?NavPlan,
+src/walk.zig-59-    max_depth: usize,
+src/walk.zig-60-    max_filesize: usize,
+src/walk.zig-61-) Error!void {
+src/walk.zig:62:    if (depth > walk_max_depth) return error.TooDeep;
+src/walk.zig-63-
+src/walk.zig-64-    const metadata = vfs.stat(io, dir, true) orelse return error.OpenFailed;
+src/walk.zig-65-    if (metadata.kind == .file) {
+src/walk.zig-66-        try out.append(gpa, dir);
+src/walk.zig-67-        return;
+src/walk.zig-68-    }
+src/walk.zig-69-    if (metadata.kind != .directory) return;
+src/walk.zig-70-

@@ -1,0 +1,1512 @@
+{
+ "revision": "94800ad55aa6f882d0222663710035375eb86b94",
+ "src_dirty": false,
+ "budget": 28000,
+ "scope": [
+  "src",
+  "README.md",
+  "GUIA.md"
+ ],
+ "items": [
+  {
+   "qid": "R01",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e matchPattern -- src README.md GUIA.md",
+   "raw_bytes": 1116,
+   "delivered_bytes": 1116,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "9d59e8ab790e817f1796588bda0bbf9eab78f8fc196c1c0a0f5ed3fb3b9a7cb1"
+  },
+  {
+   "qid": "R01",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e matchPattern -- src README.md GUIA.md",
+   "raw_bytes": 5666,
+   "delivered_bytes": 5666,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "a92e9865a309e65d101c0cebaa05b33f4fdf5d72ee3893a30f406c2e415f13bd"
+  },
+  {
+   "qid": "R01",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchPattern src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5450,
+   "delivered_bytes": 5450,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "10f1d8120a5884a0849385c6c7f4aea810c746a08a9b2c8745cbc6bf5fbdca6b"
+  },
+  {
+   "qid": "R01",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchPattern src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 8953,
+   "delivered_bytes": 8953,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "baf840f337aa03806ca461f30d936c32c4726237819026f6516851068af24723"
+  },
+  {
+   "qid": "R01",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchPattern src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 10395,
+   "delivered_bytes": 10395,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "dc0e0358240d981ed573693bbe375819fe5bf744c65b80b1228138f095f089bc"
+  },
+  {
+   "qid": "R02",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e matchesExt -- src README.md GUIA.md",
+   "raw_bytes": 663,
+   "delivered_bytes": 663,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "ec1389e694c9e339abd99da968cd2fedc09c05f9702625bbb077f55f34dde5f7"
+  },
+  {
+   "qid": "R02",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e matchesExt -- src README.md GUIA.md",
+   "raw_bytes": 3969,
+   "delivered_bytes": 3969,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "90975b6e4bd1de2bc4476a1139fd2571a34bccdc7c82afb40a54ce6ad6c388cc"
+  },
+  {
+   "qid": "R02",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchesExt src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3334,
+   "delivered_bytes": 3334,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "c25fc60b88a03e8c030e7a53fddd8df5642baaef2bbac40d5c6c0d649daac908"
+  },
+  {
+   "qid": "R02",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchesExt src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5585,
+   "delivered_bytes": 5585,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "215d25b27765c27a3e1726053a156b5fe386f65336c5a169711728b524bdb5df"
+  },
+  {
+   "qid": "R02",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py matchesExt src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6793,
+   "delivered_bytes": 6793,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5e2d1d75526a015a4016497acceed0f1302efe668bdd1bd43e18441ec93a09bf"
+  },
+  {
+   "qid": "R03",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e default_excluded_dirs -- src README.md GUIA.md",
+   "raw_bytes": 132,
+   "delivered_bytes": 132,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "69896e1610fcb6473b192406b02edd665e71168470f0887388d17a937a0341cc"
+  },
+  {
+   "qid": "R03",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e default_excluded_dirs -- src README.md GUIA.md",
+   "raw_bytes": 1686,
+   "delivered_bytes": 1686,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "a2e154c1775c4336a93a1fac69430b58008655545cd5cbc23a5c06e412520f54"
+  },
+  {
+   "qid": "R03",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py default_excluded_dirs src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2012,
+   "delivered_bytes": 2012,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "115aeaab0e71fcc1ae61e5d36937abbe37d1ed38a522feefb194fa256cbf0503"
+  },
+  {
+   "qid": "R03",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py default_excluded_dirs src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2186,
+   "delivered_bytes": 2186,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "754aab2cb7ded6f233cc0b44623f2f1390eb76b936a041adbedcc9a575b60be4"
+  },
+  {
+   "qid": "R03",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py default_excluded_dirs src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3394,
+   "delivered_bytes": 3394,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5161f9692811b6bd3af04d8687da31477e4c54c6808e8d028ad0fc190d42d04a"
+  },
+  {
+   "qid": "R04",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e breToEre -- src README.md GUIA.md",
+   "raw_bytes": 1157,
+   "delivered_bytes": 1157,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "b48f422305275267051734a53749f4a0f0e22853449d16cbe41cd0cdb07488de"
+  },
+  {
+   "qid": "R04",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e breToEre -- src README.md GUIA.md",
+   "raw_bytes": 5389,
+   "delivered_bytes": 5389,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "08542bf9b4dfd9fed1e72c31d0e76d9ba3437ac77677c8814720dfad5bcca7b9"
+  },
+  {
+   "qid": "R04",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py breToEre src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5014,
+   "delivered_bytes": 5014,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "36872a48e74bef1ac68c7222560bff4c4865d31916186d5ee2ce8a33011ba290"
+  },
+  {
+   "qid": "R04",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py breToEre src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 10999,
+   "delivered_bytes": 10999,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "681c7cbf38f76b757c06c85de400d8d9330ae493da76a102ab9337366a5648a5"
+  },
+  {
+   "qid": "R04",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py breToEre src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 13333,
+   "delivered_bytes": 13333,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "091898d2cb6feaaf5fb0d592e378df535a87eff742c0241f25493200bb4bddb5"
+  },
+  {
+   "qid": "R05",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e parseQueries -- src README.md GUIA.md",
+   "raw_bytes": 602,
+   "delivered_bytes": 602,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "9f5ce29dd7e31dbe94b79106c0d6104febb3333f04d0d1751cb7821470c20349"
+  },
+  {
+   "qid": "R05",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e parseQueries -- src README.md GUIA.md",
+   "raw_bytes": 3953,
+   "delivered_bytes": 3953,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "2f6fae880169f4256baf42a7375162557213ec0c55eb7ec954619f937199e4a5"
+  },
+  {
+   "qid": "R05",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseQueries src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2911,
+   "delivered_bytes": 2911,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5f9422c249d078a1c74480c0e4394e54a64ceb024e956ec3b37eada66b7627ff"
+  },
+  {
+   "qid": "R05",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseQueries src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6058,
+   "delivered_bytes": 6058,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "d1c7f2904cb089c4f736a67ff09078e2c815c9a3cc6334a1266ae1639d1e145c"
+  },
+  {
+   "qid": "R05",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseQueries src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 8241,
+   "delivered_bytes": 8241,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "8eb23b12a57824537ad7cb6129f282c6970f1f133bec8f12aa78357259c13cdd"
+  },
+  {
+   "qid": "R06",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e estimateTokens -- src README.md GUIA.md",
+   "raw_bytes": 981,
+   "delivered_bytes": 981,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "dc461a1cc72bcce4b8994e047f9a409a94dbe1797f64c36aa786a2539320c3f4"
+  },
+  {
+   "qid": "R06",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e estimateTokens -- src README.md GUIA.md",
+   "raw_bytes": 6499,
+   "delivered_bytes": 6499,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "0cb4c7c8b91e3d2f8b9406744428a5bed4a2a8b1344b425f66ae3450c89e08b1"
+  },
+  {
+   "qid": "R06",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py estimateTokens src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 9430,
+   "delivered_bytes": 9430,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "585a608130e33c52361e96d30932ec637d9d90a0a393fbcf6188fa406e19b481"
+  },
+  {
+   "qid": "R06",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py estimateTokens src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 13294,
+   "delivered_bytes": 13294,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "eb98d25f103fdc9445b91bf7898f23f06d407c61c0ac7491c256e157cd145fc5"
+  },
+  {
+   "qid": "R06",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py estimateTokens src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 15233,
+   "delivered_bytes": 15233,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "0bb15fba1da99a9c6258e98f3c13a8fb018883b7dde987b2e78885d42a49acaf"
+  },
+  {
+   "qid": "R07",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e isResult -- src README.md GUIA.md",
+   "raw_bytes": 111,
+   "delivered_bytes": 111,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "c567e57b2cf3fd0980a2ac42e95e87707045288b1c836ff27b6ce5e162087b5c"
+  },
+  {
+   "qid": "R07",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e isResult -- src README.md GUIA.md",
+   "raw_bytes": 1927,
+   "delivered_bytes": 1927,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "a27d0bc26a9b1fa6d10eac7b8180070d17b855befb0c9095940eaf93641061b4"
+  },
+  {
+   "qid": "R07",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py isResult src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3084,
+   "delivered_bytes": 3084,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6252871cb8ff447fe5bfa904eaf0ad20ff4f13dc1264806e60b3187c09ad8f7d"
+  },
+  {
+   "qid": "R07",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py isResult src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3902,
+   "delivered_bytes": 3902,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5e6761d4f35516cd04026b0e55fd2698a595f518b4f04522a404426d944f0e3e"
+  },
+  {
+   "qid": "R07",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py isResult src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5853,
+   "delivered_bytes": 5853,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "ab6c95825c36efc3527930c3c8c4c392a98115dbf513a733ed7cc1d7614ff8f6"
+  },
+  {
+   "qid": "R08",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e procsHomeActive -- src README.md GUIA.md",
+   "raw_bytes": 216,
+   "delivered_bytes": 216,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "ac1cf70d59fedef6b621c6186b3ee2221d9b1cd42ee8f14ecc262d93b8cc3561"
+  },
+  {
+   "qid": "R08",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e procsHomeActive -- src README.md GUIA.md",
+   "raw_bytes": 2450,
+   "delivered_bytes": 2450,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "6c75a50a36ec5bca58ba45ccf389df4f5330bd08d609e26a43214f6194733ee1"
+  },
+  {
+   "qid": "R08",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py procsHomeActive src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4230,
+   "delivered_bytes": 4230,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "932dfffef7e9d4cafe8b5ed7a9075e8833dd6d625e6059a1f6e35454653cfbc0"
+  },
+  {
+   "qid": "R08",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py procsHomeActive src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5566,
+   "delivered_bytes": 5566,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "2db6787d6be77fd5d3fed11db05327e325bec01564f016490eb5f418077e1751"
+  },
+  {
+   "qid": "R08",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py procsHomeActive src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6773,
+   "delivered_bytes": 6773,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6893baf69ed4fc7efba80134cdd319b9227027afe032e6123e77fb1e5d676287"
+  },
+  {
+   "qid": "R09",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e hasInstallLink -- src README.md GUIA.md",
+   "raw_bytes": 226,
+   "delivered_bytes": 226,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "b474855ac01cbe0b1b3853ee83af52439e8ea16e19ff291ab16366ae3857ea09"
+  },
+  {
+   "qid": "R09",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e hasInstallLink -- src README.md GUIA.md",
+   "raw_bytes": 2295,
+   "delivered_bytes": 2295,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "58caa78470b101d45b0676b44e1373f447c71dbdf2554b8d9a47e07607793c1d"
+  },
+  {
+   "qid": "R09",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py hasInstallLink src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2694,
+   "delivered_bytes": 2694,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "e727d67bddeee0457708dde7f8fdde7015887e5b25e1bbeaa8efb1211f70e5e3"
+  },
+  {
+   "qid": "R09",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py hasInstallLink src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3600,
+   "delivered_bytes": 3600,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "08cc4f2835cab958ae086c2db448bf4678e8bd8c473227e6c631720bfd25c4bc"
+  },
+  {
+   "qid": "R09",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py hasInstallLink src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4807,
+   "delivered_bytes": 4807,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "2ad9668d71a9dd3a0863b179efc053ba2e929e2dfaedca265bd6d48b2a505b88"
+  },
+  {
+   "qid": "R10",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e parseEncoding -- src README.md GUIA.md",
+   "raw_bytes": 338,
+   "delivered_bytes": 338,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "e6243d005c5a63777794a794a8e53007fc0ef95453e7d2d38c4c3a2196902c28"
+  },
+  {
+   "qid": "R10",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e parseEncoding -- src README.md GUIA.md",
+   "raw_bytes": 3995,
+   "delivered_bytes": 3995,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "397300a93859218223e553077847bfcb87bf25c9e5fc53c874fa064ee1ebf3e1"
+  },
+  {
+   "qid": "R10",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseEncoding src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5990,
+   "delivered_bytes": 5990,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "cfdeac41c7a69990139eefc37c3dac2957d81e50a9d2a29b89dd4374c8410c95"
+  },
+  {
+   "qid": "R10",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseEncoding src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 7054,
+   "delivered_bytes": 7054,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "f55d5d3f1e2566edb1081aa767d5a8f6bc7bba9ca14fdfc4a890858356a66ae4"
+  },
+  {
+   "qid": "R10",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseEncoding src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 7701,
+   "delivered_bytes": 7701,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6569787d9f39ba4212e9bd75d28c636c4b6377823df6d655c94ec947c470c218"
+  },
+  {
+   "qid": "R11",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e provSourceOf -- src README.md GUIA.md",
+   "raw_bytes": 621,
+   "delivered_bytes": 621,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "44ba4e3fb77e06f9a5cb7b857931579271eb100852bc11d3b0592ad31b2ce9b8"
+  },
+  {
+   "qid": "R11",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e provSourceOf -- src README.md GUIA.md",
+   "raw_bytes": 3592,
+   "delivered_bytes": 3592,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "c215542a767b50d3e731a8093362d0b9019669483500ce6b706d28b3d4815369"
+  },
+  {
+   "qid": "R11",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py provSourceOf src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3302,
+   "delivered_bytes": 3302,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "d7c44a3934a3e2bfd6f4b70458ec9a074b99ec3fc02773795950739939f28873"
+  },
+  {
+   "qid": "R11",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py provSourceOf src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4510,
+   "delivered_bytes": 4510,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "ae2773d7d4d6a9a61823511e4c69c0b6b1fbb2ff3e91437c1bf62a70d7a8f7c6"
+  },
+  {
+   "qid": "R11",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py provSourceOf src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4973,
+   "delivered_bytes": 4973,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "1e8c7dd7f6e7df1593367aaeed872cfc3893a190ce1cea997cfedeb9f4896a7b"
+  },
+  {
+   "qid": "R12",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e visibleLineEnd -- src README.md GUIA.md",
+   "raw_bytes": 86,
+   "delivered_bytes": 86,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "08b6620b667545db4774b6166b785ddbaaf57c9f512ecf8470a26cb31ba2a359"
+  },
+  {
+   "qid": "R12",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e visibleLineEnd -- src README.md GUIA.md",
+   "raw_bytes": 1028,
+   "delivered_bytes": 1028,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "f6455511fe207a2200940576633945ef1cd09783ce3414c233894968df83458b"
+  },
+  {
+   "qid": "R12",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py visibleLineEnd src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 781,
+   "delivered_bytes": 781,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "06ebdded73cd2bcfe71baba91428d0e6b4c66875f1c3e9c30a386333bef6c09f"
+  },
+  {
+   "qid": "R12",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py visibleLineEnd src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 1559,
+   "delivered_bytes": 1559,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "62538f8244eabefe393974bd366312b033d558b9ae5f7d50d4c7519676bc7594"
+  },
+  {
+   "qid": "R12",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py visibleLineEnd src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 1981,
+   "delivered_bytes": 1981,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "ceb7008edc49dbf2a7056b233b8e210b024ba332ab3360b58deb0a6f8e5ac199"
+  },
+  {
+   "qid": "R13",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e icase -- src README.md GUIA.md",
+   "raw_bytes": 2360,
+   "delivered_bytes": 2360,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "f5315d3a096e925b564a5497914dc502e59a540ee8c47b9065c7d9c13a81e8c3"
+  },
+  {
+   "qid": "R13",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e icase -- src README.md GUIA.md",
+   "raw_bytes": 19173,
+   "delivered_bytes": 19173,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "3165b407bc91acc7e7efcc0f6f288a77f7966d812a292173ccc4ac4024fda6c8"
+  },
+  {
+   "qid": "R13",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py icase src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 15678,
+   "delivered_bytes": 15678,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "69a5417f58771372addf7674535ca6959445baf890905e2085701a31200b4363"
+  },
+  {
+   "qid": "R13",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py icase src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 19339,
+   "delivered_bytes": 19339,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "7fb8e49030b3d02adcfffc93663f1d2f7322f8fcacbf598bd69013d8ac66ddee"
+  },
+  {
+   "qid": "R13",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py icase src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 22348,
+   "delivered_bytes": 22348,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "f555220b14d4fbc8f5b59c3802ca95c67c3fb844d95d0bf012e825df8b9f100e"
+  },
+  {
+   "qid": "R14",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e lookaround -- src README.md GUIA.md",
+   "raw_bytes": 624,
+   "delivered_bytes": 624,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "4222a8427a8eec39d9634012a6a91cb1d887b80fe75bc31355a9b8d0b83462e0"
+  },
+  {
+   "qid": "R14",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e lookaround -- src README.md GUIA.md",
+   "raw_bytes": 6334,
+   "delivered_bytes": 6334,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "472f1934ba5bd6dbe7631f510de6bb9ea45eb7b8bd9dbc12283c7f48fb171892"
+  },
+  {
+   "qid": "R14",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py lookaround src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6281,
+   "delivered_bytes": 6281,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "3dff69254c83dffc69635d35a80b813ec2f6fe92ba02412e2f5ee31418d2c253"
+  },
+  {
+   "qid": "R14",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py lookaround src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4348,
+   "delivered_bytes": 4348,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "7ee2ff7daa9e107bd218fe265b263acb86791cb9c77286ddc33f318364ff0efe"
+  },
+  {
+   "qid": "R14",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py lookaround src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6651,
+   "delivered_bytes": 6651,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6336d8e23d8a281f5b3d0b963adf81ff231a766121dcc78ba1c1707a5eaf0a26"
+  },
+  {
+   "qid": "R15",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e max_states -- src README.md GUIA.md",
+   "raw_bytes": 112,
+   "delivered_bytes": 112,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "814b0d4f21e85bedad94fef1c3c90176ae83faf0e4fa36e3c7955a08d0e2c8ef"
+  },
+  {
+   "qid": "R15",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e max_states -- src README.md GUIA.md",
+   "raw_bytes": 1791,
+   "delivered_bytes": 1791,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "fa7bc0fc45965db4d629d725ba42468a3b79042414091d740732676c807dc603"
+  },
+  {
+   "qid": "R15",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py max_states src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 1896,
+   "delivered_bytes": 1896,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "2b0ac49cf266da0cb761ff59a23b97d764a99da0bce216d054f49d771cf40c81"
+  },
+  {
+   "qid": "R15",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py max_states src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 1931,
+   "delivered_bytes": 1931,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "49d79aa751681ef8e2cfd03c5f0a715c5187bae2be6370114db7410d4090a4d4"
+  },
+  {
+   "qid": "R15",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py max_states src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2328,
+   "delivered_bytes": 2328,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "fbf47241a14a77414ef22b907fb0e7add6bb1fa2887ebeef2395e767d5af60b1"
+  },
+  {
+   "qid": "R16",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e micro_tree_max_bytes -- src README.md GUIA.md",
+   "raw_bytes": 121,
+   "delivered_bytes": 121,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "a621f64ca40d861cfec58ad19a77d9898578723dbcd5a27e224cfad45e0041bb"
+  },
+  {
+   "qid": "R16",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e micro_tree_max_bytes -- src README.md GUIA.md",
+   "raw_bytes": 1768,
+   "delivered_bytes": 1768,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "936c7805431431287f5e490299f0bedd51a2fb29df950a8f0be72c51a3004995"
+  },
+  {
+   "qid": "R16",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py micro_tree_max_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2206,
+   "delivered_bytes": 2206,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6d7fd869e1af9dda27eb61c4bb7e03f6c745007b7f8415fbee594c70069ef314"
+  },
+  {
+   "qid": "R16",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py micro_tree_max_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2492,
+   "delivered_bytes": 2492,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "4b28ebac72f23f957d8d8673dce72a63be13a0b2f4a626b6735ed3b19c881b28"
+  },
+  {
+   "qid": "R16",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py micro_tree_max_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2912,
+   "delivered_bytes": 2912,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "8468561dee957464fe79779d8a9a399268981285358e47cb8b089f9b912ef5d4"
+  },
+  {
+   "qid": "R17",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e tryQuickQuietProbe -- src README.md GUIA.md",
+   "raw_bytes": 160,
+   "delivered_bytes": 160,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "393da6f9289cc8d49362c12d55ee279e02b3cd8b61f92a870a39754fff968f85"
+  },
+  {
+   "qid": "R17",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e tryQuickQuietProbe -- src README.md GUIA.md",
+   "raw_bytes": 1684,
+   "delivered_bytes": 1684,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "65af1a812cfb5af7d548c1fd3d54d279d61e556f154b3912df488c21acf58e67"
+  },
+  {
+   "qid": "R17",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py tryQuickQuietProbe src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3492,
+   "delivered_bytes": 3492,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "9a927ba7da7b5909103e68aa5947442cfba5f3e0ffd8f392e5e15c349c635c85"
+  },
+  {
+   "qid": "R17",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py tryQuickQuietProbe src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4530,
+   "delivered_bytes": 4530,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "68d94522c87d7696f718c9f291a018b949d248229fe95dc161a5cab03266d881"
+  },
+  {
+   "qid": "R17",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py tryQuickQuietProbe src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6021,
+   "delivered_bytes": 6021,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "f6cad830ad7ab623de6c702b70ba1343dff13f5544df9e15dd4248ad8fbc2103"
+  },
+  {
+   "qid": "R18",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e has_trampoline -- src README.md GUIA.md",
+   "raw_bytes": 498,
+   "delivered_bytes": 498,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "b4723ad6fd0823d64a8a534b8b4a069194d388af87d36e3d9d91dabd173f1a4c"
+  },
+  {
+   "qid": "R18",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e has_trampoline -- src README.md GUIA.md",
+   "raw_bytes": 5368,
+   "delivered_bytes": 5368,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "9604c743dde34497536057f9a9dcbbbb12efc3b566cbfae40b0c03e5cbcc433d"
+  },
+  {
+   "qid": "R18",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py has_trampoline src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 7377,
+   "delivered_bytes": 7377,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "1a56d6d64125580beacd46043663466dfffc749715ad058ff68d2b16fb876cc4"
+  },
+  {
+   "qid": "R18",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py has_trampoline src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 8648,
+   "delivered_bytes": 8648,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "54f3bbe5b6a28c887f984ac3ff3d0195faa9fee9a8c56fa45d593259ecca006e"
+  },
+  {
+   "qid": "R18",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py has_trampoline src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 9595,
+   "delivered_bytes": 9595,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5a860e61a8d2c8132ee5b06c3b025d3341d236ea058e2fad4e7ea1263b751525"
+  },
+  {
+   "qid": "R19",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e BinaryFiles -- src README.md GUIA.md",
+   "raw_bytes": 225,
+   "delivered_bytes": 225,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "14b038347b80445d5f35ff7581a982b549351280bf4e724c7ba098e430f9a9c1"
+  },
+  {
+   "qid": "R19",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e BinaryFiles -- src README.md GUIA.md",
+   "raw_bytes": 3232,
+   "delivered_bytes": 3232,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "0cb7269501b9bd5182006c10b0c27748331ae0ae8947aa1733aa2a1b85acfa65"
+  },
+  {
+   "qid": "R19",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py BinaryFiles src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2801,
+   "delivered_bytes": 2801,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "6a400647dc371274a3da9a99824ef634b77b09dd9f977f040b72f78d293e430f"
+  },
+  {
+   "qid": "R19",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py BinaryFiles src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4199,
+   "delivered_bytes": 4199,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "3762122e999a609c88a461562f5df2b48c1d6c7c4400cb95ac479b3db3ca1b6f"
+  },
+  {
+   "qid": "R19",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py BinaryFiles src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4790,
+   "delivered_bytes": 4790,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "bab0d0173b48eb734bcee8f095050a24ba0fe4baecfec97d46ad73189846b54b"
+  },
+  {
+   "qid": "R20",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e smart_case -- src README.md GUIA.md",
+   "raw_bytes": 365,
+   "delivered_bytes": 365,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "6d202035e8eb23f1eae8aec75c14fa1409f9b42d84d729e58debcd576b20a67d"
+  },
+  {
+   "qid": "R20",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e smart_case -- src README.md GUIA.md",
+   "raw_bytes": 5809,
+   "delivered_bytes": 5809,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "1772de5ec272c32c5a48db3f8fb7ae000ccb8d7569fd4f2173ff824b814163f2"
+  },
+  {
+   "qid": "R20",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py smart_case src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6179,
+   "delivered_bytes": 6179,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "3393ae49189c994475d8d2a4bc3890d2027333c787a8f745e3d93729c2e7d9f0"
+  },
+  {
+   "qid": "R20",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py smart_case src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6752,
+   "delivered_bytes": 6752,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "557eb2a21a2b395a080318d0dedba2bd89244df86fe86b1511659a05fa7ea2aa"
+  },
+  {
+   "qid": "R20",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py smart_case src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 7363,
+   "delivered_bytes": 7363,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "8f8b776023b2a13ad10d0ad199139ee4da4048339bdfda3a45161e50ff75cfed"
+  },
+  {
+   "qid": "R21",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e ColorMode -- src README.md GUIA.md",
+   "raw_bytes": 200,
+   "delivered_bytes": 200,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "764cdd911beb4cfe1f1ad77289b320efa0e8d241a012b1e91e0515f9933af33a"
+  },
+  {
+   "qid": "R21",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e ColorMode -- src README.md GUIA.md",
+   "raw_bytes": 3246,
+   "delivered_bytes": 3246,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "5775f9598ddd2d5997b1db79fd136fd30722a2a14b6d26eca14aea5d95b5224d"
+  },
+  {
+   "qid": "R21",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py ColorMode src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4010,
+   "delivered_bytes": 4010,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "bb1d74cd0ffce7505f12e5a789abace2635b4106778005c6c0a49b4dc32adaa0"
+  },
+  {
+   "qid": "R21",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py ColorMode src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5182,
+   "delivered_bytes": 5182,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "4856cba788581092e6f2e95ec469502a91ce913220ae7ca85fff6261d3462c3c"
+  },
+  {
+   "qid": "R21",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py ColorMode src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 5706,
+   "delivered_bytes": 5706,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "a8e40188d4207e8b523faa96a8c338d5b3e72b105c4000d67b2f8a37f5b9a278"
+  },
+  {
+   "qid": "R22",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e exec_cmd -- src README.md GUIA.md",
+   "raw_bytes": 1569,
+   "delivered_bytes": 1569,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "32d7e200e23021943e54a4b62489caa9a7cf8d20cc06da0f2e51d1c72ab85ff3"
+  },
+  {
+   "qid": "R22",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e exec_cmd -- src README.md GUIA.md",
+   "raw_bytes": 18160,
+   "delivered_bytes": 18160,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "311de0e5417f03db56a17c9ff7e8c6b085c3132a8b5e682999085090e3c2afa1"
+  },
+  {
+   "qid": "R22",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py exec_cmd src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 18278,
+   "delivered_bytes": 18278,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "2df2e8f92e274b99ddede718f8affad82b36433e203ec2e80c57b817baac2a4f"
+  },
+  {
+   "qid": "R22",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py exec_cmd src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 21189,
+   "delivered_bytes": 21189,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "d7c1dd3c14354f454682c33db25eca2854220bc559ebf94995a2fb6c55c2779b"
+  },
+  {
+   "qid": "R22",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py exec_cmd src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 21739,
+   "delivered_bytes": 21739,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "39089cd3a9ffba56e2cebdcf3dd57a084fa9e137e56f339c7e0dffa273d00f76"
+  },
+  {
+   "qid": "R23",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e sort -- src README.md GUIA.md",
+   "raw_bytes": 3154,
+   "delivered_bytes": 3154,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "f12b2cb7f1b859e800c246c7232123b1bfe7d3665ed70523e811f48b79d2715c"
+  },
+  {
+   "qid": "R23",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e sort -- src README.md GUIA.md",
+   "raw_bytes": 31172,
+   "delivered_bytes": 27974,
+   "harness_truncated": true,
+   "pack_truncated": null,
+   "sha256": "96a7f6b9b1c91895c4dcf1459d74b11804056bf0268929e2b7a2cb179f64499a"
+  },
+  {
+   "qid": "R23",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py sort src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 27483,
+   "delivered_bytes": 27483,
+   "harness_truncated": false,
+   "pack_truncated": true,
+   "sha256": "d022141c1df7c2b353887059cf36ef55b1f54d004cf2a20bd0d36612ab298894"
+  },
+  {
+   "qid": "R23",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py sort src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 27485,
+   "delivered_bytes": 27485,
+   "harness_truncated": false,
+   "pack_truncated": true,
+   "sha256": "65eda5fda1f6dde87774e59278d34d8e55f98ebfaf7a7c15668e64d4560b739b"
+  },
+  {
+   "qid": "R23",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py sort src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 28312,
+   "delivered_bytes": 27710,
+   "harness_truncated": true,
+   "pack_truncated": true,
+   "sha256": "0c0203f158bde8d8a23d3252e800135b92b2b07709628bc3257b15c5c0123c23"
+  },
+  {
+   "qid": "R24",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e binary_probe_bytes -- src README.md GUIA.md",
+   "raw_bytes": 456,
+   "delivered_bytes": 456,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "6b657782fa57ddca57d62425fafe7c2ed98e00338e9bf6b074e7323eac6bd75e"
+  },
+  {
+   "qid": "R24",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e binary_probe_bytes -- src README.md GUIA.md",
+   "raw_bytes": 6009,
+   "delivered_bytes": 6009,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "51bbc8541c631a4eda94eebad32c8d31d1e57a275f0ae99a3037488cbd7b6eef"
+  },
+  {
+   "qid": "R24",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py binary_probe_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 8513,
+   "delivered_bytes": 8513,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "eaef7fb196fc177ef9aaf6ee467b84dbb3ce3fa6f4e21781aaca7d4445b7e9c2"
+  },
+  {
+   "qid": "R24",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py binary_probe_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 9150,
+   "delivered_bytes": 9150,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "a151ab7160026c560c59ea7edf2212cacccd828cc300cf113369ec84c2a09534"
+  },
+  {
+   "qid": "R24",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py binary_probe_bytes src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 10347,
+   "delivered_bytes": 10347,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "a1bcdab736abf4f6eab45b5069bb093fe6b02d684dbd9ef792c0340115d81e0a"
+  },
+  {
+   "qid": "R25",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e parseSize -- src README.md GUIA.md",
+   "raw_bytes": 242,
+   "delivered_bytes": 242,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "2c90542d8ed9c2daf4b534492006acd0a3240ae6983c9e29a97667039132ed75"
+  },
+  {
+   "qid": "R25",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e parseSize -- src README.md GUIA.md",
+   "raw_bytes": 2844,
+   "delivered_bytes": 2844,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "ee480b17f22d7fcc8011b5a5aacca0d954581aa59ecf2ba5f729c7aa11adc905"
+  },
+  {
+   "qid": "R25",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseSize src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3055,
+   "delivered_bytes": 3055,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "5c2f49cb71d0b230e2914c83c4925718692f4f500dfc0b5454a03212b7994f3f"
+  },
+  {
+   "qid": "R25",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseSize src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4090,
+   "delivered_bytes": 4090,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "b3d8f0a45893690f4165aa78988e8b75d01c7fce9ccd8a7b1bf25853825e8f36"
+  },
+  {
+   "qid": "R25",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py parseSize src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4548,
+   "delivered_bytes": 4548,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "fb954e14dc66b8a43b9b692527d7f2f1946264ae351adb7b4c32689e10a10151"
+  },
+  {
+   "qid": "R26",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e walk_max_depth -- src README.md GUIA.md",
+   "raw_bytes": 118,
+   "delivered_bytes": 118,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "10890487242f7b5df8cba98d1924a96ccd4da7c08af80c0ef53c0ae10b50306d"
+  },
+  {
+   "qid": "R26",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e walk_max_depth -- src README.md GUIA.md",
+   "raw_bytes": 1378,
+   "delivered_bytes": 1378,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "f4c077cbef88ff879afb8c302b32ecdc16e1328b6f6c314e5cf5cf31e07a3a03"
+  },
+  {
+   "qid": "R26",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py walk_max_depth src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 1761,
+   "delivered_bytes": 1761,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "3698d7b535becae60ff5a2f60b8571ad9be65e9c4a0136047794cdfcdd05b749"
+  },
+  {
+   "qid": "R26",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py walk_max_depth src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2010,
+   "delivered_bytes": 2010,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "f98cadaaa45930a77286301a5e430412d73167202883ab47e1529efc9ba7ae2f"
+  },
+  {
+   "qid": "R26",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py walk_max_depth src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 2630,
+   "delivered_bytes": 2630,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "c9ee4a041eacada24984ee932f7a79c0875de39824440902c23553c94f514a4a"
+  },
+  {
+   "qid": "R27",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e mtime_ns -- src README.md GUIA.md",
+   "raw_bytes": 2118,
+   "delivered_bytes": 2118,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "4f244cb5f2b4dc233d6ccb384ad862b75a55c784f2843d84b2a0608b2e90a785"
+  },
+  {
+   "qid": "R27",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e mtime_ns -- src README.md GUIA.md",
+   "raw_bytes": 14436,
+   "delivered_bytes": 14436,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "51661c18dd6ab0fbaf56adac0d9476f83a99afa67a5ba116d1bd4a921288cf3f"
+  },
+  {
+   "qid": "R27",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mtime_ns src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 13087,
+   "delivered_bytes": 13087,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "7b4d1a662f85c1e6ca3eb74a32a212f3c44a2bec4b2032e49cae49d8d4fa0484"
+  },
+  {
+   "qid": "R27",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mtime_ns src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 17010,
+   "delivered_bytes": 17010,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "a2033d6e2fc4fe69554c9c41bed3f8ba2ac868cb5500cfdae8687faf2a6544b5"
+  },
+  {
+   "qid": "R27",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mtime_ns src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 23742,
+   "delivered_bytes": 23742,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "7f5eed95f6b62945e1f9c311383c747d75c951a39fb89184703bdaad1b6c393d"
+  },
+  {
+   "qid": "R28",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e stop_on_nonmatch -- src README.md GUIA.md",
+   "raw_bytes": 458,
+   "delivered_bytes": 458,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "22ff93cc529153fd62599f1fb3130315f0f6f2e6064339421550689365a1ff0b"
+  },
+  {
+   "qid": "R28",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e stop_on_nonmatch -- src README.md GUIA.md",
+   "raw_bytes": 7315,
+   "delivered_bytes": 7315,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "79445ab775e793a4bc9ca04dae68a0726637664b9dfed5537b02485fc767066a"
+  },
+  {
+   "qid": "R28",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py stop_on_nonmatch src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 12441,
+   "delivered_bytes": 12441,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "be624248ca6b79fe5ff8bd308d771bb7c5d5a14a1d6bc8bb78799348a507c621"
+  },
+  {
+   "qid": "R28",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py stop_on_nonmatch src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 10678,
+   "delivered_bytes": 10678,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "72cd6def07329ebf5f008d22c9087a35bde45292d44e6b41f651e2924354a3ef"
+  },
+  {
+   "qid": "R28",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py stop_on_nonmatch src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 11627,
+   "delivered_bytes": 11627,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "977793ad17db52e2b39e028d23dcf47cc30e5eadadecaf40729a990ca4278b63"
+  },
+  {
+   "qid": "R29",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e registry -- src README.md GUIA.md",
+   "raw_bytes": 727,
+   "delivered_bytes": 727,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "1bff9f913264734c1787b0e7c7422d523f7ed17e28ec4d714f7cfb07ae2d2f9a"
+  },
+  {
+   "qid": "R29",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e registry -- src README.md GUIA.md",
+   "raw_bytes": 7134,
+   "delivered_bytes": 7134,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "981d2455b689cd443f18e2b462b53e82f70e5b551dbee2525b1b3a94a3a01c67"
+  },
+  {
+   "qid": "R29",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py registry src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 6902,
+   "delivered_bytes": 6902,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "35834b69a13a38e8ba3b929e2825a80743116fe3d5b9c79fcda14d333024e0cc"
+  },
+  {
+   "qid": "R29",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py registry src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 8625,
+   "delivered_bytes": 8625,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "4fa945f48162c89764ee75bce3db3ab382465c49f48db9030d47861d21df0641"
+  },
+  {
+   "qid": "R29",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py registry src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 9506,
+   "delivered_bytes": 9506,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "ffc8c336373ea4b9f6f62b0f3fa24d99752d5210d3baaa9a9255764c3dd84cd4"
+  },
+  {
+   "qid": "R30",
+   "cond": "A",
+   "command": "zgrep -n -w -F --sort -e mmap_threshold -- src README.md GUIA.md",
+   "raw_bytes": 158,
+   "delivered_bytes": 158,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "c9db4d632e71112c2251156c83bea0a86a520b9b6c3cc2f85b88a0abdd6dcb2a"
+  },
+  {
+   "qid": "R30",
+   "cond": "B",
+   "command": "zgrep -n -w -F --sort -C 8 -e mmap_threshold -- src README.md GUIA.md",
+   "raw_bytes": 2851,
+   "delivered_bytes": 2851,
+   "harness_truncated": false,
+   "pack_truncated": null,
+   "sha256": "f4d40a5838bf6a762d962839271090508b435ae099143ec596251831d55188ca"
+  },
+  {
+   "qid": "R30",
+   "cond": "P1",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mmap_threshold src README.md GUIA.md --repo . --zgrep zgrep --sections blocks --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3392,
+   "delivered_bytes": 3392,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "2278a4838cbd1b0c67b96db6c7834216e79694694b0a4cf531498ed25dfa2836"
+  },
+  {
+   "qid": "R30",
+   "cond": "P2",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mmap_threshold src README.md GUIA.md --repo . --zgrep zgrep --sections tests --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 3799,
+   "delivered_bytes": 3799,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "053f5f246a0ec9f245019dc2dca6e5a0d4d495a24c9ab493405e8db02c824480"
+  },
+  {
+   "qid": "R30",
+   "cond": "P3",
+   "command": "python3 evidence/agent-native/m11/prototype/zgrep_pack.py mmap_threshold src README.md GUIA.md --repo . --zgrep zgrep --sections all --budget-bytes 28000 --spill-dir evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill",
+   "raw_bytes": 4267,
+   "delivered_bytes": 4267,
+   "harness_truncated": false,
+   "pack_truncated": false,
+   "sha256": "99685cc9753d17b0e2d9e6dc6d1e328c1e4aa99af7669671c699e9cd9178f015"
+  }
+ ]
+}

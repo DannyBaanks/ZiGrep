@@ -1,0 +1,17 @@
+src/scan.zig-237-    }
+src/scan.zig-238-    out.appendSliceAssumeCapacity(text);
+src/scan.zig-239-    out.appendAssumeCapacity(out_sep);
+src/scan.zig-240-}
+src/scan.zig-241-
+src/scan.zig-242-/// The visible end of the line that starts at `from`: the position of the
+src/scan.zig-243-/// `\n`, or the end of the buffer, minus the `\r` when `--crlf` is on.
+src/scan.zig-244-/// Callers must still advance with the RAW end (the byte after `\n`).
+src/scan.zig:245:fn visibleLineEnd(data: []const u8, from: usize, crlf: bool) usize {
+src/scan.zig-246-    const e = std.mem.findScalarPos(u8, data, from, '\n') orelse data.len;
+src/scan.zig-247-    if (crlf and e > from and data[e - 1] == '\r') return e - 1;
+src/scan.zig-248-    return e;
+src/scan.zig-249-}
+src/scan.zig-250-
+src/scan.zig-251-/// `--heading`: the header line that replaces the per-line path prefix.
+src/scan.zig-252-fn emitHeading(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8) Allocator.Error!void {
+src/scan.zig-253-    try out.appendSlice(gpa, path);

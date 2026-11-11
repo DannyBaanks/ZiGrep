@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Matches the reference on unknown fields, duplicate ids, and blank lines, but hedges on the id type (non-negative integer not confirmed) and on whether a bad line can leave the batch half-run, where the reference states definitively that parsing is fail-closed.",
+ "cost_usd": 0.006694
+}

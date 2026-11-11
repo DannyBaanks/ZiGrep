@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Unknown fields, duplicate ids, blank lines and the fail-closed whole-file parse all match the reference, but the answer hedges on id, saying 'string or integer' without confirming it must be non-negative or that other types are rejected.",
+ "cost_usd": 0.006706
+}

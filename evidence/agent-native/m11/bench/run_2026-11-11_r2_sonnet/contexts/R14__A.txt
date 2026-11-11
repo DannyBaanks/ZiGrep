@@ -1,0 +1,6 @@
+src/main.zig:226:    \\not supported (reported as an error): back-references, lookaround.
+src/regex.zig:18://! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
+src/regex.zig:210:                fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
+README.md:122:`|`, `( )`, `^`, `$`, `\b`, `\B`. Back-references and lookaround are rejected
+GUIA.md:1167:* necesites backreferences o lookaround en regex (no soportados por diseño para garantizar $O(N)$);
+GUIA.md:1232:- No soportado (da error, nunca resultado incorrecto): `\b`, backreferences, lookaround.

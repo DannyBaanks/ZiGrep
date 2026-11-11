@@ -1,0 +1,18 @@
+{
+ "qid": "R18",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9604c743dde34497536057f9a9dcbbbb12efc3b566cbfae40b0c03e5cbcc433d",
+ "answer": "The spec `'v^v'` is not shown directly in the context, so I can only infer from the parsing logic.\n\nPer `src/nav.zig:43-45`, `v` maps to `.down` and `^` to `.up`. The combo detection at `src/nav.zig:59-66` scans adjacent op pairs: `down,up` sets `has_ceiling` (line 63), and `up,down` sets `has_trampoline` (line 65). `v^v` has both pairs (`v^` and `^v`), so both flags would be set.\n\nEffects:\n- Trampoline: `shouldScanFiles` returns false at depth 0 (`src/nav.zig:80`), so root-level files are skipped.\n- Ceiling: `shouldRecurseSubdirs` returns false (`src/nav.zig:88`), so subdirectories aren't entered.\n\nCombined, that would suggest nothing gets searched in `dir/`. However, the context is truncated (the `shouldRecurseSubdirs` body is cut off at line 88), and no test covers `v^v`. I can't confirm this definitively.",
+ "usage": {
+  "cost_usd": 0.017492,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.0,
+ "headers": {}
+}

@@ -1,0 +1,125 @@
+src/main.zig-377-    /// `--null-data` / `-z`: NUL is the record separator (grep -z). NOT rg's
+src/main.zig-378-    /// `-z`, which is --search-zip; grep semantics win.
+src/main.zig-379-    null_data: bool = false,
+src/main.zig-380-    /// `-U`: a match may span newlines (rg's --multiline).
+src/main.zig-381-    multiline: bool = false,
+src/main.zig-382-    /// `--multiline-dotall`: with -U, `.` also crosses a newline.
+src/main.zig-383-    multiline_dotall: bool = false,
+src/main.zig-384-    /// `--stop-on-nonmatch`: stop once a non-matching line follows a match.
+src/main.zig:385:    stop_on_nonmatch: bool = false,
+src/main.zig-386-    /// `--pre=CMD` (rg): search the stdout of CMD instead of the file. `{}`
+src/main.zig-387-    /// or no placeholder at all means the file path (rg requires `{}`).
+src/main.zig-388-    pre_cmd: ?[]const u8 = null,
+src/main.zig-389-    /// `--pre-glob=GLOB`: only apply --pre to the files that match GLOB.
+src/main.zig-390-    pre_glob: ?[]const u8 = null,
+src/main.zig-391-    /// `--encoding`: auto | none | utf-8 | utf-16 | utf-16le | utf-16be | latin1.
+src/main.zig-392-    encoding: []const u8 = "auto",
+src/main.zig-393-    patterns: [16][]const u8 = undefined,
+--
+src/main.zig-1259-            } else if (std.mem.eql(u8, body, "pre-glob")) {
+src/main.zig-1260-                i += 1;
+src/main.zig-1261-                if (i >= args.len) {
+src/main.zig-1262-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1263-                    return error.Usage;
+src/main.zig-1264-                }
+src/main.zig-1265-                opts.pre_glob = args[i];
+src/main.zig-1266-            } else if (std.mem.eql(u8, body, "stop-on-nonmatch")) {
+src/main.zig:1267:                opts.stop_on_nonmatch = true;
+src/main.zig-1268-            } else if (std.mem.eql(u8, body, "null-data")) {
+src/main.zig-1269-                opts.null_data = true;
+src/main.zig-1270-            } else if (std.mem.eql(u8, body, "heading") or std.mem.eql(u8, body, "group-by-file")) {
+src/main.zig-1271-                opts.heading = true;
+src/main.zig-1272-            } else if (std.mem.eql(u8, body, "no-heading")) {
+src/main.zig-1273-                opts.heading = false;
+src/main.zig-1274-            } else if (std.mem.eql(u8, body, "pretty")) {
+src/main.zig-1275-                // rg's convenience alias: --color=always --heading --line-number.
+--
+src/main.zig-2276-            .replace = opts.replace,
+src/main.zig-2277-            .passthru = opts.passthru,
+src/main.zig-2278-            .byte_offset = opts.byte_offset,
+src/main.zig-2279-            .crlf = opts.crlf,
+src/main.zig-2280-            .heading = false, // stdin is a single stream: no header ever
+src/main.zig-2281-            .vimgrep = opts.vimgrep,
+src/main.zig-2282-            .null_data = opts.null_data,
+src/main.zig-2283-            .multiline = opts.multiline,
+src/main.zig:2284:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig-2285-            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2286-            .json = opts.json,
+src/main.zig-2287-            .provenance = opts.provenance,
+src/main.zig-2288-        };
+src/main.zig-2289-        const path_label = "(standard input)";
+src/main.zig-2290-        const show_p = opts.show_path orelse false;
+src/main.zig-2291-
+src/main.zig-2292-        const data = stdin_buf.items;
+--
+src/main.zig-2424-            .byte_offset = opts.byte_offset,
+src/main.zig-2425-            .crlf = opts.crlf,
+src/main.zig-2426-            // `--heading` forces the ordered path (see above), so it can never
+src/main.zig-2427-            // be on here.
+src/main.zig-2428-            .heading = false,
+src/main.zig-2429-            .vimgrep = opts.vimgrep,
+src/main.zig-2430-            .null_data = opts.null_data,
+src/main.zig-2431-            .multiline = opts.multiline,
+src/main.zig:2432:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig-2433-            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2434-            .json = opts.json,
+src/main.zig-2435-            .provenance = opts.provenance,
+src/main.zig-2436-        };
+src/main.zig-2437-
+src/main.zig-2438-        const matched = kamikaze.runKamikazePipeline(
+src/main.zig-2439-            init.io,
+src/main.zig-2440-            gpa,
+--
+src/main.zig-2599-            .replace = opts.replace,
+src/main.zig-2600-            .passthru = opts.passthru,
+src/main.zig-2601-            .byte_offset = opts.byte_offset,
+src/main.zig-2602-            .crlf = opts.crlf,
+src/main.zig-2603-            .heading = heading_on,
+src/main.zig-2604-            .vimgrep = opts.vimgrep,
+src/main.zig-2605-            .null_data = opts.null_data,
+src/main.zig-2606-            .multiline = opts.multiline,
+src/main.zig:2607:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig-2608-            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2609-            .json = opts.json,
+src/main.zig-2610-            .provenance = opts.provenance,
+src/main.zig-2611-        },
+src/main.zig-2612-        .gpa = gpa,
+src/main.zig-2613-        .window = window,
+src/main.zig-2614-        .exec_mode = opts.exec_cmd != null,
+src/main.zig-2615-        .pre_cmd = opts.pre_cmd orelse "",
+--
+src/main.zig-3226-        const a = [_][:0]const u8{ "zgrep", "--no-multiline", "pat" };
+src/main.zig-3227-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3228-        try std.testing.expect(!o.multiline);
+src/main.zig-3229-    }
+src/main.zig-3230-    {
+src/main.zig-3231-        var o: Options = .{};
+src/main.zig-3232-        const a = [_][:0]const u8{ "zgrep", "--stop-on-nonmatch", "pat" };
+src/main.zig-3233-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3234:        try std.testing.expect(o.stop_on_nonmatch);
+src/main.zig-3235-    }
+src/main.zig-3236-}
+src/main.zig-3237-
+src/main.zig-3238-test "parseArgs: --column implica -n (rg) salvo --no-line-number en cualquier orden" {
+src/main.zig-3239-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+src/main.zig-3240-    defer arena.deinit();
+src/main.zig-3241-    const alloc = arena.allocator();
+src/main.zig-3242-    {
+--
+src/scan.zig-70-    vimgrep: bool = false,
+src/scan.zig-71-    /// `--null-data` (grep -z): NUL is the record separator.
+src/scan.zig-72-    null_data: bool = false,
+src/scan.zig-73-    /// `-U`: the whole file is one record, so a match may span newlines.
+src/scan.zig-74-    multiline: bool = false,
+src/scan.zig-75-    /// `--json`: structured output (JSONL, schema zgrep/1) instead of text.
+src/scan.zig-76-    json: bool = false,
+src/scan.zig-77-    /// `--stop-on-nonmatch`: stop once a non-matching line follows a match.
+src/scan.zig:78:    stop_on_nonmatch: bool = false,
+src/scan.zig-79-    /// `--encoding`: how bytes become the haystack.
+src/scan.zig-80-    encoding: Encoding = .auto,
+src/scan.zig-81-
+src/scan.zig-82-    /// True when the emission needs the match spans, so the fast
+src/scan.zig-83-    /// "jump to the next match" path cannot be used.
+src/scan.zig-84-    pub fn needs_spans(self: ScanConfig) bool {
+src/scan.zig-85-        return self.only_matching or self.column or self.color or self.replace != null or self.passthru;
+src/scan.zig-86-    }

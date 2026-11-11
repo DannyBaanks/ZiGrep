@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer declines to commit, saying it can't tell, while the reference definitively says No; it correctly hints that a name with no extension may not match, but it gives no definite answer.",
+ "cost_usd": 0.005998
+}

@@ -1,0 +1,1 @@
+src/scan.zig:245:fn visibleLineEnd(data: []const u8, from: usize, crlf: bool) usize {

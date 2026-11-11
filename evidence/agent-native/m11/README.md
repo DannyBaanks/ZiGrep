@@ -30,10 +30,17 @@ Never reuse a run directory: each run gets its own.
 
 ## Handoff
 
-- Open: statement-level windows (RESULTS finding 3), a larger held-out set
-  written before its run, local readers via `isyinfer serve`, an agentic
-  control.
-- Do not re-score the H1-H5 held-out questions after changing the pack: they
-  have been seen. New held-out questions are needed.
-- ZiGrep bug found during M11, not yet fixed: `--no-ignore` cancels
-  `--no-hidden` and `--exclude-dir` (`src/filter.zig`, RESULTS finding 6).
+- Done: round 1 (12 questions) and round 2 (30 held-out questions). Verdict in
+  RESULTS.md: the pack beats a bare grep, and ties `grep -C 8` for a strong
+  tool-less reader.
+- All 42 questions have now been seen. Any new round needs new held-out
+  questions, written and committed before it runs.
+- Known pack defects, not fixed (prototype frozen for round 2):
+  - array and constant initialisers are not shown in DEFINITION;
+  - TRUNCATION sits at the end, so a harness cut can remove it;
+  - the budget estimate can overrun by a few hundred bytes.
+- Open: a weaker local reader via `isyinfer serve`, an agentic control, a
+  narrower native `-C` that extends to the enclosing statement, and M12.
+- ZiGrep bugs found during M11: `--no-ignore` was fixed in main `8a8bf80`.
+  Five more and three doc contradictions are listed in RESULTS.md, round 2,
+  and are pending.

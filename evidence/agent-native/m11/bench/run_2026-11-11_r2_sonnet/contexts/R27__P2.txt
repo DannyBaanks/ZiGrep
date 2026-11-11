@@ -1,0 +1,296 @@
+CONTEXT PACK `mtime_ns`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 22 in 4 file(s); by role: code 10, doc_comment 3, documentation 5, string 4
+  declarations found by pattern: 0
+
+REFERENCES
+src/out_json.zig in fn:emitProvenanceEvent
+  [h9] line 212 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h11] line 223 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  src/out_json.zig:206-231  sha256:1f90a8064d591df2
+   206 | pub fn emitProvenanceEvent(
+   207 |     out: *std.ArrayList(u8),
+   208 |     gpa: Allocator,
+   209 |     path: []const u8,
+   210 |     sha256: *const [32]u8,
+   211 |     size: usize,
+>  212 |     mtime_ns: ?i128,
+   213 |     source: []const u8,
+   214 | ) Allocator.Error!void {
+   215 |     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"provenance\",\"path\":");
+   216 |     try appendJsonString(out, gpa, path);
+   217 |     try out.appendSlice(gpa, ",\"sha256\":\"");
+   218 |     const hex = std.fmt.bytesToHex(sha256.*, .lower);
+   219 |     try out.appendSlice(gpa, &hex);
+   220 |     try out.appendSlice(gpa, "\",\"size\":");
+   221 |     try appendInt(out, gpa, size);
+   222 |     try out.appendSlice(gpa, ",\"mtime_ns\":");
+>  223 |     if (mtime_ns) |m| {
+   224 |         var buf: [48]u8 = undefined;
+   225 |         const t = std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable;
+   226 |         try out.appendSlice(gpa, t);
+   227 |     } else try out.appendSlice(gpa, "null");
+   228 |     try out.appendSlice(gpa, ",\"source\":\"");
+   229 |     try out.appendSlice(gpa, source);
+   230 |     try out.appendSlice(gpa, "\"}\n");
+   231 | }
+src/out_json.zig in fn:emitCompactFileHeader
+  [h13] line 287 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h15] line 302 `p.mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  src/out_json.zig:283-311  sha256:0b4921fb30b139c4
+   283 | pub fn emitCompactFileHeader(
+   284 |     out: *std.ArrayList(u8),
+   285 |     gpa: Allocator,
+   286 |     path: []const u8,
+>  287 |     prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+   288 | ) Allocator.Error!void {
+   289 |     try out.appendSlice(gpa, "{\"path\":");
+   290 |     try appendJsonString(out, gpa, path);
+   291 |     if (prov) |p| {
+   292 |         // base64url sin relleno (RFC 4648 §5): el MISMO hash en 43 caracteres.
+   293 |         // Medido con un BPE real: 31,9 tokens por hash frente a 56,5 en hex.
+   294 |         // zgrep/1 sigue en hex (lo que imprime sha256sum).
+   295 |         try out.appendSlice(gpa, ",\"sha256_b64u\":\"");
+   296 |         var b64: [43]u8 = undefined;
+   297 |         _ = std.base64.url_safe_no_pad.Encoder.encode(&b64, p.sha256);
+   298 |         try out.appendSlice(gpa, &b64);
+   299 |         try out.appendSlice(gpa, "\",\"size\":");
+   300 |         try appendInt(out, gpa, p.size);
+   301 |         try out.appendSlice(gpa, ",\"mtime_ns\":");
+>  302 |         if (p.mtime_ns) |m| {
+   303 |             var buf: [48]u8 = undefined;
+   304 |             try out.appendSlice(gpa, std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable);
+   305 |         } else try out.appendSlice(gpa, "null");
+   306 |         try out.appendSlice(gpa, ",\"source\":\"");
+   307 |         try out.appendSlice(gpa, p.source);
+   308 |         try out.append(gpa, '"');
+   309 |     }
+   310 |     try out.appendSlice(gpa, "}\n");
+   311 | }
+src/scan.zig in fn:insertFileHeader
+  [h16] line 1325 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h17] line 1329 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h18] line 1337 `..mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h19] line 1337 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  src/scan.zig:1318-1342  sha256:445cbf9fdf6046a1
+  1318 | pub fn insertFileHeader(
+  1319 |     out: *std.ArrayList(u8),
+  1320 |     gpa: Allocator,
+  1321 |     path: []const u8,
+  1322 |     start: usize,
+  1323 |     data: []const u8,
+  1324 |     source: ProvSource,
+> 1325 |     mtime_ns: ?i128,
+  1326 |     provenance: bool,
+  1327 | ) Allocator.Error!void {
+  1328 |     if (!out_json.compact) {
+> 1329 |         if (provenance) try insertProvenance(out, gpa, path, start, data, source, mtime_ns);
+  1330 |         return;
+  1331 |     }
+  1332 |     var ev: std.ArrayList(u8) = .empty;
+  1333 |     defer ev.deinit(gpa);
+  1334 |     if (provenance) {
+  1335 |         var digest: [32]u8 = undefined;
+  1336 |         std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+> 1337 |         try out_json.emitCompactFileHeader(&ev, gpa, path, .{ .sha256 = &digest, .size = data.len, .mtime_ns = mtime_ns, .source = source.name() });
+  1338 |     } else {
+  1339 |         try out_json.emitCompactFileHeader(&ev, gpa, path, null);
+  1340 |     }
+  1341 |     try out.insertSlice(gpa, start, ev.items);
+  1342 | }
+src/scan.zig in fn:insertProvenance
+  [h20] line 1351 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  [h21] line 1357 `mtime_ns`: unresolved (lexical_only; 0 declaration(s) named mtime_ns; none is linked by checkable evidence)
+  src/scan.zig:1344-1359  sha256:2ae896c8b70840bc
+  1344 | pub fn insertProvenance(
+  1345 |     out: *std.ArrayList(u8),
+  1346 |     gpa: Allocator,
+  1347 |     path: []const u8,
+  1348 |     start: usize,
+  1349 |     data: []const u8,
+  1350 |     source: ProvSource,
+> 1351 |     mtime_ns: ?i128,
+  1352 | ) Allocator.Error!void {
+  1353 |     var digest: [32]u8 = undefined;
+  1354 |     std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+  1355 |     var ev: std.ArrayList(u8) = .empty;
+  1356 |     defer ev.deinit(gpa);
+> 1357 |     try out_json.emitProvenanceEvent(&ev, gpa, path, &digest, data.len, mtime_ns, source.name());
+  1358 |     try out.insertSlice(gpa, start, ev.items);
+  1359 | }
+mentions inside comments or strings (7): textual only, not a dependency
+  [h6] src/main.zig:87 (string) \\                    of the bytes searched and the file's mtime_ns
+  [h7] src/out_json.zig:32 (doc_comment) ///     (con `--provenance` lleva ademas sha256_b64u/size/mtime_ns/source:
+  [h8] src/out_json.zig:202 (doc_comment) /// verificable con `sha256sum`. `mtime_ns` sale de `statx` (null si no hay
+  [h10] src/out_json.zig:222 (string) try out.appendSlice(gpa, ",\"mtime_ns\":");
+  [h12] src/out_json.zig:282 (doc_comment) /// `--provenance`, `{"path":P,"sha256":..,"size":..,"mtime_ns":..,"source":..}`.
+  [h14] src/out_json.zig:301 (string) try out.appendSlice(gpa, ",\"mtime_ns\":");
+  [h22] src/scan.zig:2026 (string) \\{"schema":"zgrep/1","type":"provenance","path":"f.txt","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","size":3,"mtime_ns":42,"sou
+src/main.zig in file: textual mention(s) only, not a code reference: [h6] line 87 (string)
+  src/main.zig:79-95  sha256:47ef5f84bb9b832d
+    79 |     \\                    file and one positional row per line,
+    80 |     \\                    [t,line,col,byte_start,len,text]; see GUIA §4p
+    81 |     \\      --spill[=DIR]  with a budget: what it omits is written, exactly as
+    82 |     \\                    it would have been printed, to a 0600 JSONL file in
+    83 |     \\                    DIR (default $XDG_CACHE_HOME/zgrep/spill); the
+    84 |     \\                    summary carries its path, sha256, bytes and events
+    85 |     \\      --provenance  with --json: before the events of each file with
+    86 |     \\                    output, a provenance event with the sha256 and size
+>   87 |     \\                    of the bytes searched and the file's mtime_ns
+    88 |     \\      --queries-file FILE|-
+    89 |     \\                    run every JSONL query {"id","pattern","paths"?,
+    90 |     \\                    "flags"?} in this one process (JSON, sorted); each
+    91 |     \\                    event carries query_id, each query ends with a
+    92 |     \\                    query_end event and the stream with a summary
+    93 |     \\      --max-results N
+    94 |     \\                    stop emitting results after N (match, occurrence,
+    95 |     \\                    file, count) for the whole call; keeps counting
+src/out_json.zig in file: textual mention(s) only, not a code reference: [h7] line 32 (doc_comment), [h8] line 202 (doc_comment), [h12] line 282 (doc_comment)
+  src/out_json.zig:24-40  sha256:215eb90ff916c0d3
+    24 | const json_prefix = "{\"schema\":\"zgrep/1\",";
+    25 | 
+    26 | /// `--json=compact` (schema `zgrep/1c`, M5): la MISMA informacion que zgrep/1
+    27 | /// en ~0,4x los tokens (medido: evidence/agent-native/m5/format_study.py).
+    28 | /// Fijado una vez por ejecucion antes de escanear; los hilos solo lo leen.
+    29 | ///
+    30 | ///   * cabecera de stream: `{"schema":"zgrep/1c"}` (una vez);
+    31 | ///   * cabecera de fichero: `{"path":P}` antes de las filas de ese fichero
+>   32 | ///     (con `--provenance` lleva ademas sha256_b64u/size/mtime_ns/source:
+    33 | ///     el sha256 en base64url sin relleno, que tokeniza ~44 % mejor que hex);
+    34 | ///   * filas de linea, una por linea JSON: `[t, line, col, byte_start, len,
+    35 | ///     text]` con span, `[t, line, text]` sin span; t = m|c|o|p, con `v` si la
+    36 | ///     linea sale por `-v`. `match` = text[col-1 .. col-1+len] en bytes; solo
+    37 | ///     si NO se deriva asi (`--replace`) va como 7o elemento;
+    38 | ///   * `-l`/`-L`: `["l",P]` / `["L",P]`; `-c`: `["#",P,n]`;
+    39 | ///     `--count-matches`: `["#m",P,n]` (llevan el path: no tienen cabecera).
+    40 | pub var compact: bool = false;
+  src/out_json.zig:194-210  sha256:d2e88c761829bc8d
+   194 |     try out.appendSlice(gpa, ",\"inverted\":");
+   195 |     try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+   196 |     try out.appendSlice(gpa, "}\n");
+   197 | }
+   198 | 
+   199 | /// M4: procedencia del fichero, UNA vez por fichero y ANTES de sus eventos.
+   200 | /// `sha256` y `size` son de los bytes que zgrep leyó y buscó (no de una
+   201 | /// relectura): así la afirmación "este match está en este contenido" es
+>  202 | /// verificable con `sha256sum`. `mtime_ns` sale de `statx` (null si no hay
+   203 | /// fichero, p. ej. stdin). `source`: `file`, `file-utf16` (offsets sobre el
+   204 | /// texto decodificado, hash del fichero crudo), `pre` (hash de la salida del
+   205 | /// preprocesador) o `stdin`.
+   206 | pub fn emitProvenanceEvent(
+   207 |     out: *std.ArrayList(u8),
+   208 |     gpa: Allocator,
+   209 |     path: []const u8,
+   210 |     sha256: *const [32]u8,
+  src/out_json.zig:274-290  sha256:eb218ed27c8fe9a5
+   274 |     } else {
+   275 |         try out.append(gpa, ',');
+   276 |         try appendJsonString(out, gpa, ev.text);
+   277 |     }
+   278 |     try out.appendSlice(gpa, "]\n");
+   279 | }
+   280 | 
+   281 | /// Cabecera de fichero en `--json=compact`: `{"path":P}` o, con
+>  282 | /// `--provenance`, `{"path":P,"sha256":..,"size":..,"mtime_ns":..,"source":..}`.
+   283 | pub fn emitCompactFileHeader(
+   284 |     out: *std.ArrayList(u8),
+   285 |     gpa: Allocator,
+   286 |     path: []const u8,
+   287 |     prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+   288 | ) Allocator.Error!void {
+   289 |     try out.appendSlice(gpa, "{\"path\":");
+   290 |     try appendJsonString(out, gpa, path);
+src/out_json.zig in fn:emitProvenanceEvent: textual mention(s) only, not a code reference: [h10] line 222 (string)
+  src/out_json.zig:206-231  sha256:1f90a8064d591df2
+   206 | pub fn emitProvenanceEvent(
+   207 |     out: *std.ArrayList(u8),
+   208 |     gpa: Allocator,
+   209 |     path: []const u8,
+   210 |     sha256: *const [32]u8,
+   211 |     size: usize,
+   212 |     mtime_ns: ?i128,
+   213 |     source: []const u8,
+   214 | ) Allocator.Error!void {
+   215 |     try out.appendSlice(gpa, json_prefix ++ "\"type\":\"provenance\",\"path\":");
+   216 |     try appendJsonString(out, gpa, path);
+   217 |     try out.appendSlice(gpa, ",\"sha256\":\"");
+   218 |     const hex = std.fmt.bytesToHex(sha256.*, .lower);
+   219 |     try out.appendSlice(gpa, &hex);
+   220 |     try out.appendSlice(gpa, "\",\"size\":");
+   221 |     try appendInt(out, gpa, size);
+>  222 |     try out.appendSlice(gpa, ",\"mtime_ns\":");
+   223 |     if (mtime_ns) |m| {
+   224 |         var buf: [48]u8 = undefined;
+   225 |         const t = std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable;
+   226 |         try out.appendSlice(gpa, t);
+   227 |     } else try out.appendSlice(gpa, "null");
+   228 |     try out.appendSlice(gpa, ",\"source\":\"");
+   229 |     try out.appendSlice(gpa, source);
+   230 |     try out.appendSlice(gpa, "\"}\n");
+   231 | }
+src/out_json.zig in fn:emitCompactFileHeader: textual mention(s) only, not a code reference: [h14] line 301 (string)
+  src/out_json.zig:283-311  sha256:0b4921fb30b139c4
+   283 | pub fn emitCompactFileHeader(
+   284 |     out: *std.ArrayList(u8),
+   285 |     gpa: Allocator,
+   286 |     path: []const u8,
+   287 |     prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+   288 | ) Allocator.Error!void {
+   289 |     try out.appendSlice(gpa, "{\"path\":");
+   290 |     try appendJsonString(out, gpa, path);
+   291 |     if (prov) |p| {
+   292 |         // base64url sin relleno (RFC 4648 §5): el MISMO hash en 43 caracteres.
+   293 |         // Medido con un BPE real: 31,9 tokens por hash frente a 56,5 en hex.
+   294 |         // zgrep/1 sigue en hex (lo que imprime sha256sum).
+   295 |         try out.appendSlice(gpa, ",\"sha256_b64u\":\"");
+   296 |         var b64: [43]u8 = undefined;
+   297 |         _ = std.base64.url_safe_no_pad.Encoder.encode(&b64, p.sha256);
+   298 |         try out.appendSlice(gpa, &b64);
+   299 |         try out.appendSlice(gpa, "\",\"size\":");
+   300 |         try appendInt(out, gpa, p.size);
+>  301 |         try out.appendSlice(gpa, ",\"mtime_ns\":");
+   302 |         if (p.mtime_ns) |m| {
+   303 |             var buf: [48]u8 = undefined;
+   304 |             try out.appendSlice(gpa, std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable);
+   305 |         } else try out.appendSlice(gpa, "null");
+   306 |         try out.appendSlice(gpa, ",\"source\":\"");
+   307 |         try out.appendSlice(gpa, p.source);
+   308 |         try out.append(gpa, '"');
+   309 |     }
+   310 |     try out.appendSlice(gpa, "}\n");
+   311 | }
+
+TESTS
+src/scan.zig in test:insertProvenance: un evento antes de los del fichero, sha256 de los bytes buscados: textual mention(s) only, not a code reference: [h22] line 2026 (string)
+  src/scan.zig:2015-2030  sha256:67f27b88cf333476
+  2015 | test "insertProvenance: un evento antes de los del fichero, sha256 de los bytes buscados" {
+  2016 |     const gpa = std.testing.allocator;
+  2017 |     var out: std.ArrayList(u8) = .empty;
+  2018 |     defer out.deinit(gpa);
+  2019 |     try out.appendSlice(gpa, "PREVIO\n");
+  2020 |     const start = out.items.len;
+  2021 |     try out.appendSlice(gpa, "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n");
+  2022 |     try insertProvenance(&out, gpa, "f.txt", start, "abc", .file, 42);
+  2023 |     // sha256("abc"), el vector de prueba de FIPS 180-2.
+  2024 |     try std.testing.expectEqualStrings(
+  2025 |         \\PREVIO
+> 2026 |         \\{"schema":"zgrep/1","type":"provenance","path":"f.txt","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","size":3,"mtime_ns":42,"source":"file"}
+  2027 |         \\{"schema":"zgrep/1","type":"match"}
+  2028 |         \\
+  2029 |     , out.items);
+  2030 | }
+
+UNCERTAINTY
+- no declaration of `mtime_ns` found by pattern in scope; it may be declared elsewhere, generated, or not a symbol
+- 10 code reference(s) not linked to a declaration: h9, h11, h13, h15, h16, h17, h18, h19, h20, h21
+- not analysed: aliases (const x = y.mtime_ns), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 703 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 16

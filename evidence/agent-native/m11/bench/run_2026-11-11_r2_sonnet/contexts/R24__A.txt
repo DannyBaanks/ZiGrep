@@ -1,0 +1,6 @@
+src/main.zig:2293:        const probe = @min(data.len, scan.binary_probe_bytes);
+src/scan.zig:91:pub const binary_probe_bytes = 8192;
+src/scan.zig:953:    const probe = @min(data.len, binary_probe_bytes);
+src/scan.zig:1081:            const probe = @min(data.len, binary_probe_bytes);
+src/scan.zig:1186:    const probe = @min(data.len, binary_probe_bytes);
+src/uring_linux.zig:189:                    const probe = @min(data.len, scan.binary_probe_bytes);

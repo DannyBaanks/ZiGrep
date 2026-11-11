@@ -1,0 +1,115 @@
+src/filter.zig-42-    ".min.css",
+src/filter.zig-43-    ".map",
+src/filter.zig-44-    ".lock",
+src/filter.zig-45-    ".swp",
+src/filter.zig-46-    ".DS_Store",
+src/filter.zig-47-};
+src/filter.zig-48-
+src/filter.zig-49-/// High-performance wildcard matcher (supports * and ? and trailing /).
+src/filter.zig:50:pub fn matchPattern(name: []const u8, pattern: []const u8) bool {
+src/filter.zig-51-    var p = pattern;
+src/filter.zig-52-    if (p.len > 0 and p[p.len - 1] == '/') {
+src/filter.zig-53-        p = p[0 .. p.len - 1];
+src/filter.zig-54-    }
+src/filter.zig-55-    var n_idx: usize = 0;
+src/filter.zig-56-    var p_idx: usize = 0;
+src/filter.zig-57-    var star_idx: ?usize = null;
+src/filter.zig-58-    var match_idx: usize = 0;
+--
+src/filter.zig-252-
+src/filter.zig-253-        if (self.use_defaults) {
+src/filter.zig-254-            for (default_excluded_dirs) |d| {
+src/filter.zig-255-                if (std.mem.eql(u8, dir_name, d)) return true;
+src/filter.zig-256-            }
+src/filter.zig-257-        }
+src/filter.zig-258-
+src/filter.zig-259-        for (self.excluded_dirs.items) |ex| {
+src/filter.zig:260:            if (matchPattern(dir_name, ex)) return true;
+src/filter.zig-261-        }
+src/filter.zig-262-
+src/filter.zig-263-        for (self.ignore_patterns.items) |pat| {
+src/filter.zig:264:            if (matchPattern(dir_name, pat)) return true;
+src/filter.zig-265-        }
+src/filter.zig-266-
+src/filter.zig-267-        return false;
+src/filter.zig-268-    }
+src/filter.zig-269-
+src/filter.zig-270-    pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+src/filter.zig-271-        if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+src/filter.zig-272-            return true;
+--
+src/filter.zig-278-            }
+src/filter.zig-279-        }
+src/filter.zig-280-
+src/filter.zig-281-        for (self.excluded_exts.items) |ext| {
+src/filter.zig-282-            if (matchesExt(file_name, ext)) return true;
+src/filter.zig-283-        }
+src/filter.zig-284-
+src/filter.zig-285-        for (self.excluded_patterns.items) |pat| {
+src/filter.zig:286:            if (matchPattern(file_name, pat)) return true;
+src/filter.zig-287-        }
+src/filter.zig-288-
+src/filter.zig-289-        for (self.ignore_patterns.items) |pat| {
+src/filter.zig:290:            if (matchPattern(file_name, pat)) return true;
+src/filter.zig-291-        }
+src/filter.zig-292-
+src/filter.zig-293-        // If specific extensions or patterns were requested via --include,
+src/filter.zig-294-        // any file not matching at least one is excluded:
+src/filter.zig-295-        if (self.included_exts.items.len > 0) {
+src/filter.zig-296-            var matched = false;
+src/filter.zig-297-            for (self.included_exts.items) |ext| {
+src/filter.zig-298-                if (matchesExt(file_name, ext)) {
+--
+src/filter.zig-301-                }
+src/filter.zig-302-            }
+src/filter.zig-303-            if (!matched) return true;
+src/filter.zig-304-        }
+src/filter.zig-305-
+src/filter.zig-306-        if (self.included_patterns.items.len > 0) {
+src/filter.zig-307-            var matched = false;
+src/filter.zig-308-            for (self.included_patterns.items) |pat| {
+src/filter.zig:309:                if (matchPattern(file_name, pat)) {
+src/filter.zig-310-                    matched = true;
+src/filter.zig-311-                    break;
+src/filter.zig-312-                }
+src/filter.zig-313-            }
+src/filter.zig-314-            if (!matched) return true;
+src/filter.zig-315-        }
+src/filter.zig-316-
+src/filter.zig-317-        return false;
+src/filter.zig-318-    }
+src/filter.zig-319-};
+src/filter.zig-320-
+src/filter.zig:321:test "matchPattern wildcards" {
+src/filter.zig:322:    try std.testing.expect(matchPattern("foo.zig", "*.zig"));
+src/filter.zig:323:    try std.testing.expect(matchPattern("test_foo.zig", "test_*.zig"));
+src/filter.zig:324:    try std.testing.expect(matchPattern("target", "target/"));
+src/filter.zig:325:    try std.testing.expect(matchPattern("file1.log", "file?.log"));
+src/filter.zig:326:    try std.testing.expect(!matchPattern("file10.log", "file?.log"));
+src/filter.zig:327:    try std.testing.expect(!matchPattern("foo.rs", "*.zig"));
+src/filter.zig-328-}
+src/filter.zig-329-
+src/filter.zig-330-test "matchesExt" {
+src/filter.zig-331-    try std.testing.expect(matchesExt("main.zig", "zig"));
+src/filter.zig-332-    try std.testing.expect(matchesExt("main.zig", ".zig"));
+src/filter.zig-333-    try std.testing.expect(matchesExt("bundle.min.js", "min.js"));
+src/filter.zig-334-    try std.testing.expect(!matchesExt("zig.txt", "zig"));
+src/filter.zig-335-}
+--
+src/main.zig-782-    return out.items;
+src/main.zig-783-}
+src/main.zig-784-
+src/main.zig-785-/// `--pre-glob` decides whether a file goes through --pre. rg uses its glob
+src/main.zig-786-/// syntax; zgrep reuses the filter engine's.
+src/main.zig-787-fn preApplies(glob: ?[]const u8, path: []const u8) bool {
+src/main.zig-788-    const g = glob orelse return true;
+src/main.zig-789-    const name = std.fs.path.basename(path);
+src/main.zig:790:    return filter.matchPattern(name, g) or filter.matchPattern(path, g);
+src/main.zig-791-}
+src/main.zig-792-
+src/main.zig-793-/// The encodings zgrep can actually honour. Anything else is a usage error
+src/main.zig-794-/// instead of a silent raw-bytes fallback.
+src/main.zig-795-fn validEncoding(v: []const u8) ?[]const u8 {
+src/main.zig-796-    const names = [_][]const u8{ "auto", "none", "utf-8", "utf-16", "utf-16le", "utf-16be", "latin1" };
+src/main.zig-797-    for (names) |n| {
+src/main.zig-798-        if (std.mem.eql(u8, v, n)) return n;

@@ -1,0 +1,18 @@
+{
+ "qid": "R10",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6569787d9f39ba4212e9bd75d28c636c4b6377823df6d655c94ec947c470c218",
+ "answer": "**Accepted values:** `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `latin1` (src/scan.zig:108-114). Anything else makes `parseEncoding` return `null` (src/scan.zig:115), and all three callers then silently fall back to `.auto` (src/main.zig:2285, 2433, 2608).\n\n**What `--encoding=utf-16` does with a BOM-less file:** the context doesn't say. `parseEncoding` only maps the string `\"utf-16\"` to `.utf16` (src/scan.zig:111). The code that interprets `.utf16` (BOM detection, defaulting to LE/BE, or something else) isn't in the results. Nor is the README/GUIA text on the flag, as neither file had hits for `parseEncoding`.\n\nTo answer, I'd need the scan.zig code that consumes `Encoding.utf16` (and its BOM handling), or the `--encoding` docs in README.md/GUIA.md.",
+ "usage": {
+  "cost_usd": 0.020236,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.36,
+ "headers": {}
+}

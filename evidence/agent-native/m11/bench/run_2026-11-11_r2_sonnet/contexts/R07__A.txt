@@ -1,0 +1,2 @@
+src/batch.zig:77:fn isResult(line: []const u8) bool {
+src/batch.zig:311:        const result = isResult(line);

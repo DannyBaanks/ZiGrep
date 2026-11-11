@@ -1,0 +1,18 @@
+{
+ "qid": "R21",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "764cdd911beb4cfe1f1ad77289b320efa0e8d241a012b1e91e0515f9933af33a",
+ "answer": "The context doesn't say what `--color=auto` does, so I can't answer that from it.\n\nWhat it does show:\n- `ColorMode` is an enum with three values: `never`, `always`, and `auto` (src/main.zig:237).\n- An options field `color` has type `ColorMode` and defaults to `.never` (src/main.zig:308).\n- A test expects `ColorMode.always` for an options value `o4` (src/main.zig:3369).\n\nMissing: the code that handles `.auto`. This would be where the mode is resolved, for example a TTY check or an environment variable check, and where output is colorized. Also missing is the argument parsing for `--color=` and any mention in README.md or GUIA.md. Searching for `.auto`, `--color`, or `isatty` would likely find it.",
+ "usage": {
+  "cost_usd": 0.00614,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.83,
+ "headers": {}
+}

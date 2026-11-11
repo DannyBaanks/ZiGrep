@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly lists match, occurrence, file and count as results, but hedges on context lines, saying it cannot confirm, where the reference definitively says context (and passthru, provenance, query_end, summary) do not count.",
+ "cost_usd": 0.006086
+}

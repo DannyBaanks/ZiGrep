@@ -1,0 +1,118 @@
+CONTEXT PACK `smart_case`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 1 file(s); by role: code 6
+  declarations found by pattern: 1
+
+BLOCKS
+src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+src/main.zig:314-330  sha256:fad1e88e671a62bc
+   314 |     /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
+   315 |     /// Turns off the normal output; the command's streams are inherited.
+   316 |     exec_cmd: ?[]const u8 = null,
+   317 |     /// `--vimgrep`: one output line per match, with column (rg).
+   318 |     vimgrep: bool = false,
+   319 |     /// `-G`: the patterns are BRE, translated to ERE before compiling.
+   320 |     basic_regexp: bool = false,
+   321 |     /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
+>  322 |     smart_case: bool = false,
+   323 |     /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+   324 |     type_include: [8]types.Type = undefined,
+   325 |     type_include_count: usize = 0,
+   326 |     type_exclude: [8]types.Type = undefined,
+   327 |     type_exclude_count: usize = 0,
+   328 |     /// `--type-list`: print the type registry and exit.
+   329 |     print_type_list: bool = false,
+   330 |     /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+src/main.zig:1062-1078  sha256:5d89259bfaf9a602
+  1062 |             } else if (std.mem.eql(u8, body, "exec") or std.mem.eql(u8, body, "execute")) {
+  1063 |                 i += 1;
+  1064 |                 if (i >= args.len) {
+  1065 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1066 |                     return error.Usage;
+  1067 |                 }
+  1068 |                 opts.exec_cmd = args[i];
+  1069 |             } else if (std.mem.eql(u8, body, "smart-case")) {
+> 1070 |                 opts.smart_case = true;
+  1071 |             } else if (std.mem.startsWith(u8, body, "type=")) {
+  1072 |                 const v = body["type=".len..];
+  1073 |                 addType(opts, v, true) catch return error.Usage;
+  1074 |             } else if (std.mem.eql(u8, body, "type")) {
+  1075 |                 i += 1;
+  1076 |                 if (i >= args.len) {
+  1077 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1078 |                     return error.Usage;
+src/main.zig:1522-1538  sha256:042be1f60615c63f
+  1522 |                 // meaning, which is worse than not supporting it.
+  1523 |                 'r', 'I' => {},
+  1524 |                 'E' => {},
+  1525 |                 'G' => opts.basic_regexp = true,
+  1526 |                 'n' => opts.show_line_no = true,
+  1527 |                 's' => opts.no_messages = true,
+  1528 |                 'x' => opts.line_regexp = true,
+  1529 |                 'o' => opts.only_matching = true,
+> 1530 |                 'S' => opts.smart_case = true,
+  1531 |                 'z' => opts.null_data = true,
+  1532 |                 'U' => opts.multiline = true,
+  1533 |                 'p' => {
+  1534 |                     opts.color = .always;
+  1535 |                     opts.heading = true;
+  1536 |                     opts.show_line_no = true;
+  1537 |                 },
+  1538 |                 'b' => opts.byte_offset = true,
+src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+src/main.zig:2198-2217  sha256:640b518ca8e2e711
+  2198 |     // find -exec has no normal output. The quiet early-exits below are what
+  2199 |     // make `-q` fast, but they would stop the scan at the FIRST match and the
+  2200 |     // command would never reach the other files, so they stay off with --exec.
+  2201 |     if (opts.exec_cmd != null) opts.mode = .quiet;
+  2202 | 
+  2203 |     const t0 = nowMonotonicNs(init.io);
+  2204 | 
+  2205 |     // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+> 2206 |     if (opts.smart_case and !opts.ignore_case) {
+  2207 |         var has_upper = false;
+  2208 |         for (patterns) |pat| {
+  2209 |             for (pat) |c| {
+  2210 |                 if (c >= 'A' and c <= 'Z') has_upper = true;
+  2211 |                 if (c >= 0xC0 and c <= 0xDE and c != 0xD7) has_upper = true; // Latin-1
+  2212 |                 if (has_upper) break;
+  2213 |             }
+  2214 |             if (has_upper) break;
+  2215 |         }
+  2216 |         if (!has_upper) opts.ignore_case = true;
+  2217 |     }
+src/main.zig:3071-3093  sha256:e71f620375ec79ca
+  3071 | test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b" {
+  3072 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  3073 |     defer arena.deinit();
+  3074 |     const alloc = arena.allocator();
+  3075 |     {
+  3076 |         var o: Options = .{};
+  3077 |         const a = [_][:0]const u8{ "zgrep", "-S", "pat" };
+  3078 |         _ = try parseArgs(alloc, &a, &o);
+> 3079 |         try std.testing.expect(o.smart_case);
+  3080 |     }
+  3081 |     {
+  3082 |         var o: Options = .{};
+  3083 |         const a = [_][:0]const u8{ "zgrep", "--smart-case", "pat" };
+  3084 |         _ = try parseArgs(alloc, &a, &o);
+> 3085 |         try std.testing.expect(o.smart_case);
+  3086 |     }
+  3087 |     {
+  3088 |         var o: Options = .{};
+  3089 |         const a = [_][:0]const u8{ "zgrep", "-t", "py", "pat" };
+  3090 |         _ = try parseArgs(alloc, &a, &o);
+  3091 |         try std.testing.expectEqual(@as(usize, 1), o.type_include_count);
+  3092 |         try std.testing.expectEqualStrings("py", o.type_include[0].name);
+  3093 |     }
+
+TRUNCATION
+  truncated: false   items: 8

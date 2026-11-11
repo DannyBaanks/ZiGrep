@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer names the same four result types (match, occurrence, file, count) and says context lines don't count, matching the reference. The extra caveat about events being cut after truncation does not contradict the reference.",
+ "cost_usd": 0.0060539999999999995
+}

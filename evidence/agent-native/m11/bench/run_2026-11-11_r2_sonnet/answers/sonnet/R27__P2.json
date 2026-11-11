@@ -1,0 +1,18 @@
+{
+ "qid": "R27",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a2033d6e2fc4fe69554c9c41bed3f8ba2ac868cb5500cfdae8687faf2a6544b5",
+ "answer": "For a UTF-16 file, the `source` value is `file-utf16`. According to the doc comment at `src/out_json.zig:203-204`:\n\n- **sha256:** it hashes the raw file, not the decoded text (\"hash del fichero crudo\").\n- **Offsets:** they refer to the decoded text (\"offsets sobre el texto decodificado\").\n- **mtime_ns for stdin:** it is `null`. The comment at `src/out_json.zig:202-203` says `mtime_ns` comes from `statx` and is null when there is no file, e.g. stdin. The emitter writes `null` when the value is absent (`src/out_json.zig:223-227`), and the `source` for stdin is `stdin` (`src/out_json.zig:205`).\n\nCaveat: this comes from a doc comment. The context doesn't include the code that sets `file-utf16` or decodes the file, so I haven't confirmed the behavior in the scanning code.",
+ "usage": {
+  "cost_usd": 0.03916,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.1,
+ "headers": {}
+}

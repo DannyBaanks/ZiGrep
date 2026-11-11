@@ -1,0 +1,18 @@
+{
+ "qid": "R18",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "b4723ad6fd0823d64a8a534b8b4a069194d388af87d36e3d9d91dabd173f1a4c",
+ "answer": "The context doesn't say what `zgrep --nav 'v^v' needle dir/` searches. It only shows lines matching `has_trampoline`, not the parsing or the search code itself.\n\nWhat the context does show:\n- `has_trampoline` is a nav-plan flag, commented as set for `\"^v\"` or `\"ud\"` (src/nav.zig:37).\n- It is set to true somewhere in plan construction (src/nav.zig:65), but the condition isn't shown.\n- When it is set and `depth == 0`, a check returns false (src/nav.zig:80), but the function and its meaning are not visible.\n- Tests exist for both the trampoline and non-trampoline cases (src/nav.zig:113, 120; src/main.zig:2997, 3005).\n\nThe pattern `v^v` contains `^v`, so it may set the trampoline flag. That is only an inference.\n\nMissing: the nav parser around src/nav.zig:50-90, the meaning of `^` and `v`, and how the plan is applied to the `dir/` argument.",
+ "usage": {
+  "cost_usd": 0.009007999999999999,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 6.69,
+ "headers": {}
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R04",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "36872a48e74bef1ac68c7222560bff4c4865d31916186d5ee2ce8a33011ba290",
+ "answer": "With `-G`, zgrep translates the basic regex into an extended regex via `breToEre` (src/search.zig:393, 412). The tests in src/bre.zig show the mappings:\n\n- **`a\\+b`**: `\\+` is the quantifier (one or more). The test shows `a\\+` becomes `a+` (src/bre.zig:158). The case `a\\+b` itself isn't tested, but it follows the same rule.\n- **`a+b`**: `+` is a literal plus. It converts to `a\\+b`, which matches the literal text \"a+b\" (src/bre.zig:163). The same applies after a class: `[[:digit:]]+` becomes `[[:digit:]]\\+` (src/bre.zig:187-188).\n- **A leading `*`**: it is a literal asterisk. `*ab` becomes `\\*ab` (src/bre.zig:175, 178). A `*` that follows something, as in `a*b`, stays a quantifier (src/bre.zig:179).",
+ "usage": {
+  "cost_usd": 0.016218,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.31,
+ "headers": {}
+}

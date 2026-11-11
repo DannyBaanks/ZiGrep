@@ -1,0 +1,18 @@
+{
+ "qid": "R12",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f6455511fe207a2200940576633945ef1cd09783ce3414c233894968df83458b",
+ "answer": "Based on the context, which only shows `visibleLineEnd`:\n\n- **Trailing `\\r` not printed (for the visible line text):** with `--crlf` on, `visibleLineEnd` returns the position of the `\\n` minus one if the byte before it is `\\r` (src/scan.zig:243, 247). So the visible line excludes the `\\r`. The condition also requires `e > from`, so a line consisting only of `\\n` isn't affected (src/scan.zig:247).\n\n- **One terminator, not two:** the CRLF is treated as a single line terminator. The visible end drops the `\\r`, but callers \"must still advance with the RAW end (the byte after `\\n`)\" (src/scan.zig:244). The line boundary is therefore found by `\\n` alone (src/scan.zig:246), so `\\r\\n` doesn't produce an extra line.\n\nNot shown: the actual callers, so I can't confirm the printing code uses `visibleLineEnd`'s result for output, or how a lone `\\r` is handled. Without `--crlf`, the function returns the `\\n` position, which would keep the `\\r` (src/scan.zig:248).",
+ "usage": {
+  "cost_usd": 0.009058,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.9,
+ "headers": {}
+}

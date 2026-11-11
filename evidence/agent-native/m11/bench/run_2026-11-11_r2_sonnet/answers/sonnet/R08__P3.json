@@ -1,0 +1,18 @@
+{
+ "qid": "R08",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6893baf69ed4fc7efba80134cdd319b9227027afe032e6123e77fb1e5d676287",
+ "answer": "A cache is marked ACTIVA when `hasLockFile(...)` is true **or** `procsHomeActive(...)` is true (src/clean.zig:283). The context doesn't show `hasLockFile`'s body, so the lock-file criterion is unspecified here. Per the comment, Zig leaves no lock files, only the process (src/clean.zig:134).\n\n`procsHomeActive` works only on Linux; elsewhere it returns false (src/clean.zig:142). It scans the numeric `/proc/<pid>` directories (src/clean.zig:144-157) and reads each `/proc/<pid>/exe` symlink (src/clean.zig:158-159). It strips a trailing \" (deleted)\" (src/clean.zig:163-164).\n\n**Zig compiler recognition:** the exe's basename must be exactly `zig` or `zig.exe` (src/clean.zig:170-172). This replaced a substring check that produced false positives (src/clean.zig:165-169).\n\n**Activity rules:**\n- Global cache: any live zig process makes it active (src/clean.zig:173-176).\n- Local cache: a zig process whose cwd equals the repo (the cache's parent) or lies under it (src/clean.zig:177-186), or whose exe path starts with the cache path (src/clean.zig:187).",
+ "usage": {
+  "cost_usd": 0.019736,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.1,
+ "headers": {}
+}

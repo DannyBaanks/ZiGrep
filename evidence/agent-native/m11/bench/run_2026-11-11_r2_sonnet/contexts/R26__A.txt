@@ -1,0 +1,2 @@
+src/walk.zig:11:pub const walk_max_depth = 512;
+src/walk.zig:62:    if (depth > walk_max_depth) return error.TooDeep;

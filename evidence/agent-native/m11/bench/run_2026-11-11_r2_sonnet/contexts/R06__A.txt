@@ -1,0 +1,12 @@
+src/batch.zig:49:pub fn estimateTokens(b: []const u8) f64 {
+src/batch.zig:119:    /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+src/batch.zig:276:        const est = estimateTokens(self.line_buf.items);
+src/batch.zig:323:        const est = estimateTokens(self.line_buf.items);
+src/batch.zig:585:    const one: usize = @intFromFloat(@ceil(estimateTokens(m)));
+src/batch.zig:594:test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+src/batch.zig:595:    try std.testing.expectEqual(@as(f64, 0), estimateTokens(""));
+src/batch.zig:596:    const a = estimateTokens("abcdef ");
+src/batch.zig:597:    const b = estimateTokens("123456 ");
+src/batch.zig:598:    const c = estimateTokens("ñññ ");
+src/batch.zig:600:    try std.testing.expect(c > estimateTokens("nnn "));
+src/batch.zig:602:    try std.testing.expectApproxEqAbs(estimateTokens("ab 12\n") + estimateTokens("cd 34\n"), estimateTokens("ab 12\ncd 34\n"), 1e-9);

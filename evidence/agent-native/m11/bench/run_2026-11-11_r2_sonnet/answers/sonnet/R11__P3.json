@@ -1,0 +1,18 @@
+{
+ "qid": "R11",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "1e8c7dd7f6e7df1593367aaeed872cfc3893a190ce1cea997cfedeb9f4896a7b",
+ "answer": "The context shows `provSourceOf` returns a `ProvSource`, with two values visible: `.file` and `.file_utf16` (src/scan.zig:1230-1234). Presumably these are serialized as \"file\" and \"file-utf16\" in the event, but the context doesn't show the enum definition or JSON serialization, so I can't confirm the exact strings or whether other values exist (e.g., for stdin).\n\nWhen it's `.file_utf16` (src/scan.zig:1231-1233):\n- If `config.encoding == .none`, it's always `.file` (line 1231).\n- Otherwise, if the encoding is forced via a BOM (`forcedBom(config.encoding) != null`) or `config.encoding == .utf16`, it's `.file_utf16` (line 1232).\n- Otherwise, it's `.file_utf16` only if the data begins with a UTF-16 BOM (`isUtf16Bom(data) != null`); else `.file` (line 1233).\n\nThe comment says this mirrors the UTF-16 decision in `processBuffer`, so offsets can be related correctly (src/scan.zig:1228-1229).\n\nMissing: the `ProvSource` enum definition and the JSON emitter, to see the complete value list.",
+ "usage": {
+  "cost_usd": 0.016166,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.61,
+ "headers": {}
+}

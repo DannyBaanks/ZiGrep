@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims a fourth trigger: multiple explicit file operands (valid_operands.items.len > 1 and all_files) sets opts.sort = true, which the reference does not list; the reference names only --exec, --heading and --pre.",
+  "Says 'Four conditions' force sort and that other triggers may exist, which contradicts the reference's definite set of three options."
+ ],
+ "reason": "The answer correctly identifies --exec, --heading and --pre with the right rationales, but adds an extra trigger (multiple file operands) not in the reference and hedges about other possible triggers.",
+ "cost_usd": 0.007364000000000001
+}

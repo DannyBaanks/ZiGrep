@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: `binary` is rejected at parse time with a usage error, `text` equals -a, and `without-match` is the default; the hedge about the hyphenated spelling is minor and does not contradict the reference.",
+ "cost_usd": 0.006386
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer states auto is effectively the same as never, matching the reference, but it then hedges that it cannot confirm which comment is right and suggests the two comments conflict, whereas the reference is definite.",
+ "cost_usd": 0.0057139999999999995
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R02",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "215d25b27765c27a3e1726053a156b5fe386f65336c5a169711728b524bdb5df",
+ "answer": "With `--exclude-ext=log`, only `a.log` is excluded by `matchesExt`. This assumes the CLI passes `\"log\"` through unchanged. The context does not show the option parsing, so that is unverified.\n\n- **`a.log`: excluded.** The extension has no leading dot. The name is longer than `ext.len + 1`, `name[1]` is `'.'`, and `endsWith` matches (src/filter.zig:89-90).\n- **`catalog`: not excluded.** The char before the last 3 is `'a'`, not `'.'`, so it returns false (src/filter.zig:89-92).\n- **`.log`: not excluded by `matchesExt`.** Its length of 4 is not greater than `ext.len + 1` (4), so it falls to `return false` (src/filter.zig:89, 92). It can still be excluded if `skip_hidden` is on, since names starting with `.` return true (src/filter.zig:271). The default for `skip_hidden` is not shown.\n- **`A.LOG`: not excluded.** The `'.'` check passes, but `std.mem.endsWith` compares bytes, so `\"LOG\"` ≠ `\"log\"`. This relies on how `std.mem.endsWith` behaves, which is not shown in the context. There is no case-folding in the shown code.\n\nThe tests do not cover any of these four cases (src/filter.zig:330-335). Other rules in `isFileExcluded`, such as default extensions or patterns, could also exclude files (src/filter.zig:275-291).",
+ "usage": {
+  "cost_usd": 0.022608,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 8.76,
+ "headers": {}
+}

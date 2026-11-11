@@ -1,0 +1,117 @@
+CONTEXT PACK `lookaround`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 4 file(s); by role: doc_comment 1, documentation 3, string 2
+  declarations found by pattern: 0
+
+BLOCKS
+GUIA.md:1159-1175  sha256:694773522a9799e4
+  1159 | 
+  1160 | * necesites rendimiento extremo en escaneo de archivos con enjambre de hilos Kamikaze o salida determinista (`--sort`);
+  1161 | * el patrón sea corto o largo: `zigrep` bate a `grep` por hasta 165× y a `rg` por hasta 2,6×;
+  1162 | * quieras evitar el overhead de dependencias de libc o runtimes pesados;
+  1163 | * busques patrones con regex lineal con garantía de $O(N)$ sin backtracking catastrófico.
+  1164 | 
+  1165 | **No lo uses cuando:**
+  1166 | 
+> 1167 | * necesites backreferences o lookaround en regex (no soportados por diseño para garantizar $O(N)$);
+  1168 | * el trabajo sea **salida muy voluminosa sobre árboles pequeños** (cientos de
+  1169 |   miles de líneas de salida en < 150 MB): ahí `rg` es 2,2× más rápido y
+  1170 |   `grep` 1,3× más rápido que `zgrep`;
+  1171 | * vayas a comparar `-c` con `rg`: las semánticas de archivos binarios
+  1172 |   difieren (sección 3);
+  1173 | * corras en macOS: sigue sin probarse en ese sistema.
+  1174 | 
+  1175 | ---
+GUIA.md:1224-1240  sha256:4f3facb32d645c15
+  1224 | `evidence/REPORT.md`.
+  1225 | 
+  1226 | ## Regex, -i, -w, -e (2026-11-08)
+  1227 | 
+  1228 | `zigrep PATTERN` ahora es regex (dialecto tipo `rg`): `. [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $`.
+  1229 | Un patrón sin metacaracteres usa el kernel literal rápido de siempre. `-F` fuerza literal.
+  1230 | 
+  1231 | - `-i` ignora mayúsculas (ASCII) · `-w` palabra completa · `-e P` (repetible) varios patrones.
+> 1232 | - No soportado (da error, nunca resultado incorrecto): `\b`, backreferences, lookaround.
+  1233 | - Motor: NFA -> DFA perezoso por hilo (`src/regex.zig`), lineal, sin backtracking. Si el patrón
+  1234 |   tiene un literal obligatorio (>=3 bytes) se usa como prefiltro y el DFA solo mira esas líneas.
+  1235 | - Oráculo: `analysis/regex_oracle.py` compara conteos por archivo contra `grep -E` y `rg`.
+  1236 | 
+  1237 | ## Operaciones Estándar Grupo 1 (-v, -L, stdin, -m NUM / --max-count) (2026-11-08)
+  1238 | 
+  1239 | 1. `-v, --invert-match`: Muestra o cuenta las líneas que **no** coinciden con el patrón.
+  1240 | 2. `-L, --files-without-match`: Lista únicamente los archivos que **no** contienen coincidencias.
+README.md:114-130  sha256:14d3b7b3d17fd6c8
+   114 |   `--stats`, `--force-swarm`, `--nav` (directory navigation plans), `--exec`,
+   115 |   `--cache` (inspect and clean Zig build caches).
+   116 | 
+   117 | Since 0.4.0, line numbers are off by default, as in GNU grep and in ripgrep when
+   118 | its output is piped. Pass `-n` to enable them, or use `--pretty`.
+   119 | 
+   120 | The regex dialect matches ripgrep's:
+   121 | `.`, `[a-z]`, `[^x]`, `[[:alpha:]]`, `\d`, `\w`, `\s`, `*`, `+`, `?`, `{n,m}`,
+>  122 | `|`, `( )`, `^`, `$`, `\b`, `\B`. Back-references and lookaround are rejected
+   123 | with an error rather than approximated. `-G` translates basic regular
+   124 | expressions to this dialect.
+   125 | 
+   126 | Exit status: `0` a match was found, `1` no match, `2` error.
+   127 | 
+   128 | ### Structured output
+   129 | 
+   130 | The structured output is aimed at programs that consume search results. Every
+src/main.zig:218-234  sha256:7226c7ae3e0177fd
+   218 |     \\                     probe: if the page is in RAM its bytes are scanned
+   219 |     \\                     directly; if the tree is cold it promotes to
+   220 |     \\                     io_uring. sync is the old behaviour, byte for byte
+   221 |     \\      --help        print this help
+   222 |     \\  -V, --version     print the version
+   223 |     \\
+   224 |     \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+   225 |     \\word boundaries \b and \B are supported (zero-width assertions).
+>  226 |     \\not supported (reported as an error): back-references, lookaround.
+   227 |     \\a plain string with no metacharacters takes the fast literal path.
+   228 |     \\patterns containing a newline are rejected.
+   229 |     \\when no PATH is given or when PATH is '-', standard input is read.
+   230 |     \\
+   231 |     \\exit status: 0 match found, 1 no match, 2 error
+   232 |     \\
+   233 | ;
+   234 | 
+src/regex.zig:10-26  sha256:4562779e03aa1ec4
+    10 | //!
+    11 | //! Supported syntax (ERE-like, the same dialect as `rg`):
+    12 | //!   literals   .   [abc] [^a-z] [[:alpha:]]   \d \D \w \W \s \S   \n \t \r
+    13 | //!   groups     (re)  (?:re)        alternation  a|b
+    14 | //!   repeats    *  +  ?  {n}  {n,}  {n,m}   (a trailing `?` is accepted and ignored)
+    15 | //!   anchors    ^  $   (line anchors; every haystack is split on '\n')
+    16 | //!   escapes    \. \\ \( \) \[ \] \{ \} \* \+ \? \| \^ \$ \/ \- ...
+    17 | //! Not supported (reported as errors, never silently mis-matched): `\b`,
+>   18 | //! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
+    19 | //! UTF-8 character is several bytes; -i folds ASCII only.
+    20 | const std = @import("std");
+    21 | const Allocator = std.mem.Allocator;
+    22 | 
+    23 | pub const Set = [256]bool;
+    24 | 
+    25 | pub const CompileError = error{ BadRegex, OutOfMemory };
+    26 | 
+src/regex.zig:202-214  sha256:ddda7e13230a6d61
+   202 |     fn escapeByte(self: *Parser, c: u8) CompileError!u8 {
+   203 |         _ = self;
+   204 |         return switch (c) {
+   205 |             'n' => '\n',
+   206 |             't' => '\t',
+   207 |             'r' => '\r',
+   208 |             '0' => 0,
+   209 |             else => if (std.ascii.isAlphanumeric(c))
+>  210 |                 fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
+   211 |             else
+   212 |                 c,
+   213 |         };
+   214 |     }
+
+TRUNCATION
+  truncated: false   items: 6

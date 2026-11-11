@@ -1,0 +1,18 @@
+{
+ "qid": "R11",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ae2773d7d4d6a9a61823511e4c69c0b6b1fbb2ff3e91437c1bf62a70d7a8f7c6",
+ "answer": "The context shows `provSourceOf` returns a `ProvSource` that is either `.file` or `.file_utf16` (src/scan.zig:1230-1234). The `ProvSource` enum declaration isn't in the context, so I can't confirm whether it has other values (such as stdin or archive sources), nor how they're serialized to the JSON \"source\" string. The `file-utf16` spelling is inferred from `.file_utf16`, not shown.\n\n`provSourceOf` returns `.file_utf16` when:\n- `config.encoding` is not `.none` and either `forcedBom(config.encoding) != null` or `config.encoding == .utf16` (src/scan.zig:1232). In other words, the encoding is forced to UTF-16.\n- Otherwise, the data starts with a UTF-16 BOM, per `isUtf16Bom(data) != null` (src/scan.zig:1233).\n\nIt returns `.file` when `config.encoding == .none` (src/scan.zig:1231) or when no BOM is detected (src/scan.zig:1233).\n\nThis logic repeats the UTF-16 decision made in `processBuffer` (src/scan.zig:1228-1229). It is used on the portable scan path (src/scan.zig:905, 918, 937).\n\nTo get the full set of values, I'd need the `ProvSource` enum definition and its JSON serialization code.",
+ "usage": {
+  "cost_usd": 0.0157,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.2,
+ "headers": {}
+}

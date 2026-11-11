@@ -1,0 +1,18 @@
+{
+ "qid": "R03",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5161f9692811b6bd3af04d8687da31477e4c54c6808e8d028ad0fc190d42d04a",
+ "answer": "The context does not show the contents of the list, so I can't say whether `dist` or `build` are in it.\n\nWhat it does show:\n\n- The defaults are defined as `pub const default_excluded_dirs = [_][]const u8{` at src/filter.zig:17. The list entries themselves are not included in the output.\n- `isDirExcluded` (src/filter.zig:248-268) skips a directory if:\n  - hidden-skipping is on and the name starts with `.` (249-250);\n  - defaults are enabled and the name exactly matches an entry in `default_excluded_dirs` (253-255);\n  - it matches a CLI-excluded directory pattern (259-261) or an ignore pattern (263-265).\n\nTo answer your question, I'd need the body of the array at src/filter.zig:17 onward. The test \"FilterEngine default exclusions\" (src/filter.zig:337-352) might also show it, but its body isn't in the context either.",
+ "usage": {
+  "cost_usd": 0.012434,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.26,
+ "headers": {}
+}

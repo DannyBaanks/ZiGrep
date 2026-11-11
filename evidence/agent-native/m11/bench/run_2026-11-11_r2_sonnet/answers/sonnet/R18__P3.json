@@ -1,0 +1,18 @@
+{
+ "qid": "R18",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5a860e61a8d2c8132ee5b06c3b025d3341d236ea058e2fad4e7ea1263b751525",
+ "answer": "The context only partly answers this. It shows how the nav spec `v^v` is parsed, but not what the search covers in the end.\n\n- `NavPlan.parse` reads `v` as down and `^` as up (src/nav.zig:44-45). It sets `has_ceiling` for a down-then-up pair and `has_trampoline` for an up-then-down pair (src/nav.zig:62-65).\n- `v^v` is down, up, down. That gives `has_ceiling` at the first pair (`v^`) and `has_trampoline` at the second (`^v`). So both flags are set, going by the parse loop (src/nav.zig:59-66).\n- With `has_trampoline` set, `shouldScanFiles` returns false at depth 0, so files in the root directory are skipped. Deeper files are scanned (src/nav.zig:77-82).\n- `shouldRecurseSubdirs` is not shown (it is at src/nav.zig:85-90). I therefore can't say how `has_ceiling` interacts with the trampoline, or whether subdirectories are searched at all.\n- The tests cover only `v^` and `^v` separately (src/nav.zig:109-123). None covers `v^v`.\n\nMissing: the body of `shouldRecurseSubdirs`, and any README/GUIA text on `--nav`.",
+ "usage": {
+  "cost_usd": 0.025438000000000002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.48,
+ "headers": {}
+}

@@ -1,0 +1,4 @@
+src/scan.zig:905:            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
+src/scan.zig:918:            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
+src/scan.zig:937:    if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, provSourceOf(data, config), mtime_from)) |err| res.err = err;
+src/scan.zig:1230:fn provSourceOf(data: []const u8, config: ScanConfig) ProvSource {

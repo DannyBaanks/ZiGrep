@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly identifies the 512 hard cap and error.TooDeep in the walk, but omits the micro path's depth-32 fallback and that --max-depth=0 means no user limit, and hedges heavily.",
+ "cost_usd": 0.005978
+}

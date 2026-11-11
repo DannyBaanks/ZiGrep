@@ -1,0 +1,18 @@
+{
+ "qid": "R28",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "79445ab775e793a4bc9ca04dae68a0726637664b9dfed5537b02485fc767066a",
+ "answer": "**What it does:** `--stop-on-nonmatch` means \"stop once a non-matching line follows a match\" (src/main.zig:384, src/scan.zig:77). The option is a boolean defaulting to `false` (src/main.zig:385, src/scan.zig:78).\n\n**Where it's wired up:**\n- Parsed in `parseArgs`, which sets `opts.stop_on_nonmatch = true` (src/main.zig:1266-1267). A test confirms this (src/main.zig:3232-3234).\n- Copied from the options into the scan config in three places: the stdin path (src/main.zig:2284), the kamikaze pipeline (src/main.zig:2432), and the general search config (src/main.zig:2607).\n- The `ScanConfig` struct declares the field (src/scan.zig:77-78).\n\n**Not shown:** The context contains no code that actually reads `stop_on_nonmatch` in the scanning loop. The search only matched the field declarations, the parsing, and the config copies. The logic that stops scanning is probably elsewhere in src/scan.zig (or another file), but I can't confirm that from this output.",
+ "usage": {
+  "cost_usd": 0.020222,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.35,
+ "headers": {}
+}

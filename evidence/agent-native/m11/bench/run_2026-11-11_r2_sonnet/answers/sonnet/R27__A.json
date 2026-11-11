@@ -1,0 +1,18 @@
+{
+ "qid": "R27",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "4f244cb5f2b4dc233d6ccb384ad862b75a55c784f2843d84b2a0608b2e90a785",
+ "answer": "**The context only partly answers this.**\n\n- **sha256 for UTF-16:** The context doesn't say whether the hash covers the raw file or the decoded text.\n  - `src/main.zig:87` describes the hash as being \"of the bytes searched\", which is ambiguous.\n  - `src/scan.zig:1337` and `src/scan.zig:1357` hash `data` and use `data.len` as the size. The context doesn't show whether `data` is the raw bytes or transcoded text.\n  - The UTF-16 decoding path is not shown, so I can't say.\n- **Offsets:** Nothing in the context says what the offsets refer to. The missing material is the JSON match-event offset docs and the UTF-16 handling code.\n- **mtime_ns for standard input:** It appears to be null. `GUIA.md:831` ends with \"lo recibido, `mtime_ns` null)\", which reads as \"what was received, mtime_ns null\". The preceding line isn't shown, so the stdin link is inferred. This fits `src/out_json.zig:202`, where mtime_ns comes from `statx` and is null when none is available. `GUIA.md:828` says it comes from `statx` on the descriptor that was read.\n\nTo settle the first two points, I'd need the UTF-16 decoding code in `scan.zig` and the offset documentation in `GUIA.md`.",
+ "usage": {
+  "cost_usd": 0.015156000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 7.13,
+ "headers": {}
+}

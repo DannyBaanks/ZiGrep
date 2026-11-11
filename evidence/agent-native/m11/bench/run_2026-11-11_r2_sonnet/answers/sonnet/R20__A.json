@@ -1,0 +1,18 @@
+{
+ "qid": "R20",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "6d202035e8eb23f1eae8aec75c14fa1409f9b42d84d729e58debcd576b20a67d",
+ "answer": "The context does not contain enough information to answer definitively.\n\nWhat it shows: `smart_case` is an option field (src/main.zig:322), set to true by a long-form flag (src/main.zig:1070) and by `-S` (src/main.zig:1530). There is a conditional at src/main.zig:2206, `if (opts.smart_case and !opts.ignore_case)`, which suggests smart case applies only when explicit ignore-case isn't set.\n\nWhat is missing: the body of that conditional at line 2206. It would show how the pattern is checked for uppercase characters and whether that check handles non-ASCII letters like `ñ`/`ú`. Without it, I can't confirm that `ñandú` triggers case-insensitive matching. The tests at lines 3079 and 3085 only check that the flag is parsed.",
+ "usage": {
+  "cost_usd": 0.006606,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.05,
+ "headers": {}
+}

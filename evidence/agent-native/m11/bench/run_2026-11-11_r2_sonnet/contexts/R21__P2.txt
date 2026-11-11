@@ -1,0 +1,96 @@
+CONTEXT PACK `ColorMode`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 3 in 1 file(s); by role: code 3
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] const/var `ColorMode` in container:ColorMode
+  src/main.zig:235-237  sha256:2c3eee24f165cfdb  relation: declaration (pattern match, heuristic)
+   235 | /// `--color` tri-state. `auto` is deliberately folded to `never`: deciding
+   236 | /// it properly needs isatty(stdout), which is not worth the flag.
+>  237 | pub const ColorMode = enum { never, always, auto };
+
+REFERENCES
+src/main.zig in container:Options
+  [h2] line 308 `ColorMode`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:237, no local shadow found)
+  src/main.zig:247-247  sha256:37960d111c9a8d7b
+   247 | pub const Options = struct {
+  src/main.zig:300-316  sha256:1cd9ec0073c809dd
+   300 |     /// `-f FILE`: patterns come from files as well.
+   301 |     pattern_files: [16][]const u8 = undefined,
+   302 |     pattern_files_count: usize = 0,
+   303 |     /// `-o`: one output line per (non-empty) match.
+   304 |     only_matching: bool = false,
+   305 |     /// `--column`: print the 1-based byte column of the first match (rg).
+   306 |     column: bool = false,
+   307 |     /// `--color=always|never|auto` (auto degrades to never off a TTY).
+>  308 |     color: ColorMode = .never,
+   309 |     /// `--replace=TEXT` (rg): substitute every match with TEXT. The rest of
+   310 |     /// the line survives (rg); with `-o` the record is just the replacement.
+   311 |     replace: ?[]const u8 = null,
+   312 |     /// `--passthru`: also print lines that do not match.
+   313 |     passthru: bool = false,
+   314 |     /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
+   315 |     /// Turns off the normal output; the command's streams are inherited.
+   316 |     exec_cmd: ?[]const u8 = null,
+
+TESTS
+src/main.zig in test:parseArgs: la numeracion arranca APAGADA (0.4.0) y -n la enciende  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h3] line 3369 `ColorMode`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/main.zig:237, no local shadow found)
+  src/main.zig:3338-3380  sha256:fdf7ba1fa382ea1e
+  3338 | test "parseArgs: la numeracion arranca APAGADA (0.4.0) y -n la enciende" {
+  3339 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  3340 |     defer arena.deinit();
+  3341 |     const alloc = arena.allocator();
+  3342 |     var o: Options = .{};
+  3343 |     const a = [_][:0]const u8{ "zgrep", "pat", "f.txt" };
+  3344 |     _ = try parseArgs(alloc, &a, &o);
+  3345 |     // Default nuevo, medido contra grep y contra rg-en-pipe: ninguno numera
+  3346 |     // salvo que se pida. La premisa del corpus ("rg numera por defecto") era
+  3347 |     // falsa en el caso que importa (ver evidence/agent-native/contract.md).
+  3348 |     try std.testing.expect(!o.show_line_no);
+  3349 |     // -n y --line-number la encienden
+  3350 |     {
+  3351 |         var o2: Options = .{};
+  3352 |         const a2 = [_][:0]const u8{ "zgrep", "-n", "pat", "f.txt" };
+  3353 |         _ = try parseArgs(alloc, &a2, &o2);
+  3354 |         try std.testing.expect(o2.show_line_no);
+  3355 |     }
+  3356 |     {
+  3357 |         var o3: Options = .{};
+  3358 |         const a3 = [_][:0]const u8{ "zgrep", "--line-number", "pat", "f.txt" };
+  3359 |         _ = try parseArgs(alloc, &a3, &o3);
+  3360 |         try std.testing.expect(o3.show_line_no);
+  3361 |     }
+  3362 |     // --pretty la enciende tambien (es alias de --color=always --heading
+  3363 |     // --line-number; con el default apagado por fin tiene sentido)
+  3364 |     {
+  3365 |         var o4: Options = .{};
+  3366 |         const a4 = [_][:0]const u8{ "zgrep", "--pretty", "pat", "f.txt" };
+  3367 |         _ = try parseArgs(alloc, &a4, &o4);
+  3368 |         try std.testing.expect(o4.show_line_no);
+> 3369 |         try std.testing.expectEqual(ColorMode.always, o4.color);
+  3370 |         try std.testing.expect(o4.heading);
+  3371 |     }
+  3372 |     // --json NO implica numeracion: los campos la llevan
+  3373 |     {
+  3374 |         var o5: Options = .{};
+  3375 |         const a5 = [_][:0]const u8{ "zgrep", "--json", "pat", "f.txt" };
+  3376 |         _ = try parseArgs(alloc, &a5, &o5);
+  3377 |         try std.testing.expect(!o5.show_line_no);
+  3378 |         try std.testing.expect(o5.json);
+  3379 |     }
+  3380 | }
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.ColorMode), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 670 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 7

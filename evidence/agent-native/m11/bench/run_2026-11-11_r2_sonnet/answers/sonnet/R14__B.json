@@ -1,0 +1,18 @@
+{
+ "qid": "R14",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "472f1934ba5bd6dbe7631f510de6bb9ea45eb7b8bd9dbc12283c7f48fb171892",
+ "answer": "**Yes, `\\b` appears to be supported, and the header comment in src/regex.zig is stale.**\n\n- src/main.zig:225 (help text) says \"word boundaries \\b and \\B are supported (zero-width assertions).\"\n- README.md:121-122 lists `\\b`, `\\B` in the supported dialect.\n- src/regex.zig:210 (the error message for unsupported escapes) says \"\\b and \\B ARE\" supported.\n- The header at src/regex.zig:17 still lists `\\b` as not supported, contradicting the above.\n- GUIA.md:1232 (dated 2026-11-08) also still says `\\b` is unsupported, so it is likely outdated too.\n\nCaveat: the context doesn't include the actual parser/matcher code that handles `\\b`, so I can't confirm the implementation directly. The evidence is the help text, README, and error message. Lookaround and back-references remain unsupported (src/main.zig:226).",
+ "usage": {
+  "cost_usd": 0.018714,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.07,
+ "headers": {}
+}

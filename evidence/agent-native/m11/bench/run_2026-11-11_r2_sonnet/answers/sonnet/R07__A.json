@@ -1,0 +1,18 @@
+{
+ "qid": "R07",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "c567e57b2cf3fd0980a2ac42e95e87707045288b1c836ff27b6ce5e162087b5c",
+ "answer": "The context doesn't contain enough information to answer.\n\nWhat it shows: a function `isResult(line: []const u8) bool` is defined at `src/batch.zig:77`, and it is called at `src/batch.zig:311` (`const result = isResult(line);`). That suggests result classification is done per line by `isResult`.\n\nWhat is missing:\n- The body of `isResult` (starting at `src/batch.zig:77`), which determines which event types count as results.\n- The code around `src/batch.zig:311`, which would show whether context lines are excluded from the count or how `result` is used with the limit.\n- Any handling or documentation of `--max-results` itself; the search was only for `isResult`, and nothing in README.md or GUIA.md matched.\n\nTo answer, I would need the `isResult` implementation and the `--max-results` handling, e.g. a search for `max_results` or `max-results`.",
+ "usage": {
+  "cost_usd": 0.006286,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.3,
+ "headers": {}
+}

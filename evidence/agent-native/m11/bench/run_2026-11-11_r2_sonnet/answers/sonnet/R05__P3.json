@@ -1,0 +1,18 @@
+{
+ "qid": "R05",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "8eb23b12a57824537ad7cb6129f282c6970f1f133bec8f12aa78357259c13cdd",
+ "answer": "Partial answer: the context shows the behavior only through one doc comment, one test, and the caller. The body of `parseQueries` (src/batch.zig:499-540) is not shown.\n\n- **id values:** the test name says ids may be string or integer (src/batch.zig:614). The test confirms `\"a\"` is kept as `\"\\\"a\\\"\"` and `7` as `\"7\"` (src/batch.zig:624-625). Other JSON types are not shown, so whether they are accepted is unknown.\n- **Unknown fields:** rejected with `error.Invalid`. The test uses `\"path\"` as a typo for `paths` (src/batch.zig:633-635).\n- **Duplicate ids:** rejected with `error.Invalid`, and `perr.line_no` is 2, the line of the duplicate (src/batch.zig:628-632).\n- **Blank lines:** ignored (src/batch.zig:498, 620).\n- **Half-run batch:** no. The whole file is parsed before anything runs, so it fails closed (src/batch.zig:497-498). On `Invalid`, `runBatch` prints `file:line: reason` and returns 2 (src/main.zig:1914-1917).\n\nMissing: the body of `parseQueries`, which would show the exact validation rules.",
+ "usage": {
+  "cost_usd": 0.022462,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.67,
+ "headers": {}
+}

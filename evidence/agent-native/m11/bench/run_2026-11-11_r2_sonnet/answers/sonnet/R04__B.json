@@ -1,0 +1,18 @@
+{
+ "qid": "R04",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "08542bf9b4dfd9fed1e72c31d0e76d9ba3437ac77677c8814720dfad5bcca7b9",
+ "answer": "With `-G`, the pattern is first translated by `breToEre` (src/bre.zig:33) and then parsed as ERE (src/search.zig:393, 412).\n\n- **`a\\+b`**: `\\+` becomes the ERE `+` quantifier, so it means \"one or more `a`, then `b`\". The test maps `a\\+` to `a+` (src/bre.zig:158).\n- **`a+b`**: a bare `+` is a literal plus. It is translated to `a\\+b` (src/bre.zig:163, 27), so it matches the text \"a+b\".\n- **Pattern starting with `*`**: the `*` is a literal in BRE when it appears at the start of a pattern, branch or group (src/bre.zig:29). The test shows `*ab` becoming `\\*ab` (src/bre.zig:178). A `*` elsewhere stays a quantifier, e.g. `a*b` is unchanged (src/bre.zig:179).",
+ "usage": {
+  "cost_usd": 0.016916,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.25,
+ "headers": {}
+}

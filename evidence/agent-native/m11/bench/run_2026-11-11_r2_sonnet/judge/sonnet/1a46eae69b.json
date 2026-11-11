@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says no match and that regex folding is ASCII-only, but hedges on the literal path and README claim, not stating definitively that Latin-1 folding holds only for literals.",
+ "cost_usd": 0.007004
+}

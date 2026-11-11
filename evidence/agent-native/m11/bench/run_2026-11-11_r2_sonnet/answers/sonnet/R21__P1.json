@@ -1,0 +1,18 @@
+{
+ "qid": "R21",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "bb1d74cd0ffce7505f12e5a789abace2635b4106778005c6c0a49b4dc32adaa0",
+ "answer": "The only direct evidence is a doc comment on the option field: `--color=always|never|auto` (\"auto degrades to never off a TTY\") (src/main.zig:307-308). So with `auto`, zgrep colors output when writing to a terminal and falls back to `never` (no color) when output isn't a TTY, e.g. when piped.\n\nRelated facts from the context:\n- `ColorMode` is an enum with `never`, `always`, `auto` (src/main.zig:237).\n- The default is `.never` (src/main.zig:308).\n- `--pretty` sets `color` to `always` (src/main.zig:3362-3369).\n\nMissing: the actual code that resolves `auto` (TTY detection) and the argument parser for `--color`; the context only shows the declaration, comment, and a test, so I can't confirm the exact detection mechanism.",
+ "usage": {
+  "cost_usd": 0.013618000000000002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.88,
+ "headers": {}
+}

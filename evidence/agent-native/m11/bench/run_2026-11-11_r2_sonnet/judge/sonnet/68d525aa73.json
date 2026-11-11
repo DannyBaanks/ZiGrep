@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer says it can't determine the result and only tentatively suggests 'plausibly not', whereas the reference definitively says No with the matchesExt dot-prefix reasoning; the direction is consistent but hedged and incomplete.",
+ "cost_usd": 0.006302
+}

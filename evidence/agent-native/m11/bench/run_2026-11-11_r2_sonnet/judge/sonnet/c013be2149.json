@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly says no RSS or timing measurement is available, and its mmap_threshold 256 KB and page-cache points match the reference.",
+ "cost_usd": 0.006072
+}

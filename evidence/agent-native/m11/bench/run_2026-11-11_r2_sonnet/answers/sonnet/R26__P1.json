@@ -1,0 +1,18 @@
+{
+ "qid": "R26",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3698d7b535becae60ff5a2f60b8571ad9be65e9c4a0136047794cdfcdd05b749",
+ "answer": "Yes. The context shows a hard cap independent of `--max-depth`:\n\n- `src/walk.zig:11` defines `pub const walk_max_depth = 512;`.\n- `src/walk.zig:62` in `walkOne` does `if (depth > walk_max_depth) return error.TooDeep;`, so the walk fails once depth exceeds 512.\n- `src/walk.zig:17` includes `TooDeep` in the module's `Error` set.\n\n`walkOne` also takes a separate `max_depth: usize` parameter (`src/walk.zig:59`), which is presumably the user-facing `--max-depth` option. The context doesn't show how that parameter is used or whether the CLI flag maps to it. The cap is also an error (`TooDeep`), not a silent stop, though how callers handle that error isn't shown.",
+ "usage": {
+  "cost_usd": 0.009696,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.51,
+ "headers": {}
+}

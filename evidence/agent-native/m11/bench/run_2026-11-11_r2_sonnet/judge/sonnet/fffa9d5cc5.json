@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Matches reference on ordering, quiet mode with early-exits disabled, and --json usage error, and says --exec is rejected in batch queries, but hedges on the command-line/batch case and omits the {} path substitution/append rule.",
+ "cost_usd": 0.006658
+}

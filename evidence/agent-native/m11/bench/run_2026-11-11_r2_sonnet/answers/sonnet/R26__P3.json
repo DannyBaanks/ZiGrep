@@ -1,0 +1,18 @@
+{
+ "qid": "R26",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "c9ee4a041eacada24984ee932f7a79c0875de39824440902c23553c94f514a4a",
+ "answer": "Yes, apparently. The context shows a hard-coded constant `pub const walk_max_depth = 512;` at src/walk.zig:11. In `walkOne`, the check `if (depth > walk_max_depth) return error.TooDeep;` (src/walk.zig:62) applies regardless of the `max_depth` parameter (src/walk.zig:59), which is a separate argument.\n\nSo recursion deeper than 512 levels returns `error.TooDeep`, even if no `--max-depth` is given.\n\nCaveats: the reference link is marked heuristic (single top-level declaration, no local shadow found). The context doesn't show how `walkOne` is called, what initial `depth` is passed, or how `error.TooDeep` is handled by callers (e.g., whether it aborts the walk or is skipped). Only src, README.md, and GUIA.md were searched, so other uses are unknown.",
+ "usage": {
+  "cost_usd": 0.011292,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.88,
+ "headers": {}
+}

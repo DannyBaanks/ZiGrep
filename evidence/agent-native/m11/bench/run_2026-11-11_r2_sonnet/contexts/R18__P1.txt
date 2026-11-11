@@ -1,0 +1,154 @@
+CONTEXT PACK `has_trampoline`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 7 in 2 file(s); by role: code 7
+  declarations found by pattern: 1
+
+BLOCKS
+src/main.zig:2956-3014  sha256:a2878048b6c11f37
+  2956 | test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+  2957 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  2958 |     defer arena.deinit();
+  2959 |     const alloc = arena.allocator();
+  2960 |     {
+  2961 |         var o: Options = .{};
+  2962 |         const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
+  2963 |         _ = try parseArgs(alloc, &a, &o);
+  2964 |         try std.testing.expect(o.kamikaze);
+  2965 |     }
+  2966 |     {
+  2967 |         var o: Options = .{};
+  2968 |         const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+  2969 |         _ = try parseArgs(alloc, &a, &o);
+  2970 |         try std.testing.expect(o.kamikaze);
+  2971 |         try std.testing.expect(o.skip_hidden);
+  2972 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+  2973 |         try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+  2974 |     }
+  2975 |     {
+  2976 |         var o: Options = .{};
+  2977 |         const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+  2978 |         _ = try parseArgs(alloc, &a, &o);
+  2979 |         try std.testing.expect(o.no_ignore);
+  2980 |         try std.testing.expect(o.no_default_ignore);
+  2981 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+  2982 |         try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+  2983 |         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+  2984 |         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+  2985 |     }
+  2986 |     {
+  2987 |         var o: Options = .{};
+  2988 |         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+  2989 |         _ = try parseArgs(alloc, &a, &o);
+  2990 |         try std.testing.expect(o.sort);
+  2991 |         try std.testing.expect(!o.kamikaze);
+  2992 |     }
+  2993 |     {
+  2994 |         var o: Options = .{};
+  2995 |         const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+  2996 |         _ = try parseArgs(alloc, &a, &o);
+> 2997 |         try std.testing.expect(o.nav_plan.has_trampoline);
+  2998 |         try std.testing.expect(!o.nav_plan.has_ceiling);
+  2999 |     }
+  3000 |     {
+  3001 |         var o: Options = .{};
+  3002 |         const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+  3003 |         _ = try parseArgs(alloc, &a, &o);
+  3004 |         try std.testing.expect(o.nav_plan.has_ceiling);
+> 3005 |         try std.testing.expect(!o.nav_plan.has_trampoline);
+  3006 |     }
+  3007 |     {
+  3008 |         var o: Options = .{};
+  3009 |         const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+  3010 |         _ = try parseArgs(alloc, &a, &o);
+  3011 |         try std.testing.expect(o.sort);
+  3012 |         try std.testing.expect(!o.kamikaze);
+  3013 |     }
+  3014 | }
+src/nav.zig:33-91  sha256:d545c0a34f9cfd25
+    33 | pub const NavPlan = struct {
+    34 |     ops: [32]NavOp = undefined,
+    35 |     len: usize = 0,
+    36 |     has_ceiling: bool = false,      // "v^" or "du"
+>   37 |     has_trampoline: bool = false,   // "^v" or "ud"
+    38 |     reverse_siblings: bool = false, // '<' or 'l'
+    39 | 
+    40 |     pub fn parse(spec: []const u8) !NavPlan {
+    41 |         var plan = NavPlan{};
+    42 |         for (spec) |c| {
+    43 |             const op: NavOp = switch (c) {
+    44 |                 'v', 'd', 'D' => .down,
+    45 |                 '^', 'u', 'U' => .up,
+    46 |                 '>', 'r', 'R' => .right,
+    47 |                 '<', 'l', 'L' => .left,
+    48 |                 ' ', '\t', ',' => continue,
+    49 |                 else => return error.InvalidNavOp,
+    50 |             };
+    51 |             if (plan.len < plan.ops.len) {
+    52 |                 plan.ops[plan.len] = op;
+    53 |                 plan.len += 1;
+    54 |             }
+    55 |         }
+    56 | 
+    57 |         // Detect 2D vector contraposition combos
+    58 |         var i: usize = 0;
+    59 |         while (i + 1 < plan.len) : (i += 1) {
+    60 |             const a = plan.ops[i];
+    61 |             const b = plan.ops[i + 1];
+    62 |             if (a == .down and b == .up) {
+    63 |                 plan.has_ceiling = true;
+    64 |             } else if (a == .up and b == .down) {
+>   65 |                 plan.has_trampoline = true;
+    66 |             }
+    67 |         }
+    68 | 
+    69 |         for (plan.ops[0..plan.len]) |op| {
+    70 |             if (op == .left) plan.reverse_siblings = true;
+    71 |         }
+    72 | 
+    73 |         return plan;
+    74 |     }
+    75 | 
+    76 |     /// Determines whether regular files at the given directory depth should be scanned.
+    77 |     pub inline fn shouldScanFiles(self: NavPlan, depth: usize) bool {
+    78 |         if (self.len == 0) return true;
+    79 |         // Trampoline (^v / ud): Skip files in the root level (depth 0), but scan deeper.
+>   80 |         if (self.has_trampoline and depth == 0) return false;
+    81 |         return true;
+    82 |     }
+    83 | 
+    84 |     /// Determines whether subdirectories at the given directory depth should be descended into.
+    85 |     pub inline fn shouldRecurseSubdirs(self: NavPlan, depth: usize) bool {
+    86 |         if (self.len == 0) return true;
+    87 |         // Ceiling (v^ / du): Bounce back at depth 0, do not enter subdirectories.
+    88 |         if (self.has_ceiling and depth >= 0) return false;
+    89 |         return true;
+    90 |     }
+    91 | };
+src/nav.zig:109-128  sha256:a79a865c28849f7a
+   109 | test "nav: contraposition combos: ceiling and trampoline" {
+   110 |     // Ceiling: v^ or du (depth limit = 0 subdirs)
+   111 |     const ceiling = try NavPlan.parse("v^");
+   112 |     try std.testing.expect(ceiling.has_ceiling);
+>  113 |     try std.testing.expect(!ceiling.has_trampoline);
+   114 |     try std.testing.expect(ceiling.shouldScanFiles(0));
+   115 |     try std.testing.expect(!ceiling.shouldRecurseSubdirs(0));
+   116 | 
+   117 |     // Trampoline: ^v or ud (leapfrog root files, dive into subdirs)
+   118 |     const trampoline = try NavPlan.parse("^v");
+   119 |     try std.testing.expect(!trampoline.has_ceiling);
+>  120 |     try std.testing.expect(trampoline.has_trampoline);
+   121 |     try std.testing.expect(!trampoline.shouldScanFiles(0)); // root files skipped!
+   122 |     try std.testing.expect(trampoline.shouldScanFiles(1));  // subfolder files scanned!
+   123 |     try std.testing.expect(trampoline.shouldRecurseSubdirs(0));
+   124 | 
+   125 |     // Reverse sibling flag
+   126 |     const rev = try NavPlan.parse("dl");
+   127 |     try std.testing.expect(rev.reverse_siblings);
+   128 | }
+
+TRUNCATION
+  truncated: false   items: 3

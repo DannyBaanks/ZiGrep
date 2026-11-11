@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer lists 8 of the 10 default directories correctly but misses .idea and .vscode, and it does not definitively state that dist and build are absent, hedging where the reference is definite; it also omits the --no-ignore flags.",
+ "cost_usd": 0.006384000000000001
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly describes the plumbing (parsed, stored, forwarded) and notes no reader was seen in scan.zig, but it hedges that it can't state the semantics instead of definitively saying the flag has no effect and the help text describes unimplemented behavior.",
+ "cost_usd": 0.006778
+}

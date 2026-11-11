@@ -1,0 +1,143 @@
+CONTEXT PACK `tryQuickQuietProbe`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `tryQuickQuietProbe` in fn:tryQuickQuietProbe
+  src/kamikaze.zig:743-801  sha256:0f8ccf7dc3de8036  relation: declaration (pattern match, heuristic)
+   743 | /// Zero-Latency Probe for Quiet Mode (-q):
+   744 | /// Scans up to 4 regular files in root on the main thread prior to thread pool creation.
+   745 | /// If a match is found instantly, returns true in < 0.3 ms with 0 thread spawns.
+>  746 | fn tryQuickQuietProbe(
+   747 |     io: std.Io,
+   748 |     gpa: Allocator,
+   749 |     searcher: *const Searcher,
+   750 |     root: [:0]const u8,
+   751 |     filter_engine: *const FilterEngine,
+   752 |     binary: bool,
+   753 |     scan_config: scan.ScanConfig,
+   754 | ) bool {
+   755 |     var stream = vfs.DirStream.open(io, root) catch return false;
+   756 |     defer stream.close();
+   757 | 
+   758 |     var probed: usize = 0;
+   759 |     var scratch: [64 * 1024]u8 = undefined;
+   760 |     var out: std.ArrayList(u8) = .empty;
+   761 |     defer out.deinit(gpa);
+   762 | 
+   763 |     var path_buf: [platform.path_max]u8 = undefined;
+   764 |     while (probed < 4) {
+   765 |         const maybe_entry = stream.next() catch return false;
+   766 |         const entry = maybe_entry orelse break;
+   767 |         var kind = entry.kind;
+   768 |         if (kind == .unknown) {
+   769 |             const probe_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+   770 |             defer gpa.free(probe_path);
+   771 |             kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
+   772 |         }
+   773 |         if (kind != .file) continue;
+   774 |         if (filter_engine.isFileExcluded(entry.name)) continue;
+   775 | 
+   776 |         const stack_path = formatPathBuf(&path_buf, root, entry.name);
+   777 |         var heap_path: ?[:0]const u8 = null;
+   778 |         const full_path: [:0]const u8 = stack_path orelse blk: {
+   779 |             heap_path = joinPathSentinel(gpa, root, entry.name) catch continue;
+   780 |             break :blk heap_path.?;
+   781 |         };
+   782 |         defer if (heap_path) |hp| gpa.free(hp);
+   783 | 
+   784 |         const res = scan.scanFile(
+   785 |             io,
+   786 |             gpa,
+   787 |             searcher,
+   788 |             full_path,
+   789 |             false,
+   790 |             .quiet,
+   791 |             binary,
+   792 |             scan_config,
+   793 |             &out,
+   794 |             &scratch,
+   795 |             null, // sonda temprana de -q: no decide el motor de la corrida
+   796 |         );
+   797 |         if (res.matched) return true;
+   798 |         probed += 1;
+   799 |     }
+   800 |     return false;
+   801 | }
+
+REFERENCES
+src/kamikaze.zig in fn:quietProbeHit
+  [h2] line 815 `tryQuickQuietProbe`: unresolved (lexical_only; 1 declaration(s) named tryQuickQuietProbe; none is linked by checkable evidence)
+  src/kamikaze.zig:804-821  sha256:9e385e5fa01e1e10
+   804 | fn quietProbeHit(
+   805 |     io: std.Io,
+   806 |     gpa: Allocator,
+   807 |     searcher: *const Searcher,
+   808 |     roots: []const [:0]const u8,
+   809 |     filter_engine: *const FilterEngine,
+   810 |     binary: bool,
+   811 |     scan_config: scan.ScanConfig,
+   812 |     stats: *KamikazeStats,
+   813 | ) bool {
+   814 |     for (roots) |root| {
+>  815 |         if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {
+   816 |             stats.early_aborted = true;
+   817 |             return true;
+   818 |         }
+   819 |     }
+   820 |     return false;
+   821 | }
+
+STRUCTURE
+src/kamikaze.zig (1030 lines, 32 declarations; '*' = contains a hit)
+       48-52    container DirectoryBatch
+       58-72    container KamikazeStats
+       74-95    container SpinLock
+       77-90      fn lock
+       92-94      fn unlock
+       98-101   container DirTask
+      104-229   container WorkPool
+      113-115     fn init
+      117-128     fn deinit
+      130-132     fn abort
+      134-140     fn pushRoot
+      142-154     fn pushSingleFile
+      156-164     fn popBatch
+      166-172     fn finishBatch
+      174-182     fn popDir
+      184-190     fn finishDir
+      192-219     fn pushScoutResults
+      221-228     fn isDone
+      231-255   fn formatPathBuf
+      257-259   fn joinPathSentinel
+      261-288   container KamikazeContext
+      290-292   fn flushToStdout
+      294-375   fn scoutDirConcurrent
+      377-496   fn scanBatch
+      509-515   fn ensureUring
+      517-574   fn kamikazeWorker
+      580-591   fn statNoFollow
+      606-741   fn tryQuickTreeScan
+  *   746-801   fn tryQuickQuietProbe
+  *   804-821   fn quietProbeHit
+      960-972   test FilterEngine integration in Kamikaze
+      974-1029  test WorkPool lifecycle and termination
+
+HISTORY
+[h1] src/kamikaze.zig:746 last changed by 0179fc824e 2026-11-08 "perf: eliminate sched_yield kernel storms via hardware spinLoopHint and zero-latency quiet probe" (git blame)
+src/kamikaze.zig: last commit 404fd0d	2026-11-11	M5: el experimento (tokens reales) y --json=compact, que salio de sus datos
+
+UNCERTAINTY
+- 1 code reference(s) not linked to a declaration: h2
+- not analysed: aliases (const x = y.tryQuickQuietProbe), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 651 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 10

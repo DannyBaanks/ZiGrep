@@ -1,0 +1,77 @@
+CONTEXT PACK `lookaround`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 4 file(s); by role: doc_comment 1, documentation 3, string 2
+  declarations found by pattern: 0
+
+REFERENCES
+mentions inside comments or strings (3): textual only, not a dependency
+  [h4] src/main.zig:226 (string) \\not supported (reported as an error): back-references, lookaround.
+  [h5] src/regex.zig:18 (doc_comment) //! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
+  [h6] src/regex.zig:210 (string) fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
+src/main.zig in file: textual mention(s) only, not a code reference: [h4] line 226 (string)
+  src/main.zig:218-234  sha256:7226c7ae3e0177fd
+   218 |     \\                     probe: if the page is in RAM its bytes are scanned
+   219 |     \\                     directly; if the tree is cold it promotes to
+   220 |     \\                     io_uring. sync is the old behaviour, byte for byte
+   221 |     \\      --help        print this help
+   222 |     \\  -V, --version     print the version
+   223 |     \\
+   224 |     \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+   225 |     \\word boundaries \b and \B are supported (zero-width assertions).
+>  226 |     \\not supported (reported as an error): back-references, lookaround.
+   227 |     \\a plain string with no metacharacters takes the fast literal path.
+   228 |     \\patterns containing a newline are rejected.
+   229 |     \\when no PATH is given or when PATH is '-', standard input is read.
+   230 |     \\
+   231 |     \\exit status: 0 match found, 1 no match, 2 error
+   232 |     \\
+   233 | ;
+   234 | 
+src/regex.zig in file: textual mention(s) only, not a code reference: [h5] line 18 (doc_comment)
+  src/regex.zig:10-26  sha256:4562779e03aa1ec4
+    10 | //!
+    11 | //! Supported syntax (ERE-like, the same dialect as `rg`):
+    12 | //!   literals   .   [abc] [^a-z] [[:alpha:]]   \d \D \w \W \s \S   \n \t \r
+    13 | //!   groups     (re)  (?:re)        alternation  a|b
+    14 | //!   repeats    *  +  ?  {n}  {n,}  {n,m}   (a trailing `?` is accepted and ignored)
+    15 | //!   anchors    ^  $   (line anchors; every haystack is split on '\n')
+    16 | //!   escapes    \. \\ \( \) \[ \] \{ \} \* \+ \? \| \^ \$ \/ \- ...
+    17 | //! Not supported (reported as errors, never silently mis-matched): `\b`,
+>   18 | //! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
+    19 | //! UTF-8 character is several bytes; -i folds ASCII only.
+    20 | const std = @import("std");
+    21 | const Allocator = std.mem.Allocator;
+    22 | 
+    23 | pub const Set = [256]bool;
+    24 | 
+    25 | pub const CompileError = error{ BadRegex, OutOfMemory };
+    26 | 
+src/regex.zig in fn:escapeByte: textual mention(s) only, not a code reference: [h6] line 210 (string)
+  src/regex.zig:202-214  sha256:ddda7e13230a6d61
+   202 |     fn escapeByte(self: *Parser, c: u8) CompileError!u8 {
+   203 |         _ = self;
+   204 |         return switch (c) {
+   205 |             'n' => '\n',
+   206 |             't' => '\t',
+   207 |             'r' => '\r',
+   208 |             '0' => 0,
+   209 |             else => if (std.ascii.isAlphanumeric(c))
+>  210 |                 fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
+   211 |             else
+   212 |                 c,
+   213 |         };
+   214 |     }
+
+UNCERTAINTY
+- no declaration of `lookaround` found by pattern in scope; it may be declared elsewhere, generated, or not a symbol
+- not analysed: aliases (const x = y.lookaround), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 635 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 9

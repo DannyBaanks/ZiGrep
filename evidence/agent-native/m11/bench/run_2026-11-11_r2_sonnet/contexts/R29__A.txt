@@ -1,0 +1,10 @@
+src/main.zig:328:    /// `--type-list`: print the type registry and exit.
+src/main.zig:695:/// `-t py` / `--type-not py`: adds the registry's extensions to the include
+src/main.zig:729:/// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+src/main.zig:2101:    // `--type-list` is an answer too: the registry, on stdout, exit 0.
+src/types.zig:1://! Static type registry for `-t` / `--type-not` / `--type-list`.
+src/types.zig:3://! Mirrors the rg registry in spirit (name -> extensions) with a curated
+src/types.zig:14:pub const registry = [_]Type{
+src/types.zig:67:    for (registry) |t| {
+src/types.zig:75:    for (registry) |t| {
+src/types.zig:104:    try std.testing.expectEqual(registry.len, count);

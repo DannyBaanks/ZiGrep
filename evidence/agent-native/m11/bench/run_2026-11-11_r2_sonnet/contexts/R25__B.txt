@@ -1,0 +1,45 @@
+src/main.zig-706-        return error.Usage;
+src/main.zig-707-    }
+src/main.zig-708-    list[count.*] = t;
+src/main.zig-709-    count.* += 1;
+src/main.zig-710-}
+src/main.zig-711-
+src/main.zig-712-/// `--max-filesize` value: plain bytes or with a K/M/G/T suffix (rg accepts
+src/main.zig-713-/// both upper and lower case, and `+N` means "greater than").
+src/main.zig:714:fn parseSize(value: []const u8) ?usize {
+src/main.zig-715-    var v = value;
+src/main.zig-716-    if (v.len > 0 and v[0] == '+') v = v[1..];
+src/main.zig-717-    if (v.len == 0) return null;
+src/main.zig-718-    const mult: usize = switch (v[v.len - 1]) {
+src/main.zig-719-        'k', 'K' => 1024,
+src/main.zig-720-        'm', 'M' => 1024 * 1024,
+src/main.zig-721-        'g', 'G' => 1024 * 1024 * 1024,
+src/main.zig-722-        't', 'T' => 1024 * 1024 * 1024 * 1024,
+--
+src/main.zig-1195-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1196-                    return error.Usage;
+src/main.zig-1197-                }
+src/main.zig-1198-                opts.max_columns = parseCount(args[i]) orelse {
+src/main.zig-1199-                    opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+src/main.zig-1200-                    return error.Usage;
+src/main.zig-1201-                };
+src/main.zig-1202-            } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+src/main.zig:1203:                opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+src/main.zig-1204-                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+src/main.zig-1205-                    return error.Usage;
+src/main.zig-1206-                };
+src/main.zig-1207-            } else if (std.mem.eql(u8, body, "max-filesize")) {
+src/main.zig-1208-                i += 1;
+src/main.zig-1209-                if (i >= args.len) {
+src/main.zig-1210-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-1211-                    return error.Usage;
+src/main.zig-1212-                }
+src/main.zig:1213:                opts.max_filesize = parseSize(args[i]) orelse {
+src/main.zig-1214-                    opts.fail = .{ .what = "bad value for --max-filesize", .arg = args[i] };
+src/main.zig-1215-                    return error.Usage;
+src/main.zig-1216-                };
+src/main.zig-1217-            } else if (std.mem.eql(u8, body, "multiline") or std.mem.eql(u8, body, "multiline-dotall")) {
+src/main.zig-1218-                opts.multiline = true;
+src/main.zig-1219-                if (std.mem.eql(u8, body, "multiline-dotall")) opts.multiline_dotall = true;
+src/main.zig-1220-            } else if (std.mem.eql(u8, body, "no-multiline")) {
+src/main.zig-1221-                opts.multiline = false;

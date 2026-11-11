@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the question cannot be answered from the available information, whereas the reference gives a definite answer: not by default, only with --include-out, and protected if an install symlink points inside."
+ ],
+ "reason": "The answer declines to answer, though the reference is definite (no deletion by default; only with --include-out, and protected by hasInstallLink), so it fails to give the key point.",
+ "cost_usd": 0.006468
+}

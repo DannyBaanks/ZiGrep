@@ -1,0 +1,14 @@
+src/filter.zig:50:pub fn matchPattern(name: []const u8, pattern: []const u8) bool {
+src/filter.zig:260:            if (matchPattern(dir_name, ex)) return true;
+src/filter.zig:264:            if (matchPattern(dir_name, pat)) return true;
+src/filter.zig:286:            if (matchPattern(file_name, pat)) return true;
+src/filter.zig:290:            if (matchPattern(file_name, pat)) return true;
+src/filter.zig:309:                if (matchPattern(file_name, pat)) {
+src/filter.zig:321:test "matchPattern wildcards" {
+src/filter.zig:322:    try std.testing.expect(matchPattern("foo.zig", "*.zig"));
+src/filter.zig:323:    try std.testing.expect(matchPattern("test_foo.zig", "test_*.zig"));
+src/filter.zig:324:    try std.testing.expect(matchPattern("target", "target/"));
+src/filter.zig:325:    try std.testing.expect(matchPattern("file1.log", "file?.log"));
+src/filter.zig:326:    try std.testing.expect(!matchPattern("file10.log", "file?.log"));
+src/filter.zig:327:    try std.testing.expect(!matchPattern("foo.rs", "*.zig"));
+src/main.zig:790:    return filter.matchPattern(name, g) or filter.matchPattern(path, g);

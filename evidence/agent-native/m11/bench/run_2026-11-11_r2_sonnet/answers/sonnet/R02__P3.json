@@ -1,0 +1,18 @@
+{
+ "qid": "R02",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5e2d1d75526a015a4016497acceed0f1302efe668bdd1bd43e18441ec93a09bf",
+ "answer": "With `--exclude-ext=log`, assuming the extension reaches `matchesExt` as `\"log\"`, only `a.log` is excluded. `addExcludedExts` (src/filter.zig:150-159) isn't shown, so any normalization (lowercasing, adding a dot) is unknown.\n\nFor a bare extension, `matchesExt` requires `name.len > ext.len + 1`, a `.` right before the suffix, and a case-sensitive `endsWith` (src/filter.zig:89-90).\n\n- **`a.log`**: excluded. Length 5 > 4, `.` is at index 1, and the name ends with `log`.\n- **`catalog`**: not excluded. The character before the last three is `a`, not `.`.\n- **`.log`**: not excluded by `matchesExt`, because length 4 is not > 4. It is excluded only if `skip_hidden` is on, since names starting with `.` are dropped (src/filter.zig:271-272). The default for that flag isn't shown.\n- **`A.LOG`**: not excluded. `std.mem.endsWith` compares bytes exactly, so `LOG` doesn't match `log` (src/filter.zig:90).\n\nOther filters (defaults, patterns, ignore files) could still exclude these files, but they aren't evidenced for these names.",
+ "usage": {
+  "cost_usd": 0.02282,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 7.36,
+ "headers": {}
+}

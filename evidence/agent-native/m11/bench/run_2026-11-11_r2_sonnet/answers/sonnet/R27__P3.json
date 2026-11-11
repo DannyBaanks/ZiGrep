@@ -1,0 +1,18 @@
+{
+ "qid": "R27",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "7f5eed95f6b62945e1f9c311383c747d75c951a39fb89184703bdaad1b6c393d",
+ "answer": "**Hash:** sha256 covers the raw file, not the decoded text. For `source` = `file-utf16`, the docs say \"hash del fichero crudo\" (GUIA.md:829). The doc comment agrees: \"offsets sobre el texto decodificado, hash del fichero crudo\" (src/out_json.zig:203-204).\n\n**Offsets:** they refer to the decoded text, not the raw UTF-16 bytes (GUIA.md:829-830; src/out_json.zig:203-204).\n\n**mtime_ns for stdin:** it is `null`. GUIA.md:830-831 says that for `stdin` the hash covers what was received and `mtime_ns` is null. The code emits `null` when `mtime_ns` is `?i128` and unset (src/out_json.zig:223-227). The doc comment says it comes from `statx`, null if there is no file, e.g. stdin (src/out_json.zig:202-203).\n\n**Gap:** the context doesn't show the code that actually decodes UTF-16 or picks `file-utf16`. These answers rest on documentation and comments, not that logic.",
+ "usage": {
+  "cost_usd": 0.052360000000000004,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.08,
+ "headers": {}
+}

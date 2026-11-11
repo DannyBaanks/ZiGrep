@@ -1,0 +1,18 @@
+{
+ "qid": "R01",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a92e9865a309e65d101c0cebaa05b33f4fdf5d72ee3893a30f406c2e415f13bd",
+ "answer": "Based on the context, the glob matcher supports only `*` and `?`, plus a trailing `/`:\n\n- The doc comment on `matchPattern` says: \"High-performance wildcard matcher (supports * and ? and trailing /)\" (src/filter.zig:49).\n- A trailing `/` is stripped before matching (src/filter.zig:52-54).\n- Tests cover `*.zig`, `test_*.zig`, `target/`, and `file?.log` (src/filter.zig:322-326).\n\n**Is `[abc]` a character class?** Nothing in the context says so. The documented syntax lists only `*`, `?` and the trailing `/`, and no test exercises brackets. The remainder of the function body (from src/filter.zig:58 onward) was not shown, so I can't rule out bracket handling in the code itself. Going by the doc comment, `[abc]` is not supported and would likely be treated literally.\n\nCaveat: I only see `matchPattern` used for excluded/included patterns and `--pre-glob` (src/filter.zig:286, 309; src/main.zig:790). README.md and GUIA.md contents weren't in the results.",
+ "usage": {
+  "cost_usd": 0.017384,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.38,
+ "headers": {}
+}

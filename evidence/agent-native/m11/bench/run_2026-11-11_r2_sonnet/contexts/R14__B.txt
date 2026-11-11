@@ -1,0 +1,107 @@
+src/main.zig-218-    \\                     probe: if the page is in RAM its bytes are scanned
+src/main.zig-219-    \\                     directly; if the tree is cold it promotes to
+src/main.zig-220-    \\                     io_uring. sync is the old behaviour, byte for byte
+src/main.zig-221-    \\      --help        print this help
+src/main.zig-222-    \\  -V, --version     print the version
+src/main.zig-223-    \\
+src/main.zig-224-    \\regex dialect (same as rg): . [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $
+src/main.zig-225-    \\word boundaries \b and \B are supported (zero-width assertions).
+src/main.zig:226:    \\not supported (reported as an error): back-references, lookaround.
+src/main.zig-227-    \\a plain string with no metacharacters takes the fast literal path.
+src/main.zig-228-    \\patterns containing a newline are rejected.
+src/main.zig-229-    \\when no PATH is given or when PATH is '-', standard input is read.
+src/main.zig-230-    \\
+src/main.zig-231-    \\exit status: 0 match found, 1 no match, 2 error
+src/main.zig-232-    \\
+src/main.zig-233-;
+src/main.zig-234-
+--
+src/regex.zig-10-//!
+src/regex.zig-11-//! Supported syntax (ERE-like, the same dialect as `rg`):
+src/regex.zig-12-//!   literals   .   [abc] [^a-z] [[:alpha:]]   \d \D \w \W \s \S   \n \t \r
+src/regex.zig-13-//!   groups     (re)  (?:re)        alternation  a|b
+src/regex.zig-14-//!   repeats    *  +  ?  {n}  {n,}  {n,m}   (a trailing `?` is accepted and ignored)
+src/regex.zig-15-//!   anchors    ^  $   (line anchors; every haystack is split on '\n')
+src/regex.zig-16-//!   escapes    \. \\ \( \) \[ \] \{ \} \* \+ \? \| \^ \$ \/ \- ...
+src/regex.zig-17-//! Not supported (reported as errors, never silently mis-matched): `\b`,
+src/regex.zig:18://! back-references, lookaround. `.` and classes work on bytes, so a multi-byte
+src/regex.zig-19-//! UTF-8 character is several bytes; -i folds ASCII only.
+src/regex.zig-20-const std = @import("std");
+src/regex.zig-21-const Allocator = std.mem.Allocator;
+src/regex.zig-22-
+src/regex.zig-23-pub const Set = [256]bool;
+src/regex.zig-24-
+src/regex.zig-25-pub const CompileError = error{ BadRegex, OutOfMemory };
+src/regex.zig-26-
+--
+src/regex.zig-202-    fn escapeByte(self: *Parser, c: u8) CompileError!u8 {
+src/regex.zig-203-        _ = self;
+src/regex.zig-204-        return switch (c) {
+src/regex.zig-205-            'n' => '\n',
+src/regex.zig-206-            't' => '\t',
+src/regex.zig-207-            'r' => '\r',
+src/regex.zig-208-            '0' => 0,
+src/regex.zig-209-            else => if (std.ascii.isAlphanumeric(c))
+src/regex.zig:210:                fail("unsupported escape (back-references and lookaround are not supported; \\b and \\B ARE)")
+src/regex.zig-211-            else
+src/regex.zig-212-                c,
+src/regex.zig-213-        };
+src/regex.zig-214-    }
+src/regex.zig-215-
+src/regex.zig-216-    fn parseClass(self: *Parser) CompileError!*Node {
+src/regex.zig-217-        // self.i is just past '['
+src/regex.zig-218-        var negate = false;
+--
+README.md-114-  `--stats`, `--force-swarm`, `--nav` (directory navigation plans), `--exec`,
+README.md-115-  `--cache` (inspect and clean Zig build caches).
+README.md-116-
+README.md-117-Since 0.4.0, line numbers are off by default, as in GNU grep and in ripgrep when
+README.md-118-its output is piped. Pass `-n` to enable them, or use `--pretty`.
+README.md-119-
+README.md-120-The regex dialect matches ripgrep's:
+README.md-121-`.`, `[a-z]`, `[^x]`, `[[:alpha:]]`, `\d`, `\w`, `\s`, `*`, `+`, `?`, `{n,m}`,
+README.md:122:`|`, `( )`, `^`, `$`, `\b`, `\B`. Back-references and lookaround are rejected
+README.md-123-with an error rather than approximated. `-G` translates basic regular
+README.md-124-expressions to this dialect.
+README.md-125-
+README.md-126-Exit status: `0` a match was found, `1` no match, `2` error.
+README.md-127-
+README.md-128-### Structured output
+README.md-129-
+README.md-130-The structured output is aimed at programs that consume search results. Every
+--
+GUIA.md-1159-
+GUIA.md-1160-* necesites rendimiento extremo en escaneo de archivos con enjambre de hilos Kamikaze o salida determinista (`--sort`);
+GUIA.md-1161-* el patrón sea corto o largo: `zigrep` bate a `grep` por hasta 165× y a `rg` por hasta 2,6×;
+GUIA.md-1162-* quieras evitar el overhead de dependencias de libc o runtimes pesados;
+GUIA.md-1163-* busques patrones con regex lineal con garantía de $O(N)$ sin backtracking catastrófico.
+GUIA.md-1164-
+GUIA.md-1165-**No lo uses cuando:**
+GUIA.md-1166-
+GUIA.md:1167:* necesites backreferences o lookaround en regex (no soportados por diseño para garantizar $O(N)$);
+GUIA.md-1168-* el trabajo sea **salida muy voluminosa sobre árboles pequeños** (cientos de
+GUIA.md-1169-  miles de líneas de salida en < 150 MB): ahí `rg` es 2,2× más rápido y
+GUIA.md-1170-  `grep` 1,3× más rápido que `zgrep`;
+GUIA.md-1171-* vayas a comparar `-c` con `rg`: las semánticas de archivos binarios
+GUIA.md-1172-  difieren (sección 3);
+GUIA.md-1173-* corras en macOS: sigue sin probarse en ese sistema.
+GUIA.md-1174-
+GUIA.md-1175----
+--
+GUIA.md-1224-`evidence/REPORT.md`.
+GUIA.md-1225-
+GUIA.md-1226-## Regex, -i, -w, -e (2026-11-08)
+GUIA.md-1227-
+GUIA.md-1228-`zigrep PATTERN` ahora es regex (dialecto tipo `rg`): `. [a-z] [^x] [[:alpha:]] \d \w \s * + ? {n,m} | ( ) ^ $`.
+GUIA.md-1229-Un patrón sin metacaracteres usa el kernel literal rápido de siempre. `-F` fuerza literal.
+GUIA.md-1230-
+GUIA.md-1231-- `-i` ignora mayúsculas (ASCII) · `-w` palabra completa · `-e P` (repetible) varios patrones.
+GUIA.md:1232:- No soportado (da error, nunca resultado incorrecto): `\b`, backreferences, lookaround.
+GUIA.md-1233-- Motor: NFA -> DFA perezoso por hilo (`src/regex.zig`), lineal, sin backtracking. Si el patrón
+GUIA.md-1234-  tiene un literal obligatorio (>=3 bytes) se usa como prefiltro y el DFA solo mira esas líneas.
+GUIA.md-1235-- Oráculo: `analysis/regex_oracle.py` compara conteos por archivo contra `grep -E` y `rg`.
+GUIA.md-1236-
+GUIA.md-1237-## Operaciones Estándar Grupo 1 (-v, -L, stdin, -m NUM / --max-count) (2026-11-08)
+GUIA.md-1238-
+GUIA.md-1239-1. `-v, --invert-match`: Muestra o cuenta las líneas que **no** coinciden con el patrón.
+GUIA.md-1240-2. `-L, --files-without-match`: Lista únicamente los archivos que **no** contienen coincidencias.

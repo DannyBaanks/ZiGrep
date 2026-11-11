@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says it is not bytes/4 and describes the weighted sum of bytes, digits, punctuation, whitespace runs and non-ASCII bytes times a scale, but omits the estimator name, the concrete scale, the BPE calibration and that it replaced bytes/4 because that underestimated.",
+ "cost_usd": 0.006896
+}

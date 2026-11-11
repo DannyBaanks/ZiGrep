@@ -1,0 +1,18 @@
+{
+ "qid": "R22",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "d7c1dd3c14354f454682c33db25eca2854220bc559ebf94995a2fb6c55c2779b",
+ "answer": "**Ordering:** `--exec` forces `opts.sort = true`, because only the ordered path records which files matched. Commands run after the scan (src/main.zig:2186-2190). Matched flags are collected per file (2563-2570, 2634) and `runExecAll` runs afterward (2749-2751).\n\n**Early exit:** `--exec` sets `opts.mode = .quiet` but deliberately disables the `-q` early exits, so every file is scanned (2198-2201). This applies to the serial loop (2632), the 3-file probe (2652) and the join branch (2667). The \"match wins over error\" rule is also skipped, so any error gives exit 2 (2490-2493, 2770). A failing child exit also gives 2 (2746-2752, 2768).\n\n**`--json`:** Combining it with `--exec` is a usage error, since the child's output would break the JSONL stream (1721-1727).\n\n**`--queries-file`:** `--exec` in a batch query's `\"flags\"` is rejected by `batchQueryProblem` (1882). It is only checked per query. The context doesn't show whether a top-level `--exec` plus `--queries-file` is rejected.",
+ "usage": {
+  "cost_usd": 0.044332,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.98,
+ "headers": {}
+}

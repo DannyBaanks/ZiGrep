@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer reaches the reference's mechanism and conclusion (both flags set, nothing searched) but hedges that it cannot confirm, whereas the reference is definite; it also omits the exit code 1 with no message.",
+ "cost_usd": 0.006384000000000001
+}

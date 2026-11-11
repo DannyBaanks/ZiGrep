@@ -1,0 +1,78 @@
+src/filter.zig-76-
+src/filter.zig-77-    while (p_idx < p.len and p[p_idx] == '*') {
+src/filter.zig-78-        p_idx += 1;
+src/filter.zig-79-    }
+src/filter.zig-80-
+src/filter.zig-81-    return p_idx == p.len;
+src/filter.zig-82-}
+src/filter.zig-83-
+src/filter.zig:84:pub fn matchesExt(name: []const u8, ext: []const u8) bool {
+src/filter.zig-85-    if (ext.len == 0) return false;
+src/filter.zig-86-    if (ext[0] == '.') {
+src/filter.zig-87-        return std.mem.endsWith(u8, name, ext);
+src/filter.zig-88-    }
+src/filter.zig-89-    if (name.len > ext.len + 1 and name[name.len - ext.len - 1] == '.') {
+src/filter.zig-90-        return std.mem.endsWith(u8, name, ext);
+src/filter.zig-91-    }
+src/filter.zig-92-    return false;
+--
+src/filter.zig-269-
+src/filter.zig-270-    pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+src/filter.zig-271-        if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+src/filter.zig-272-            return true;
+src/filter.zig-273-        }
+src/filter.zig-274-
+src/filter.zig-275-        if (self.use_defaults) {
+src/filter.zig-276-            for (default_excluded_exts) |ext| {
+src/filter.zig:277:                if (matchesExt(file_name, ext)) return true;
+src/filter.zig-278-            }
+src/filter.zig-279-        }
+src/filter.zig-280-
+src/filter.zig-281-        for (self.excluded_exts.items) |ext| {
+src/filter.zig:282:            if (matchesExt(file_name, ext)) return true;
+src/filter.zig-283-        }
+src/filter.zig-284-
+src/filter.zig-285-        for (self.excluded_patterns.items) |pat| {
+src/filter.zig-286-            if (matchPattern(file_name, pat)) return true;
+src/filter.zig-287-        }
+src/filter.zig-288-
+src/filter.zig-289-        for (self.ignore_patterns.items) |pat| {
+src/filter.zig-290-            if (matchPattern(file_name, pat)) return true;
+src/filter.zig-291-        }
+src/filter.zig-292-
+src/filter.zig-293-        // If specific extensions or patterns were requested via --include,
+src/filter.zig-294-        // any file not matching at least one is excluded:
+src/filter.zig-295-        if (self.included_exts.items.len > 0) {
+src/filter.zig-296-            var matched = false;
+src/filter.zig-297-            for (self.included_exts.items) |ext| {
+src/filter.zig:298:                if (matchesExt(file_name, ext)) {
+src/filter.zig-299-                    matched = true;
+src/filter.zig-300-                    break;
+src/filter.zig-301-                }
+src/filter.zig-302-            }
+src/filter.zig-303-            if (!matched) return true;
+src/filter.zig-304-        }
+src/filter.zig-305-
+src/filter.zig-306-        if (self.included_patterns.items.len > 0) {
+--
+src/filter.zig-322-    try std.testing.expect(matchPattern("foo.zig", "*.zig"));
+src/filter.zig-323-    try std.testing.expect(matchPattern("test_foo.zig", "test_*.zig"));
+src/filter.zig-324-    try std.testing.expect(matchPattern("target", "target/"));
+src/filter.zig-325-    try std.testing.expect(matchPattern("file1.log", "file?.log"));
+src/filter.zig-326-    try std.testing.expect(!matchPattern("file10.log", "file?.log"));
+src/filter.zig-327-    try std.testing.expect(!matchPattern("foo.rs", "*.zig"));
+src/filter.zig-328-}
+src/filter.zig-329-
+src/filter.zig:330:test "matchesExt" {
+src/filter.zig:331:    try std.testing.expect(matchesExt("main.zig", "zig"));
+src/filter.zig:332:    try std.testing.expect(matchesExt("main.zig", ".zig"));
+src/filter.zig:333:    try std.testing.expect(matchesExt("bundle.min.js", "min.js"));
+src/filter.zig:334:    try std.testing.expect(!matchesExt("zig.txt", "zig"));
+src/filter.zig-335-}
+src/filter.zig-336-
+src/filter.zig-337-test "FilterEngine default exclusions" {
+src/filter.zig-338-    const gpa = std.testing.allocator;
+src/filter.zig-339-    var engine = FilterEngine.init(gpa);
+src/filter.zig-340-    defer engine.deinit();
+src/filter.zig-341-
+src/filter.zig-342-    try std.testing.expect(engine.isDirExcluded(".git"));

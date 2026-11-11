@@ -1,0 +1,18 @@
+{
+ "qid": "R24",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a1bcdab736abf4f6eab45b5069bb093fe6b02d684dbd9ef792c0340115d81e0a",
+ "answer": "If the piped data has a NUL byte in its first 8192 bytes, zgrep prints `Binary file (standard input) matches` and exits 0. This happens whether or not the pattern is present, because the check runs before any searching (`src/main.zig:2293-2300`).\n\n- **Detection:** the stdin path counts data as binary when `-a` is not set, there is no UTF-16 BOM, and a NUL appears in the probe window (`src/main.zig:2293-2295`). The window is 8192 bytes (`src/scan.zig:91`).\n- **Message:** it is printed only in `.lines` mode. In other modes nothing is printed, and the exit code is still 0 (`src/main.zig:2296-2300`).\n- **Stream:** the message is written with `std.debug.print`, which normally writes to stderr. The context does not confirm this.\n- **Exit code:** the code returns 0 unconditionally, even though nothing was actually matched (`src/main.zig:2300`). This is surprising, since GNU grep would exit 1 when there is no match.\n- **Not covered:** binary data with no NUL in the first 8192 bytes would not be detected as binary. It would go through normal scanning, and the context does not show what that prints.",
+ "usage": {
+  "cost_usd": 0.02818,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 6.89,
+ "headers": {}
+}

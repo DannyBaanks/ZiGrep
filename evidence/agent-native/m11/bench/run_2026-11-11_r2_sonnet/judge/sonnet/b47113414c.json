@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three points: sha256 is of the raw file, offsets refer to the decoded text, and mtime_ns is null for stdin (from statx, null when there is no file). It omits the 'bytes zgrep read' and --pre details, but the question does not ask about them.",
+ "cost_usd": 0.006562
+}

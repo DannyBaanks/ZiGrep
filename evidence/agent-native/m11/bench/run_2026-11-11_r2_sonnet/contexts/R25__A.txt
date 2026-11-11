@@ -1,0 +1,3 @@
+src/main.zig:714:fn parseSize(value: []const u8) ?usize {
+src/main.zig:1203:                opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+src/main.zig:1213:                opts.max_filesize = parseSize(args[i]) orelse {

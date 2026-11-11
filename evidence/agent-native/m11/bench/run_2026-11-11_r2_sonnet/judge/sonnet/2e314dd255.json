@@ -1,0 +1,10 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says the exe basename may be `zig` or `zig.exe`; the reference says exactly `zig`",
+  "Adds that a local cache is also active if a process's exe path starts with the cache path; the reference does not mention this",
+  "Says Zig leaves no lock files, only the process, and that hasLockFile's body is unknown; the reference says lock files (any name containing 'lock') are also checked"
+ ],
+ "reason": "The core process detection (Linux /proc exe basename, deleted suffix stripped, global vs local cwd rule) matches, but the answer adds the zig.exe and exe-path claims and downplays the lock-file check, which the reference describes as active.",
+ "cost_usd": 0.00787
+}

@@ -1,0 +1,10 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says the lock-file criterion is unspecified and that Zig leaves no lock files, whereas the reference says lock files (any name containing 'lock') are checked",
+  "Says the exe basename may be `zig` or `zig.exe`, whereas the reference says exactly `zig`",
+  "Adds that a local cache is also active if a process exe path starts with the cache path, which the reference does not mention"
+ ],
+ "reason": "The core process-detection logic (Linux /proc, global vs local, exact basename, deleted suffix) matches, but the answer misses the lock-file check and adds claims (zig.exe, exe path under cache) not in the reference.",
+ "cost_usd": 0.008118
+}

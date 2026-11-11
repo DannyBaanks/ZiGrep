@@ -1,0 +1,18 @@
+{
+ "qid": "R10",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "397300a93859218223e553077847bfcb87bf25c9e5fc53c874fa064ee1ebf3e1",
+ "answer": "**Accepted values:** `parseEncoding` recognizes exactly `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, and `latin1` (src/scan.zig:107-114). Anything else returns `null` (src/scan.zig:115), and the callers then fall back to `.auto` (src/main.zig:2285, 2433, 2608).\n\n**`--encoding=utf-16` without a BOM:** A doc comment in src/scan.zig:99 says `utf-16` means \"BOM decides, else LE (rg does the same)\". So with no BOM, the file is treated as little-endian UTF-16.\n\n**Caveats:** The context shows only part of that doc comment, and it doesn't include the decoding code. I can't confirm how the BOM check is implemented. I also can't tell from this output whether the CLI reports an error on an unrecognized value or silently uses `auto`, since the arg-parsing validation isn't shown. The fallback to `.auto` in main.zig is all I can see.",
+ "usage": {
+  "cost_usd": 0.014164,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.6,
+ "headers": {}
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: up to 4 regular files in the root directory, on the main thread, before the thread pool is created. It omits the README's contradictory 'three files' note, but the question does not ask about it, and its extra detail about the per-root limit does not contradict the reference.",
+ "cost_usd": 0.00636
+}

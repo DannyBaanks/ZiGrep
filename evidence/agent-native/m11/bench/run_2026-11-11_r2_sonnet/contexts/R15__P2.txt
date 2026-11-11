@@ -1,0 +1,39 @@
+CONTEXT PACK `max_states`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] const/var `max_states` in file top level
+  src/regex.zig:659-659  sha256:909883fd9e679d3f  relation: declaration (pattern match, heuristic)
+>  659 | const max_states = 3000;
+
+REFERENCES
+src/regex.zig in fn:intern
+  [h2] line 810 `max_states`: same_file_top_level -> h1 (heuristic; single top-level declaration in src/regex.zig:659, no local shadow found)
+  src/regex.zig:807-818  sha256:c9ad1bfc2220bfc4
+   807 |     fn intern(self: *Dfa, nodes: []const u32) Allocator.Error!u32 {
+   808 |         const key = std.mem.sliceAsBytes(nodes);
+   809 |         if (self.index.get(key)) |id| return id;
+>  810 |         if (self.states.items.len >= max_states) {
+   811 |             // Cache full: flush and start over. Callers must not reuse old ids.
+   812 |             const copy = try self.gpa.dupe(u32, nodes);
+   813 |             defer self.gpa.free(copy);
+   814 |             try self.reset();
+   815 |             return self.internFresh(copy);
+   816 |         }
+   817 |         return self.internFresh(nodes);
+   818 |     }
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.max_states), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 640 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 6

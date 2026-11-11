@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on ordering, quiet mode with early exits disabled, --json usage error, and batch rejection; extra details (exit codes) don't contradict it, though it omits the {} path substitution.",
+ "cost_usd": 0.0064080000000000005
+}

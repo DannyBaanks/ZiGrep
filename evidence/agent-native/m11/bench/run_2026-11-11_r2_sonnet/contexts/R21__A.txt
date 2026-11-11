@@ -1,0 +1,3 @@
+src/main.zig:237:pub const ColorMode = enum { never, always, auto };
+src/main.zig:308:    color: ColorMode = .never,
+src/main.zig:3369:        try std.testing.expectEqual(ColorMode.always, o4.color);

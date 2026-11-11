@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all four files (a.log excluded; catalog, .log, A.LOG not excluded by matchesExt), and its extra caveats about skip_hidden and other rules do not contradict the reference.",
+ "cost_usd": 0.007042
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: \\b is supported, the header comment is stale, and back-references and lookaround are rejected; the extra GUIA.md and caveat details don't contradict it.",
+ "cost_usd": 0.006084
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R14",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "4222a8427a8eec39d9634012a6a91cb1d887b80fe75bc31355a9b8d0b83462e0",
+ "answer": "**Yes, `\\b` appears to be supported, but the context is partly contradictory.**\n\n- The code's error message says `\\b` and `\\B` ARE supported while back-references and lookaround are not (src/regex.zig:210).\n- README.md:122 lists `\\b` and `\\B` among the supported syntax and says back-references and lookaround are rejected.\n- GUIA.md:1232 lists `\\b` as unsupported, alongside backreferences and lookaround.\n\nYour premise doesn't match what the search showed. The src/regex.zig:18 line only mentions \"back-references, lookaround\", with no `\\b`. The line is truncated, so I can't see whether `\\b` appears on an adjacent line of that header. The `\\b` \"unsupported\" claim comes from GUIA.md:1232, not from the src/regex.zig header, as far as these results show.\n\nThe GUIA.md line is probably outdated, but the context doesn't confirm that. To be certain, check the regex parser's `\\b` handling in src/regex.zig and its tests.",
+ "usage": {
+  "cost_usd": 0.007752,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.77,
+ "headers": {}
+}

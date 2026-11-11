@@ -1,0 +1,2 @@
+src/clean.zig:141:fn procsHomeActive(io: std.Io, gpa: Allocator, path: []const u8, kind: Kind) bool {
+src/clean.zig:283:    const active = hasLockFile(io, target_path) or procsHomeActive(io, gpa, target_path, kind);

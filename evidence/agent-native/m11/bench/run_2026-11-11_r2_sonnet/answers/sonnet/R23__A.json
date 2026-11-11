@@ -1,0 +1,18 @@
+{
+ "qid": "R23",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f12b2cb7f1b859e800c246c7232123b1bfe7d3665ed70523e811f48b79d2715c",
+ "answer": "The context shows several conditions in `src/main.zig` that force `opts.sort = true` without `--sort`:\n\n- **`--exec` command** (`opts.exec_cmd != null`): `src/main.zig:2190`.\n- **`--heading`** (`opts.heading`): `src/main.zig:2195`. The adjacent comment (`src/main.zig:2193`) says rg keeps the argument order, which is what `--sort` provides.\n- **`--pre` command** (`opts.pre_cmd != null`): `src/main.zig:2197`.\n- **Multiple operands that are all files** (`valid_operands.items.len > 1 and all_files`): `src/main.zig:2362`.\n\nCaveat: the context shows only the assignments, not the exact flag spellings for `exec_cmd`, `heading`, or `pre_cmd`. I'm inferring they correspond to `--exec`, `--heading`, and `--pre` from the field names. The full option parsing isn't shown.\n\n`--deterministic` is simply an alias for `--sort` (`src/main.zig:968`).",
+ "usage": {
+  "cost_usd": 0.012776000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.27,
+ "headers": {}
+}

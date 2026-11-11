@@ -1,0 +1,73 @@
+CONTEXT PACK `provSourceOf`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 4 in 1 file(s); by role: code 4
+  declarations found by pattern: 1
+
+BLOCKS
+src/scan.zig:856-856  sha256:c98acd756fcf36e5
+   856 | fn scanFilePortable(
+src/scan.zig:894-926  sha256:429f5214e80a005b
+   894 |     if (scratch) |buffer| {
+   895 |         if (size < buffer.len) {
+   896 |             const read = file.readPositionalAll(io, buffer[0..size], 0) catch |err| {
+   897 |                 res.err = mapIoError(err);
+   898 |                 return res;
+   899 |             };
+   900 |             if (read != size) {
+   901 |                 res.err = .IO;
+   902 |                 return res;
+   903 |             }
+   904 |             processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
+>  905 |             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
+   906 |             return res;
+   907 |         }
+   908 |     }
+   909 | 
+   910 |     if (size >= mmap_threshold) {
+   911 |         if (std.Io.File.MemoryMap.create(io, file, .{
+   912 |             .len = size,
+   913 |             .protection = .{ .read = true, .write = false },
+   914 |         })) |map_value| {
+   915 |             var map = map_value;
+   916 |             defer map.destroy(io);
+   917 |             processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
+>  918 |             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
+   919 |             return res;
+   920 |         } else |_| {}
+   921 |     }
+   922 | 
+   923 |     const data = gpa.alloc(u8, size) catch {
+   924 |         res.err = .NOMEM;
+   925 |         return res;
+   926 |     };
+src/scan.zig:929-945  sha256:019c2d36e3045237
+   929 |         res.err = mapIoError(err);
+   930 |         return res;
+   931 |     };
+   932 |     if (read != size) {
+   933 |         res.err = .IO;
+   934 |         return res;
+   935 |     }
+   936 |     processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
+>  937 |     if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, provSourceOf(data, config), mtime_from)) |err| res.err = err;
+   938 |     return res;
+   939 | }
+   940 | 
+   941 | fn processBuffer(
+   942 |     gpa: Allocator,
+   943 |     searcher: *const Searcher,
+   944 |     data: []const u8,
+   945 |     path: []const u8,
+src/scan.zig:1230-1234  sha256:f2b8ae138be9436c
+> 1230 | fn provSourceOf(data: []const u8, config: ScanConfig) ProvSource {
+  1231 |     if (config.encoding == .none) return .file;
+  1232 |     if (forcedBom(config.encoding) != null or config.encoding == .utf16) return .file_utf16;
+  1233 |     return if (isUtf16Bom(data) != null) .file_utf16 else .file;
+  1234 | }
+
+TRUNCATION
+  truncated: false   items: 4

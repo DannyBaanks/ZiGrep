@@ -1,0 +1,18 @@
+{
+ "qid": "R08",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ac1cf70d59fedef6b621c6186b3ee2221d9b1cd42ee8f14ecc262d93b8cc3561",
+ "answer": "The context only partially answers this.\n\n**When a cache is ACTIVA:** `src/clean.zig:283` computes `active = hasLockFile(io, target_path) or procsHomeActive(io, gpa, target_path, kind)`. So a cache is considered in use if it has a lock file, or if `procsHomeActive` returns true for it.\n\n**How a Zig compiler process is recognised:** the context doesn't show this. `procsHomeActive` is only declared at `src/clean.zig:141` (signature taking `io`, `gpa`, `path`, `kind`, returning `bool`), and its body isn't included. Nor is `hasLockFile`'s implementation, which would tell what lock file is checked.\n\nTo answer fully, I'd need the body of `procsHomeActive` (likely scanning processes, e.g. /proc, and matching names or cmdlines) and `hasLockFile` in `src/clean.zig`.",
+ "usage": {
+  "cost_usd": 0.006808,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.38,
+ "headers": {}
+}

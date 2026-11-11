@@ -1,0 +1,4 @@
+src/main.zig:2285:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig:2433:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig:2608:            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/scan.zig:107:pub fn parseEncoding(name: []const u8) ?Encoding {

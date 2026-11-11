@@ -1,0 +1,18 @@
+{
+ "qid": "R17",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "393da6f9289cc8d49362c12d55ee279e02b3cd8b61f92a870a39754fff968f85",
+ "answer": "The context doesn't say how many files are probed. It shows only two matches for `tryQuickQuietProbe`:\n\n- `src/kamikaze.zig:746` defines the function `tryQuickQuietProbe(`.\n- `src/kamikaze.zig:815` calls it, as `if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {`.\n\nSo the probe lives in `src/kamikaze.zig`, with its definition at line 746 and its call site at line 815. The matched lines don't include the function body, any file-count limit, or any mention of worker threads. The README and GUIA matches are absent too.\n\nTo answer, I'd need the body of `tryQuickQuietProbe` (from line 746 onward) and the code around line 815, where the worker threads are started.",
+ "usage": {
+  "cost_usd": 0.006368,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.39,
+ "headers": {}
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R03",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "69896e1610fcb6473b192406b02edd665e71168470f0887388d17a937a0341cc",
+ "answer": "The context doesn't answer this. It shows only that a constant `default_excluded_dirs` is declared at `src/filter.zig:17` as an array of strings (`[_][]const u8{`) and that it's iterated at `src/filter.zig:254`. The search matched only the identifier, so the array's contents aren't shown.\n\nSo I can't say which directories are skipped, or whether `dist` or `build` are among them. To answer, I'd need the lines following `src/filter.zig:17` (the array's elements), and ideally the code around line 254. The README.md and GUIA.md searches returned no matches for this identifier, so any documentation of the list would need a different search term, such as `node_modules` or `.git`.",
+ "usage": {
+  "cost_usd": 0.005818,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.95,
+ "headers": {}
+}

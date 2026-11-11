@@ -1,0 +1,35 @@
+src/main.zig-34-const Allocator = std.mem.Allocator;
+src/main.zig-35-
+src/main.zig-36-const version = "0.4.0-dev";
+src/main.zig-37-
+src/main.zig-38-/// Size budget for the zero-thread micro-tree fast path: a tree whose regular
+src/main.zig-39-/// files add up to less than this is scanned on the calling thread, with no
+src/main.zig-40-/// thread pool and without the upward `.dataignore`/`.gitignore` walk.
+src/main.zig-41-/// `--force-swarm` opts out and restores the concurrent swarm.
+src/main.zig:42:const micro_tree_max_bytes: usize = 2 * 1024 * 1024;
+src/main.zig-43-
+src/main.zig-44-const usage =
+src/main.zig-45-    \\zgrep — grep-compatible search (literal + regex) with concurrent kamikaze swarm, written in Zig
+src/main.zig-46-    \\
+src/main.zig-47-    \\usage: zgrep [OPTIONS] PATTERN [PATH...]
+src/main.zig-48-    \\       zgrep [OPTIONS] [-e PATTERN...] [PATH...]
+src/main.zig-49-    \\       cat FILE | zgrep [OPTIONS] PATTERN
+src/main.zig-50-    \\
+--
+src/main.zig-2445-            opts.mode,
+src/main.zig-2446-            opts.binary,
+src/main.zig-2447-            show_path,
+src/main.zig-2448-            scan_cfg,
+src/main.zig-2449-            worker_count,
+src/main.zig-2450-            &k_stats,
+src/main.zig-2451-            opts.use_uring,
+src/main.zig-2452-            opts.force_swarm,
+src/main.zig:2453:            micro_tree_max_bytes,
+src/main.zig-2454-            opts.io_engine_mode,
+src/main.zig-2455-            &engine_state,
+src/main.zig-2456-            opts.max_depth,
+src/main.zig-2457-            opts.max_filesize,
+src/main.zig-2458-        ) catch |err| {
+src/main.zig-2459-            std.debug.print("zgrep: kamikaze failed: {s}\n", .{@errorName(err)});
+src/main.zig-2460-            return 2;
+src/main.zig-2461-        };

@@ -1,0 +1,18 @@
+{
+ "qid": "R21",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5775f9598ddd2d5997b1db79fd136fd30722a2a14b6d26eca14aea5d95b5224d",
+ "answer": "In zgrep, `--color=auto` is effectively the same as `--color=never`.\n\n- The `ColorMode` enum has three values: `never`, `always`, `auto` (src/main.zig:237).\n- The comment says `auto` is \"deliberately folded to `never`\", because deciding it properly would need `isatty(stdout)`, which \"is not worth the flag\" (src/main.zig:235-236).\n- The option's doc comment agrees: \"auto degrades to never off a TTY\" (src/main.zig:307). That wording is a bit softer than the other comment, which suggests no TTY check happens at all, so colour would never be on, even on a terminal.\n- The default is `.never` (src/main.zig:308).\n\nThe context doesn't include the parsing code where `auto` is actually mapped, so I can't confirm exactly where the folding happens or whether a TTY check exists.",
+ "usage": {
+  "cost_usd": 0.011812,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.08,
+ "headers": {}
+}

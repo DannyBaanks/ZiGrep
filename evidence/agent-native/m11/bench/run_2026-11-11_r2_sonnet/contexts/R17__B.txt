@@ -1,0 +1,35 @@
+src/kamikaze.zig-738-    }
+src/kamikaze.zig-739-
+src/kamikaze.zig-740-    return matched_any;
+src/kamikaze.zig-741-}
+src/kamikaze.zig-742-
+src/kamikaze.zig-743-/// Zero-Latency Probe for Quiet Mode (-q):
+src/kamikaze.zig-744-/// Scans up to 4 regular files in root on the main thread prior to thread pool creation.
+src/kamikaze.zig-745-/// If a match is found instantly, returns true in < 0.3 ms with 0 thread spawns.
+src/kamikaze.zig:746:fn tryQuickQuietProbe(
+src/kamikaze.zig-747-    io: std.Io,
+src/kamikaze.zig-748-    gpa: Allocator,
+src/kamikaze.zig-749-    searcher: *const Searcher,
+src/kamikaze.zig-750-    root: [:0]const u8,
+src/kamikaze.zig-751-    filter_engine: *const FilterEngine,
+src/kamikaze.zig-752-    binary: bool,
+src/kamikaze.zig-753-    scan_config: scan.ScanConfig,
+src/kamikaze.zig-754-) bool {
+--
+src/kamikaze.zig-807-    searcher: *const Searcher,
+src/kamikaze.zig-808-    roots: []const [:0]const u8,
+src/kamikaze.zig-809-    filter_engine: *const FilterEngine,
+src/kamikaze.zig-810-    binary: bool,
+src/kamikaze.zig-811-    scan_config: scan.ScanConfig,
+src/kamikaze.zig-812-    stats: *KamikazeStats,
+src/kamikaze.zig-813-) bool {
+src/kamikaze.zig-814-    for (roots) |root| {
+src/kamikaze.zig:815:        if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {
+src/kamikaze.zig-816-            stats.early_aborted = true;
+src/kamikaze.zig-817-            return true;
+src/kamikaze.zig-818-        }
+src/kamikaze.zig-819-    }
+src/kamikaze.zig-820-    return false;
+src/kamikaze.zig-821-}
+src/kamikaze.zig-822-
+src/kamikaze.zig-823-/// Executes the full Concurrent Kamikaze Swarm pipeline ("Abuelo -> Padres -> Hijos").

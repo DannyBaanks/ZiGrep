@@ -1,0 +1,18 @@
+{
+ "qid": "R30",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "99685cc9753d17b0e2d9e6dc6d1e328c1e4aa99af7669671c699e9cd9178f015",
+ "answer": "The context doesn't contain this information, so I can't give you a peak RSS figure or a timing for a 4 GB file on NVMe.\n\nWhat the context does show is only about how files are read:\n- `mmap_threshold` is 256 KiB (src/scan.zig:157).\n- In the portable path, files at or above that size are memory-mapped read-only (src/scan.zig:910-917). If mapping fails, the code falls through to another path (src/scan.zig:920).\n- In the Linux path, files below the threshold are read fully into an allocated buffer (src/scan.zig:1143-1155).\n\nA mapped 4 GB file would not necessarily mean 4 GB of RSS, but the context doesn't say how the pages are touched or released.\n\nWhat's missing is benchmark results, such as README or GUIA.md sections on performance or memory, or bench output. The search only covered the `mmap_threshold` term, and 719 files outside the requested scope were not searched (UNCERTAINTY section). A search for \"RSS\", \"peak memory\", or \"4 GB\" would help.",
+ "usage": {
+  "cost_usd": 0.014522,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.98,
+ "headers": {}
+}

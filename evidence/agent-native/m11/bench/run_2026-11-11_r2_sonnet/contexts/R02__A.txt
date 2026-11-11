@@ -1,0 +1,9 @@
+src/filter.zig:84:pub fn matchesExt(name: []const u8, ext: []const u8) bool {
+src/filter.zig:277:                if (matchesExt(file_name, ext)) return true;
+src/filter.zig:282:            if (matchesExt(file_name, ext)) return true;
+src/filter.zig:298:                if (matchesExt(file_name, ext)) {
+src/filter.zig:330:test "matchesExt" {
+src/filter.zig:331:    try std.testing.expect(matchesExt("main.zig", "zig"));
+src/filter.zig:332:    try std.testing.expect(matchesExt("main.zig", ".zig"));
+src/filter.zig:333:    try std.testing.expect(matchesExt("bundle.min.js", "min.js"));
+src/filter.zig:334:    try std.testing.expect(!matchesExt("zig.txt", "zig"));

@@ -1,0 +1,18 @@
+{
+ "qid": "R19",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3762122e999a609c88a461562f5df2b48c1d6c7c4400cb95ac479b3db3ca1b6f",
+ "answer": "**No for `binary`; yes for `text` and `without-match`.**\n\n- `--binary-files=binary` is rejected at parse time. The enum is only `{ text, without_match }` (src/main.zig:243). The comment says grep's `binary` means \"print matches but suppress binary content\", which this engine cannot do, so it errors instead of silently accepting it (src/main.zig:240-242). A test expects `error.Usage` with a message containing \"never prints binary content\" (src/main.zig:3186-3189).\n- `text` is equivalent to `-a`: it searches the file and prints the matches (src/main.zig:239-240, 330). A test confirms it parses to `BinaryFiles.text` (src/main.zig:3180-3182).\n- `without-match` is the default and \"pretend[s] it does not match\" for binary files (src/main.zig:240, 330-331).\n\nThe context doesn't show the actual parsing code or how binary files are detected. The test results were not run (coverage: NOT_DEMONSTRATED).",
+ "usage": {
+  "cost_usd": 0.014446,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.32,
+ "headers": {}
+}

@@ -1,0 +1,7 @@
+src/main.zig:385:    stop_on_nonmatch: bool = false,
+src/main.zig:1267:                opts.stop_on_nonmatch = true;
+src/main.zig:2284:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:2432:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:2607:            .stop_on_nonmatch = opts.stop_on_nonmatch,
+src/main.zig:3234:        try std.testing.expect(o.stop_on_nonmatch);
+src/scan.zig:78:    stop_on_nonmatch: bool = false,

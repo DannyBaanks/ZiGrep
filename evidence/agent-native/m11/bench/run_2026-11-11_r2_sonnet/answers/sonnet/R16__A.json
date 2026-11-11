@@ -1,0 +1,18 @@
+{
+ "qid": "R16",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a621f64ca40d861cfec58ad19a77d9898578723dbcd5a27e224cfad45e0041bb",
+ "answer": "The context only partly answers this.\n\n- `src/main.zig:42` defines `micro_tree_max_bytes` as a `usize` constant equal to 2 * 1024 * 1024 bytes (2 MiB). This suggests a size threshold for the \"micro-tree\" classification.\n- `src/main.zig:2453` passes `micro_tree_max_bytes` as an argument in some call. The context doesn't show which function or what it does with the value.\n\nWhat's missing:\n- The code around line 2453, which would show how the threshold is compared (for example, total bytes of the tree versus the limit) and what is measured.\n- Any code that branches on the micro-tree condition, so I can't say what changes when a tree qualifies (for example, skipping an index, searching in a different mode, or reading files differently).\n- Any README.md or GUIA.md mention, since the search found none.\n\nI can't confirm the exact definition or the behavioral change from this output alone.",
+ "usage": {
+  "cost_usd": 0.0066040000000000005,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.85,
+ "headers": {}
+}

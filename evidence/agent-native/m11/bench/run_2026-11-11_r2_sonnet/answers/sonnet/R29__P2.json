@@ -1,0 +1,18 @@
+{
+ "qid": "R29",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "4fa945f48162c89764ee75bce3db3ab382465c49f48db9030d47861d21df0641",
+ "answer": "The context does not answer this. It shows that `-t` works through extensions only: `applyTypes` feeds each type's `exts` into `addIncludedExts`/`addExcludedExts` (src/main.zig:729-736), and `types.lookup` matches a type by name (src/types.zig:66-71). `Type` has `name` and `exts` fields (src/types.zig:9-11).\n\nMissing:\n- The actual contents of `registry` (src/types.zig:14 onward). The pack shows only the declaration line, so I can't tell whether a `docker` type exists or what it lists.\n- The filter engine's code (`addIncludedExts`, `filter.FilterEngine`), which would show whether exact filenames like `Dockerfile` can match. A name with no extension may not match an extension filter.\n\nWithout those, I can't say whether `-t docker` searches `Dockerfile`.",
+ "usage": {
+  "cost_usd": 0.021696,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.17,
+ "headers": {}
+}

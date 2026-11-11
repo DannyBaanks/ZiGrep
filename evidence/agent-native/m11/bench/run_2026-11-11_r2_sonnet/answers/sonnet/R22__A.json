@@ -1,0 +1,18 @@
+{
+ "qid": "R22",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "32d7e200e23021943e54a4b62489caa9a7cf8d20cc06da0f2e51d1c72ab85ff3",
+ "answer": "Based only on the grep hits (the matching lines, not surrounding code), here is what is visible:\n\n- **Ordering:** `--exec` forces sorting on: `if (opts.exec_cmd != null and !opts.sort) opts.sort = true;` (src/main.zig:2190).\n- **Quiet/early exit:** `--exec` sets the mode to quiet (src/main.zig:2201). Every early-exit path for quiet mode is guarded by `opts.exec_cmd == null`, so with `--exec` the search does not stop at the first match (src/main.zig:2493, 2632, 2652, 2667, 2770).\n- **`--json`:** There is a check at src/main.zig:1724 combining `opts.json` and `opts.exec_cmd != null`. The body isn't shown, so I can't say whether it errors or something else.\n- **`--queries-file` batches:** `--exec` is rejected in a batch, with the message \"its output would break the JSONL stream\" (src/main.zig:1882).\n\nNot visible: how the command template is actually run (src/main.zig:2563, 2749 reference it, but without context), and the exact `--json` behavior. Those would need the surrounding code.",
+ "usage": {
+  "cost_usd": 0.010258,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.49,
+ "headers": {}
+}

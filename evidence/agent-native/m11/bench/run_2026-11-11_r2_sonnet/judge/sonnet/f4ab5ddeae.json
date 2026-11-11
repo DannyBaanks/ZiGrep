@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims it cannot determine whether `ñand.` matches `ÑANDÚ` or whether the README claim holds for regex; the reference says definitively no, and the claim holds only for literal patterns."
+ ],
+ "reason": "The answer finds the right evidence (ASCII-only lowering in regex.zig, Latin-1 only in the fixed path) but declines to conclude, whereas the reference gives a definite 'No'.",
+ "cost_usd": 0.00761
+}

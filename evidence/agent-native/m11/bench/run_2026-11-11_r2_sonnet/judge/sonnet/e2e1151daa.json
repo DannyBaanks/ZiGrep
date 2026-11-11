@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says 'almost certainly no' and 'likely not' in hedged terms where the reference is definite",
+  "Suggests the `.` would have to span a two-byte `Ú`, which is not the reference's reason; the non-match is due to ñ vs Ñ not folding in the regex engine"
+ ],
+ "reason": "The answer reaches the correct conclusion (regex folds ASCII only, no match) but hedges, does not confirm the README claim holds only for literal patterns, and admits not seeing the literal Latin-1 path.",
+ "cost_usd": 0.00805
+}

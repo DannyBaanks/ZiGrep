@@ -1,0 +1,13 @@
+src/bre.zig:33:pub fn breToEre(arena: std.mem.Allocator, pattern: []const u8) []const u8 {
+src/bre.zig:152:test "breToEre: the inverted escapes" {
+src/bre.zig:170:        const got = breToEre(arena.allocator(), c[0]);
+src/bre.zig:175:test "breToEre: a leading * stays literal" {
+src/bre.zig:178:    try std.testing.expectEqualStrings("\\*ab", breToEre(arena.allocator(), "*ab"));
+src/bre.zig:179:    try std.testing.expectEqualStrings("a*b", breToEre(arena.allocator(), "a*b"));
+src/bre.zig:180:    try std.testing.expectEqualStrings("(ab)*c", breToEre(arena.allocator(), "\\(ab\\)*c"));
+src/bre.zig:183:test "breToEre: classes are left alone" {
+src/bre.zig:186:    try std.testing.expectEqualStrings("[abc]", breToEre(arena.allocator(), "[abc]"));
+src/bre.zig:188:    try std.testing.expectEqualStrings("[[:digit:]]\\+", breToEre(arena.allocator(), "[[:digit:]]+"));
+src/bre.zig:190:    try std.testing.expectEqualStrings("[(]", breToEre(arena.allocator(), "[(]"));
+src/search.zig:393:            const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+src/search.zig:412:        const src = if (o.basic) bre.breToEre(arena, p) else p;

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The list and the dist/build conclusion match the reference, but the answer never mentions the --no-ignore / --no-default-ignore flags that disable the list, and it hedges on how use_defaults is set.",
+ "cost_usd": 0.006058
+}

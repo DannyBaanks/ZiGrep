@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly says it is not bytes/4 and names estimateTokens in src/batch.zig with the zgrep-classes-v1 weighted-class estimator and the 1.112*1.01 scale; it omits the BPE calibration and that it replaced bytes/4, but makes no contradicting claims.",
+ "cost_usd": 0.006986
+}

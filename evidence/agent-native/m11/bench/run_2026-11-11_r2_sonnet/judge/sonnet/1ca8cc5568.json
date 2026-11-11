@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states that auto is effectively never and that no TTY check is done, matching the reference; the hedging about parsing code is minor and doesn't contradict it.",
+ "cost_usd": 0.0057
+}

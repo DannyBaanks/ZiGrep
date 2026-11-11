@@ -1,0 +1,73 @@
+CONTEXT PACK `parseSize`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 3 in 1 file(s); by role: code 3
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `parseSize` in fn:parseSize
+  src/main.zig:712-727  sha256:0e2d3017225155da  relation: declaration (pattern match, heuristic)
+   712 | /// `--max-filesize` value: plain bytes or with a K/M/G/T suffix (rg accepts
+   713 | /// both upper and lower case, and `+N` means "greater than").
+>  714 | fn parseSize(value: []const u8) ?usize {
+   715 |     var v = value;
+   716 |     if (v.len > 0 and v[0] == '+') v = v[1..];
+   717 |     if (v.len == 0) return null;
+   718 |     const mult: usize = switch (v[v.len - 1]) {
+   719 |         'k', 'K' => 1024,
+   720 |         'm', 'M' => 1024 * 1024,
+   721 |         'g', 'G' => 1024 * 1024 * 1024,
+   722 |         't', 'T' => 1024 * 1024 * 1024 * 1024,
+   723 |         else => 1,
+   724 |     };
+   725 |     if (mult != 1) v = v[0 .. v.len - 1];
+   726 |     return (parseCount(v) orelse return null) *| mult;
+   727 | }
+
+REFERENCES
+src/main.zig in fn:parseArgs
+  [h2] line 1203 `parseSize`: unresolved (lexical_only; 1 declaration(s) named parseSize; none is linked by checkable evidence)
+  [h3] line 1213 `parseSize`: unresolved (lexical_only; 1 declaration(s) named parseSize; none is linked by checkable evidence)
+  src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+  src/main.zig:1195-1221  sha256:153d0a3e3804a265
+  1195 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1196 |                     return error.Usage;
+  1197 |                 }
+  1198 |                 opts.max_columns = parseCount(args[i]) orelse {
+  1199 |                     opts.fail = .{ .what = "bad value for --max-columns", .arg = args[i] };
+  1200 |                     return error.Usage;
+  1201 |                 };
+  1202 |             } else if (std.mem.startsWith(u8, body, "max-filesize=")) {
+> 1203 |                 opts.max_filesize = parseSize(body["max-filesize=".len..]) orelse {
+  1204 |                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = body["max-filesize=".len..] };
+  1205 |                     return error.Usage;
+  1206 |                 };
+  1207 |             } else if (std.mem.eql(u8, body, "max-filesize")) {
+  1208 |                 i += 1;
+  1209 |                 if (i >= args.len) {
+  1210 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1211 |                     return error.Usage;
+  1212 |                 }
+> 1213 |                 opts.max_filesize = parseSize(args[i]) orelse {
+  1214 |                     opts.fail = .{ .what = "bad value for --max-filesize", .arg = args[i] };
+  1215 |                     return error.Usage;
+  1216 |                 };
+  1217 |             } else if (std.mem.eql(u8, body, "multiline") or std.mem.eql(u8, body, "multiline-dotall")) {
+  1218 |                 opts.multiline = true;
+  1219 |                 if (std.mem.eql(u8, body, "multiline-dotall")) opts.multiline_dotall = true;
+  1220 |             } else if (std.mem.eql(u8, body, "no-multiline")) {
+  1221 |                 opts.multiline = false;
+
+UNCERTAINTY
+- 2 code reference(s) not linked to a declaration: h2, h3
+- not analysed: aliases (const x = y.parseSize), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 693 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 7

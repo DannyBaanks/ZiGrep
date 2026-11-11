@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly states max_states=3000, the flush/reset, and the warning about old state ids, but never says the search continues with no error and no NFA fallback, which the reference states explicitly.",
+ "cost_usd": 0.00597
+}

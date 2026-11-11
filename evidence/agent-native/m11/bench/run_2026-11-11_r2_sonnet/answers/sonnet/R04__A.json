@@ -1,0 +1,18 @@
+{
+ "qid": "R04",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "b48f422305275267051734a53749f4a0f0e22853449d16cbe41cd0cdb07488de",
+ "answer": "**Partially answerable.** The context shows only some test cases, not the converter body (`src/bre.zig:33`).\n\n- **`a+b`**: `+` is treated as a literal plus. The converter turns `[[:digit:]]+` into `[[:digit:]]\\+` (`src/bre.zig:188`), which in ERE is an escaped, literal `+`.\n- **Leading `*`**: it stays a literal star. `*ab` becomes `\\*ab` (`src/bre.zig:175, 178`). A `*` after a character, as in `a*b`, is unchanged and remains a quantifier (`src/bre.zig:179`).\n- **`a\\+b`**: the context doesn't show this case. The test \"the inverted escapes\" (`src/bre.zig:152`) suggests `\\+` becomes the ERE `+` quantifier, but its cases (lines 153–169) aren't shown, so that is an inference.\n\n`-G` patterns are passed through `breToEre` (`src/search.zig:393, 412`).",
+ "usage": {
+  "cost_usd": 0.011368,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 7.16,
+ "headers": {}
+}

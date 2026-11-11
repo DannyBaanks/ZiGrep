@@ -1,0 +1,59 @@
+CONTEXT PACK `parseQueries`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 2 file(s); by role: code 5, string 1
+  declarations found by pattern: 1
+
+BLOCKS
+src/batch.zig:499-499  sha256:113e8305db21ccb1
+>  499 | pub fn parseQueries(arena: Allocator, text: []const u8, err_out: *ParseError) error{ Invalid, OutOfMemory }![]Query {
+src/batch.zig:614-636  sha256:d285e92d582f6724
+>  614 | test "parseQueries: ids string y entero, rechaza duplicados y campos desconocidos" {
+   615 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   616 |     defer arena.deinit();
+   617 |     var perr: ParseError = undefined;
+>  618 |     const ok = try parseQueries(arena.allocator(),
+   619 |         \\{"id":"a","pattern":"x"}
+   620 |         \\
+   621 |         \\{"id":7,"pattern":"y","paths":["src"],"flags":["-i"]}
+   622 |     , &perr);
+   623 |     try std.testing.expectEqual(@as(usize, 2), ok.len);
+   624 |     try std.testing.expectEqualStrings("\"a\"", ok[0].id_json);
+   625 |     try std.testing.expectEqualStrings("7", ok[1].id_json);
+   626 |     try std.testing.expectEqualStrings("src", ok[1].paths.?[0]);
+   627 | 
+>  628 |     try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+   629 |         \\{"id":"a","pattern":"x"}
+   630 |         \\{"id":"a","pattern":"y"}
+   631 |     , &perr));
+   632 |     try std.testing.expectEqual(@as(usize, 2), perr.line_no);
+>  633 |     try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+   634 |         \\{"id":"a","pattern":"x","path":["typo"]}
+   635 |     , &perr));
+   636 | }
+src/main.zig:1897-1897  sha256:909e882932b2919f
+  1897 | fn runBatch(
+src/main.zig:1906-1922  sha256:bfa7f4805524d20e
+  1906 |     const text: []const u8 = if (std.mem.eql(u8, queries_path, "-"))
+  1907 |         try readAllStdin(io, arena)
+  1908 |     else
+  1909 |         std.Io.Dir.cwd().readFileAlloc(io, queries_path, arena, .limited(64 << 20)) catch |e| {
+  1910 |             std.debug.print("zgrep: {s}: {s}\n", .{ queries_path, @errorName(e) });
+  1911 |             return 2;
+  1912 |         };
+  1913 |     var perr: batch.ParseError = undefined;
+> 1914 |     const queries = batch.parseQueries(arena, text, &perr) catch |e| switch (e) {
+  1915 |         error.Invalid => {
+  1916 |             std.debug.print("zgrep: {s}:{d}: {s}\n", .{ queries_path, perr.line_no, perr.what });
+  1917 |             return 2;
+  1918 |         },
+  1919 |         error.OutOfMemory => return e,
+  1920 |     };
+  1921 | 
+  1922 |     // The global part of every query's argv: the command line minus
+
+TRUNCATION
+  truncated: false   items: 4

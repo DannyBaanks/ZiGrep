@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the answer cannot be determined from the code, whereas the reference definitively answers: no, the search stays case-sensitive because the 0xC3 lead byte falls in the 0xC0..0xDE range treated as uppercase."
+ ],
+ "reason": "The answer declines to answer, but the reference says it is answerable and definitively no, so it gets no credit.",
+ "cost_usd": 0.006566
+}

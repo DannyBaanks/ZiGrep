@@ -1,0 +1,10 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Says in other modes it prints nothing, which the reference does not state (reference says it prints the message)",
+  "Claims the message may go to stderr via std.debug.print, while reference only says it prints the message",
+  "Hedges that it cannot confirm there is no earlier pattern check, whereas the reference is definite that it returns 0 without searching"
+ ],
+ "reason": "The core claim (prints 'Binary file (standard input) matches' and exits 0 despite no match, due to NUL in first 8192 bytes) matches, but it adds unverified details and hedges where the reference is definite, and omits that GNU grep exits 1.",
+ "cost_usd": 0.007598000000000001
+}

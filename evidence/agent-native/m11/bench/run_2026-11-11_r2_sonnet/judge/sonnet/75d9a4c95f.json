@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly states walk_max_depth=512 and error.TooDeep, but omits the micro path's depth-32 fallback and that --max-depth=0 means no user limit, and hedges on the --max-depth relationship.",
+ "cost_usd": 0.005967999999999999
+}

@@ -1,0 +1,18 @@
+{
+ "qid": "R11",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "c215542a767b50d3e731a8093362d0b9019669483500ce6b706d28b3d4815369",
+ "answer": "The context shows a `ProvSource` enum whose visible members are `file` and `file_utf16` (src/scan.zig:1236-1238). The snippet is cut off after `file_utf16`, so I can't rule out further members. The JSON string spellings (e.g. \"file-utf16\" with a hyphen) aren't shown either.\n\n**When it is `file_utf16`** (`provSourceOf`, src/scan.zig:1230-1234):\n- `config.encoding == .none` → `.file` (src/scan.zig:1231).\n- A forced BOM encoding (`forcedBom(config.encoding) != null`) or `config.encoding == .utf16` → `.file_utf16` (src/scan.zig:1232).\n- Otherwise, `.file_utf16` if the data starts with a UTF-16 BOM (`isUtf16Bom(data) != null`), else `.file` (src/scan.zig:1233).\n\nThe other path also yields `.file_utf16` when `utf16_bom != null`, else `.file` (src/scan.zig:1224).\n\nThe doc comment says this tells how offsets relate to the file (src/scan.zig:1228-1229).\n\n**Missing:** the rest of the enum and the serialization code that maps these to the \"file-utf16\" string.",
+ "usage": {
+  "cost_usd": 0.014022,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.88,
+ "headers": {}
+}

@@ -1,0 +1,79 @@
+CONTEXT PACK `mmap_threshold`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 3 in 1 file(s); by role: code 3
+  declarations found by pattern: 1
+
+BLOCKS
+src/scan.zig:149-165  sha256:17791a6d5a2a060d
+   149 |             if (len > 0) try out.appendSlice(gpa, buf[0..len]);
+   150 |         }
+   151 |     }
+   152 |     return out.toOwnedSlice(gpa);
+   153 | }
+   154 | 
+   155 | /// mmap below this size is rarely a win over a plain read; the read path
+   156 | /// exists mainly as a fallback for mappings the kernel refuses.
+>  157 | pub const mmap_threshold = 256 * 1024;
+   158 | 
+   159 | pub const FileScan = struct {
+   160 |     matched: bool = false,
+   161 |     lines: usize = 0,
+   162 |     /// Matches, not lines (only filled when `--count-matches` is on).
+   163 |     matches: usize = 0,
+   164 |     /// Bytes actually searched (excludes binary skips and failures).
+   165 |     bytes: usize = 0,
+src/scan.zig:856-856  sha256:c98acd756fcf36e5
+   856 | fn scanFilePortable(
+src/scan.zig:902-921  sha256:5e5d94d610b8d4ec
+   902 |                 return res;
+   903 |             }
+   904 |             processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
+   905 |             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
+   906 |             return res;
+   907 |         }
+   908 |     }
+   909 | 
+>  910 |     if (size >= mmap_threshold) {
+   911 |         if (std.Io.File.MemoryMap.create(io, file, .{
+   912 |             .len = size,
+   913 |             .protection = .{ .read = true, .write = false },
+   914 |         })) |map_value| {
+   915 |             var map = map_value;
+   916 |             defer map.destroy(io);
+   917 |             processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
+   918 |             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
+   919 |             return res;
+   920 |         } else |_| {}
+   921 |     }
+src/scan.zig:1006-1006  sha256:cd75acc62d4e5470
+  1006 | fn scanFileLinux(
+src/scan.zig:1135-1156  sha256:7c1013c0c7c55af2
+  1135 |         return res;
+  1136 |     }
+  1137 | 
+  1138 |     // --- obtain a readable view of the whole file -------------------------
+  1139 |     var data: []const u8 = &.{};
+  1140 |     var mapped = false;
+  1141 |     var owned: ?[]u8 = null;
+  1142 | 
+> 1143 |     if (size < mmap_threshold) {
+  1144 |         // Small file: one bounded read beats mmap's page-fault setup.
+  1145 |         const buf = gpa.alloc(u8, size) catch {
+  1146 |             res.err = .NOMEM;
+  1147 |             return res;
+  1148 |         };
+  1149 |         owned = buf;
+  1150 |         if (readFully(fd, buf)) |e| {
+  1151 |             gpa.free(buf);
+  1152 |             res.err = e;
+  1153 |             return res;
+  1154 |         }
+  1155 |         data = buf;
+  1156 |     } else {
+
+TRUNCATION
+  truncated: false   items: 5

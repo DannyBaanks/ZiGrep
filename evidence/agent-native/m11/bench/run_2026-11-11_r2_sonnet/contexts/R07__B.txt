@@ -1,0 +1,35 @@
+src/batch.zig-69-        w_punct * @as(f64, @floatFromInt(punct)) + w_space_runs * @as(f64, @floatFromInt(space_runs)) +
+src/batch.zig-70-        w_nonascii * @as(f64, @floatFromInt(nonascii));
+src/batch.zig-71-    return f * est_scale;
+src/batch.zig-72-}
+src/batch.zig-73-
+src/batch.zig-74-const json_prefix = "{\"schema\":\"zgrep/1\",";
+src/batch.zig-75-
+src/batch.zig-76-/// Eventos que son resultados (lo que un agente cuenta como "hallazgos").
+src/batch.zig:77:fn isResult(line: []const u8) bool {
+src/batch.zig-78-    const rest = line[json_prefix.len..];
+src/batch.zig-79-    inline for (.{ "match", "occurrence", "file", "count" }) |t| {
+src/batch.zig-80-        if (std.mem.startsWith(u8, rest, "\"type\":\"" ++ t ++ "\"")) return true;
+src/batch.zig-81-    }
+src/batch.zig-82-    return false;
+src/batch.zig-83-}
+src/batch.zig-84-
+src/batch.zig-85-const Lock = struct {
+--
+src/batch.zig-303-
+src/batch.zig-304-    fn event(self: *Emitter, line: []const u8) Allocator.Error!void {
+src/batch.zig-305-        if (self.compact) return self.compactEvent(line);
+src/batch.zig-306-        if (!std.mem.startsWith(u8, line, json_prefix)) {
+src/batch.zig-307-            self.dropped_non_event += 1;
+src/batch.zig-308-            self.q_dropped += 1;
+src/batch.zig-309-            return;
+src/batch.zig-310-        }
+src/batch.zig:311:        const result = isResult(line);
+src/batch.zig-312-        self.line_buf.clearRetainingCapacity();
+src/batch.zig-313-        try self.line_buf.appendSlice(self.gpa, json_prefix);
+src/batch.zig-314-        if (self.query_id) |id| {
+src/batch.zig-315-            try self.line_buf.appendSlice(self.gpa, "\"query_id\":");
+src/batch.zig-316-            try self.line_buf.appendSlice(self.gpa, id);
+src/batch.zig-317-            try self.line_buf.append(self.gpa, ',');
+src/batch.zig-318-        }
+src/batch.zig-319-        try self.line_buf.appendSlice(self.gpa, line[json_prefix.len..]);

@@ -1,0 +1,439 @@
+CONTEXT PACK `sort`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 43 in 6 file(s); by role: code 18, comment 4, doc_comment 2, documentation 13, string 6
+  declarations found by pattern: 1
+
+DEFINITION
+[h16] field `sort` in container:Options
+  src/main.zig:255-255  sha256:11575808b6ba1193  relation: declaration (pattern match, heuristic)
+>  255 |     sort: bool = false,
+
+REFERENCES
+src/main.zig in fn:parseArgs
+  [h17] line 946 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h19] line 969 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h20] line 1608 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+  src/main.zig:938-954  sha256:e98be5f319342456
+   938 |                 i += 1;
+   939 |                 if (i >= args.len) {
+   940 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+   941 |                     return error.Usage;
+   942 |                 }
+   943 |                 opts.threads = try parseThreadCount(opts, args[i], "bad value for --threads");
+   944 |             } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
+   945 |                 opts.kamikaze = true;
+>  946 |                 opts.sort = false;
+   947 |             } else if (std.mem.eql(u8, body, "uring") or std.mem.eql(u8, body, "io-uring")) {
+   948 |                 opts.use_uring = true;
+   949 |                 opts.io_engine_mode = .uring;
+   950 |             } else if (std.mem.startsWith(u8, a, "--io-engine=")) {
+   951 |                 const value = a["--io-engine=".len..];
+   952 |                 if (std.mem.eql(u8, value, "sync")) {
+   953 |                     opts.use_uring = false;
+   954 |                     opts.io_engine_mode = .sync;
+  src/main.zig:961-977  sha256:88bee0e8521fc09f
+   961 |                 } else {
+   962 |                     opts.fail = .{
+   963 |                         .what = "bad value for --io-engine (expected auto|sync|uring)",
+   964 |                         .arg = value,
+   965 |                     };
+   966 |                     return error.Usage;
+   967 |                 }
+   968 |             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+>  969 |                 opts.sort = true;
+   970 |                 opts.kamikaze = false;
+   971 |             } else if (std.mem.startsWith(u8, body, "nav=") or std.mem.startsWith(u8, body, "befunge=")) {
+   972 |                 const spec = if (std.mem.startsWith(u8, body, "nav="))
+   973 |                     body["nav=".len..]
+   974 |                 else
+   975 |                     body["befunge=".len..];
+   976 |                 opts.nav_plan = nav.NavPlan.parse(spec) catch {
+   977 |                     opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = spec };
+  src/main.zig:1600-1616  sha256:beb95353aeb8ce6c
+  1600 |                     opts.nav_plan = nav.NavPlan.parse(value) catch {
+  1601 |                         opts.fail = .{ .what = "invalid Befunge navigation spec", .arg = value };
+  1602 |                         return error.Usage;
+  1603 |                     };
+  1604 |                     ci = chars.len;
+  1605 |                 },
+  1606 |                 'k' => {
+  1607 |                     opts.kamikaze = true;
+> 1608 |                     opts.sort = false;
+  1609 |                 },
+  1610 |                 'c' => opts.mode = .count,
+  1611 |                 'l' => opts.mode = .files,
+  1612 |                 'L' => opts.mode = .files_without_match,
+  1613 |                 'q' => opts.mode = .quiet,
+  1614 |                 'H' => opts.show_path = true,
+  1615 |                 'h' => opts.show_path = false,
+  1616 |                 'a' => opts.binary = true,
+src/main.zig in fn:runSearch
+  [h24] line 2190 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h25] line 2190 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h27] line 2195 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h28] line 2195 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h29] line 2197 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h30] line 2197 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h32] line 2362 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  [h33] line 2377 `opts.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'opts' was not checked)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2182-2205  sha256:4889a3d329a43f62
+  2182 |         v
+  2183 |     else
+  2184 |         !(operands.len == 1 and isRegularFile(init.io, operands[0]));
+  2185 | 
+  2186 |     // `--exec` needs to know WHICH files matched, which only the ordered
+  2187 |     // path keeps; the streaming pipeline reports a single boolean. For v1 the
+  2188 |     // exec therefore runs on the sorted path, after the scan. This changes
+  2189 |     // nothing about the bytes read, only the order the commands run in.
+> 2190 |     if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+  2191 |     // `--heading` groups by file, and the streaming path emits in completion
+  2192 |     // order: two files' groups would interleave and a header would point at
+  2193 |     // the wrong cluster. rg keeps the argument order, which is what --sort
+  2194 |     // reproduces.
+> 2195 |     if (opts.heading and !opts.sort) opts.sort = true;
+  2196 |     // --pre also runs per file, so it needs the ordered path.
+> 2197 |     if (opts.pre_cmd != null and !opts.sort) opts.sort = true;
+  2198 |     // find -exec has no normal output. The quiet early-exits below are what
+  2199 |     // make `-q` fast, but they would stop the scan at the FIRST match and the
+  2200 |     // command would never reach the other files, so they stay off with --exec.
+  2201 |     if (opts.exec_cmd != null) opts.mode = .quiet;
+  2202 | 
+  2203 |     const t0 = nowMonotonicNs(init.io);
+  2204 | 
+  2205 |     // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+  src/main.zig:2354-2385  sha256:961e05ac4dd0b918
+  2354 |         if (info.kind != .file) all_files = false;
+  2355 |         try valid_operands.append(arena, op);
+  2356 |     }
+  2357 |     // Several explicit FILES are answered in argument order, like GNU grep
+  2358 |     // (and like rg in practice). The streaming swarm pops its work LIFO, so
+  2359 |     // `zgrep pat a b c` used to print c, b, a: an agent that zips the output
+  2360 |     // with its own argument list got it backwards. Directories keep the
+  2361 |     // streaming path (rg does not promise an order there either; --sort does).
+> 2362 |     if (valid_operands.items.len > 1 and all_files) opts.sort = true;
+  2363 | 
+  2364 |     if (valid_operands.items.len == 0 and had_error) {
+  2365 |         return 2;
+  2366 |     }
+  2367 | 
+  2368 |     // rg prints the header only with more than one input: with a single
+  2369 |     // file it would waste a line. The rule is about the FILES, not about the
+  2370 |     // operands: `zgrep --heading pat dir/` prints the header even when the
+  2371 |     // directory holds one file, because that is what rg does. The file list
+  2372 |     // is only known on the ordered path, and `--heading` forces it.
+  2373 |     // Output separator is per-run, not per-line.
+  2374 |     scan.out_sep = if (opts.null_data) 0 else '\n';
+  2375 | 
+  2376 |     // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
+> 2377 |     if (!opts.sort) {
+  2378 |         var k_stats: kamikaze.KamikazeStats = .{};
+  2379 |     var engine_state: io_engine.State = .{};
+  2380 |         var filter_engine = filter.FilterEngine.init(gpa);
+  2381 |         defer filter_engine.deinit();
+  2382 | 
+  2383 |         filter_engine.no_ignore = opts.no_ignore;
+  2384 |         filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+  2385 |         filter_engine.skip_hidden = opts.skip_hidden;
+src/regex.zig in fn:closure
+  [h40] line 782 `mem.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'mem' was not checked)
+  [h41] line 782 `std.sort`: unresolved (lexical_only; 1 declaration(s) named sort; none is linked by checkable evidence)
+  src/regex.zig:747-784  sha256:b139b903ff381793
+   747 |     fn closure(self: *Dfa, at_bol: bool, at_eol: bool) Allocator.Error![]const u32 {
+   748 |         self.gen +%= 1;
+   749 |         if (self.gen == 0) {
+   750 |             @memset(self.mark, 0);
+   751 |             self.gen = 1;
+   752 |         }
+   753 |         self.work.clearRetainingCapacity();
+   754 |         self.stack.clearRetainingCapacity();
+   755 |         for (self.seeds.items) |s| try self.stack.append(self.gpa, s);
+   756 |         const nodes = self.prog.nodes;
+   757 |         while (self.stack.pop()) |id| {
+   758 |             if (self.mark[id] == self.gen) continue;
+   759 |             self.mark[id] = self.gen;
+   760 |             const n = nodes[id];
+   761 |             switch (n.kind) {
+   762 |                 .set => try self.work.append(self.gpa, id),
+   763 |                 .split => {
+   764 |                     try self.stack.append(self.gpa, n.out1);
+   765 |                     try self.stack.append(self.gpa, n.out);
+   766 |                 },
+   767 |                 .bol => if (at_bol) try self.stack.append(self.gpa, n.out),
+   768 |                 .eol => if (at_eol) {
+   769 |                     try self.stack.append(self.gpa, n.out);
+   770 |                 } else {
+   771 |                     try self.work.append(self.gpa, id);
+   772 |                 },
+   773 |                 // A word-boundary node is KEPT in the state, exactly like `eol`: it
+   774 |                 // cannot be resolved while building the state (the byte that
+   775 |                 // settles it has not been consumed yet), so `step` resolves it
+   776 |                 // on the next byte.
+   777 |                 .wb => try self.work.append(self.gpa, id),
+   778 |                 .nwb => try self.work.append(self.gpa, id),
+   779 |                 .match => try self.work.append(self.gpa, id),
+   780 |             }
+   781 |         }
+>  782 |         std.mem.sort(u32, self.work.items, {}, std.sort.asc(u32));
+   783 |         return self.work.items;
+   784 |     }
+src/walk.zig in fn:walkOne
+  [h42] line 119 `std.sort`: unresolved (lexical_only; 1 declaration(s) named sort; none is linked by checkable evidence)
+  [h43] line 121 `std.sort`: unresolved (lexical_only; 1 declaration(s) named sort; none is linked by checkable evidence)
+  src/walk.zig:51-51  sha256:1c9d27723c053692
+    51 | fn walkOne(
+  src/walk.zig:111-129  sha256:2460fbbcfc5c5738
+   111 |         }
+   112 | 
+   113 |         const child = try vfs.joinPathSentinel(gpa, dir, entry.name);
+   114 |         try items.append(gpa, .{ .path = child, .kind = kind });
+   115 |     }
+   116 | 
+   117 |     // Keep directory traversal deterministic; Befunge '<' reverses siblings.
+   118 |     if (nav_plan != null and nav_plan.?.reverse_siblings) {
+>  119 |         std.sort.pdq(Item, items.items, {}, Item.greaterThan);
+   120 |     } else {
+>  121 |         std.sort.pdq(Item, items.items, {}, Item.lessThan);
+   122 |     }
+   123 | 
+   124 |     for (items.items) |item| {
+   125 |         if (item.kind == .directory) {
+   126 |             // rg's --max-depth counts from the root, so depth 0 is the root
+   127 |             // itself: `--max-depth 1` never descends into a subdirectory.
+   128 |             if (max_depth != 0 and depth + 1 >= max_depth) {
+   129 |                 gpa.free(item.path);
+mentions inside comments or strings (12): textual only, not a dependency
+  [h14] src/kamikaze.zig:721 (comment) null, // el camino ordenado (`--sort`) no tiene muestra de motor
+  [h15] src/main.zig:188 (string) \\      --sort, --deterministic
+  [h18] src/main.zig:968 (string) } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+  [h21] src/main.zig:1892 (doc_comment) /// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+  [h22] src/main.zig:1895 (doc_comment) /// matched, else 1. `--sort` makes the batch deterministic, so it is
+  [h23] src/main.zig:1925 (string) try base.appendSlice(arena, &.{ args[0], "--json", "--sort" });
+  [h26] src/main.zig:2193 (comment) // the wrong cluster. rg keeps the argument order, which is what --sort
+  [h31] src/main.zig:2361 (comment) // streaming path (rg does not promise an order there either; --sort does).
+  [h34] src/main.zig:2405 (comment) // ignored unless `--sort` was passed.
+  [h35] src/main.zig:2988 (string) const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+  [h38] src/main.zig:3320 (string) const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "--max-columns=40", "-e", "pat", "--", "f.txt" };
+  [h39] src/main.zig:3329 (string) const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "-e", "pat", "--", "f.txt" };
+src/kamikaze.zig in fn:tryQuickTreeScan: textual mention(s) only, not a code reference: [h14] line 721 (comment)
+  src/kamikaze.zig:606-606  sha256:5d09df0fb4e2b720
+   606 | fn tryQuickTreeScan(
+  src/kamikaze.zig:708-734  sha256:f694dc10798eaffc
+   708 |     for (files.items) |full_path| {
+   709 |         const before_len = local_out.items.len;
+   710 |         const res = scan.scanFile(
+   711 |             io,
+   712 |             gpa,
+   713 |             searcher,
+   714 |             full_path,
+   715 |             show_path,
+   716 |             mode,
+   717 |             binary,
+   718 |             scan_config,
+   719 |             &local_out,
+   720 |             scratch,
+>  721 |             null, // el camino ordenado (`--sort`) no tiene muestra de motor
+   722 |         );
+   723 |         if (context_mode and !scan_config.json) scan.insertGroupSeparator(&local_out, gpa, before_len);
+   724 | 
+   725 |         stats.files_scanned += 1;
+   726 |         stats.bytes_scanned += res.bytes;
+   727 |         const is_hit = if (mode == .files_without_match) !res.matched else res.matched;
+   728 |         if (is_hit) {
+   729 |             stats.matched_files += 1;
+   730 |             stats.matched_lines += res.lines;
+   731 |             matched_any = true;
+   732 |             if (mode == .quiet) return true;
+   733 |         }
+   734 |     }
+src/main.zig in file: textual mention(s) only, not a code reference: [h15] line 188 (string), [h21] line 1892 (doc_comment), [h22] line 1895 (doc_comment)
+  src/main.zig:180-196  sha256:4b3bfa5def38e971
+   180 |     \\                    also consider zig-out (DANGER: installs live there)
+   181 |     \\      --cache-no-global
+   182 |     \\                    do not include ~/.cache/zig
+   183 |     \\      --binary-files=TYPE
+   184 |     \\                    text | without-match (zgrep never prints binary
+   185 |     \\                    content, so 'binary' is rejected, not faked)
+   186 |     \\  -k, --kamikaze, --dataflow
+   187 |     \\                    streaming dataflow with concurrent kamikaze swarm (default)
+>  188 |     \\      --sort, --deterministic
+   189 |     \\                    emit results in deterministic order by path (disables streaming)
+   190 |     \\  -N, --nav, --befunge SPEC
+   191 |     \\                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+   192 |     \\                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
+   193 |     \\      --exclude-dir=DIR
+   194 |     \\                    skip directory matching DIR (comma-separated or globs)
+   195 |     \\      --exclude-ext=EXT
+   196 |     \\                    skip file extensions (e.g. log,tmp,lock)
+  src/main.zig:1884-1903  sha256:e879ca1dd9d684f8
+  1884 |     if (vo.queries_file != null) return "--queries-file cannot nest";
+  1885 |     if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
+  1886 |     if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+  1887 |     if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
+  1888 |     return null;
+  1889 | }
+  1890 | 
+  1891 | /// `--queries-file FILE|-`: every JSONL query runs in THIS process, in file
+> 1892 | /// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+  1893 | /// Each event carries `query_id`; each query ends with `query_end`; the stream
+  1894 | /// ends with `summary`. Exit status: 2 if any query failed, else 0 if any
+> 1895 | /// matched, else 1. `--sort` makes the batch deterministic, so it is
+  1896 | /// byte-comparable with N separate invocations (`batch_conformance.py`).
+  1897 | fn runBatch(
+  1898 |     init: std.process.Init,
+  1899 |     arena: Allocator,
+  1900 |     args: []const [:0]const u8,
+  1901 |     global_operands: []const [:0]const u8,
+  1902 |     queries_path: []const u8,
+  1903 |     gopts: *const Options,
+src/main.zig in fn:parseArgs: textual mention(s) only, not a code reference: [h18] line 968 (string)
+  src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+  src/main.zig:950-976  sha256:f4b39da10d4fb060
+   950 |             } else if (std.mem.startsWith(u8, a, "--io-engine=")) {
+   951 |                 const value = a["--io-engine=".len..];
+   952 |                 if (std.mem.eql(u8, value, "sync")) {
+   953 |                     opts.use_uring = false;
+   954 |                     opts.io_engine_mode = .sync;
+   955 |                 } else if (std.mem.eql(u8, value, "uring")) {
+   956 |                     opts.use_uring = true;
+   957 |                     opts.io_engine_mode = .uring;
+   958 |                 } else if (std.mem.eql(u8, value, "auto")) {
+   959 |                     opts.use_uring = false;
+   960 |                     opts.io_engine_mode = .auto;
+   961 |                 } else {
+   962 |                     opts.fail = .{
+   963 |                         .what = "bad value for --io-engine (expected auto|sync|uring)",
+   964 |                         .arg = value,
+   965 |                     };
+   966 |                     return error.Usage;
+   967 |                 }
+>  968 |             } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+   969 |                 opts.sort = true;
+   970 |                 opts.kamikaze = false;
+   971 |             } else if (std.mem.startsWith(u8, body, "nav=") or std.mem.startsWith(u8, body, "befunge=")) {
+   972 |                 const spec = if (std.mem.startsWith(u8, body, "nav="))
+   973 |                     body["nav=".len..]
+   974 |                 else
+   975 |                     body["befunge=".len..];
+   976 |                 opts.nav_plan = nav.NavPlan.parse(spec) catch {
+src/main.zig in fn:runBatch: textual mention(s) only, not a code reference: [h23] line 1925 (string)
+  src/main.zig:1897-1897  sha256:909e882932b2919f
+  1897 | fn runBatch(
+  src/main.zig:1917-1933  sha256:d64a84d6150a3894
+  1917 |             return 2;
+  1918 |         },
+  1919 |         error.OutOfMemory => return e,
+  1920 |     };
+  1921 | 
+  1922 |     // The global part of every query's argv: the command line minus
+  1923 |     // --queries-file, the default paths and a `--` (re-added before the paths).
+  1924 |     var base: std.ArrayList([:0]const u8) = .empty;
+> 1925 |     try base.appendSlice(arena, &.{ args[0], "--json", "--sort" });
+  1926 |     {
+  1927 |         var i: usize = 1;
+  1928 |         while (i < args.len) : (i += 1) {
+  1929 |             const a = args[i];
+  1930 |             // Batch-level options belong to the call, not to each query.
+  1931 |             var skip_value = false;
+  1932 |             var skip_self = false;
+  1933 |             if (std.mem.eql(u8, a, "--spill") or std.mem.startsWith(u8, a, "--spill=")) continue;
+src/main.zig in fn:runSearch: textual mention(s) only, not a code reference: [h26] line 2193 (comment), [h31] line 2361 (comment), [h34] line 2405 (comment)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+> 2193 |     // the wrong cluster. rg keeps the argument order, which is what --sort
+> 2361 |     // streaming path (rg does not promise an order there either; --sort does).
+> 2405 |         // ignored unless `--sort` was passed.
+    (brief form: full text in the spill)
+
+TESTS
+src/main.zig in test:parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h36] line 2990 `o.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'o' was not checked)
+  [h37] line 3011 `o.sort`: unique_field_candidate -> h16 (heuristic; the only field named sort in scope is src/main.zig:255; the type of 'o' was not checked)
+  src/main.zig:2956-3014  sha256:a2878048b6c11f37
+  2956 | test "parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden" {
+  2957 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  2958 |     defer arena.deinit();
+  2959 |     const alloc = arena.allocator();
+  2960 |     {
+  2961 |         var o: Options = .{};
+  2962 |         const a = [_][:0]const u8{ "zgrep", "-k", "pat", "dir" };
+  2963 |         _ = try parseArgs(alloc, &a, &o);
+  2964 |         try std.testing.expect(o.kamikaze);
+  2965 |     }
+  2966 |     {
+  2967 |         var o: Options = .{};
+  2968 |         const a = [_][:0]const u8{ "zgrep", "--dataflow", "--exclude-dir=.git", "--no-hidden", "pat", "dir" };
+  2969 |         _ = try parseArgs(alloc, &a, &o);
+  2970 |         try std.testing.expect(o.kamikaze);
+  2971 |         try std.testing.expect(o.skip_hidden);
+  2972 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_dirs_count);
+  2973 |         try std.testing.expectEqualStrings(".git", o.exclude_dirs[0]);
+  2974 |     }
+  2975 |     {
+  2976 |         var o: Options = .{};
+  2977 |         const a = [_][:0]const u8{ "zgrep", "--exclude-ext=log,tmp", "--include-ext=zig", "--no-ignore", "--no-default-ignore", "pat", "dir" };
+  2978 |         _ = try parseArgs(alloc, &a, &o);
+  2979 |         try std.testing.expect(o.no_ignore);
+  2980 |         try std.testing.expect(o.no_default_ignore);
+  2981 |         try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+  2982 |         try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+  2983 |         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+  2984 |         try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+  2985 |     }
+  2986 |     {
+  2987 |         var o: Options = .{};
+  2988 |         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+  2989 |         _ = try parseArgs(alloc, &a, &o);
+> 2990 |         try std.testing.expect(o.sort);
+  2991 |         try std.testing.expect(!o.kamikaze);
+  2992 |     }
+  2993 |     {
+  2994 |         var o: Options = .{};
+  2995 |         const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+  2996 |         _ = try parseArgs(alloc, &a, &o);
+  2997 |         try std.testing.expect(o.nav_plan.has_trampoline);
+  2998 |         try std.testing.expect(!o.nav_plan.has_ceiling);
+  2999 |     }
+  3000 |     {
+  3001 |         var o: Options = .{};
+  3002 |         const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+  3003 |         _ = try parseArgs(alloc, &a, &o);
+  3004 |         try std.testing.expect(o.nav_plan.has_ceiling);
+  3005 |         try std.testing.expect(!o.nav_plan.has_trampoline);
+  3006 |     }
+  3007 |     {
+  3008 |         var o: Options = .{};
+  3009 |         const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+  3010 |         _ = try parseArgs(alloc, &a, &o);
+> 3011 |         try std.testing.expect(o.sort);
+  3012 |         try std.testing.expect(!o.kamikaze);
+  3013 |     }
+  3014 | }
+src/main.zig in test:parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden: textual mention(s) only, not a code reference: [h35] line 2988 (string)
+  src/main.zig:2956-3014  sha256:a2878048b6c11f37
+> 2988 |         const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+    (brief form: full text in the spill)
+src/main.zig in test:parseArgs: --max-columns (M9), valor y errores de uso: textual mention(s) only, not a code reference: [h38] line 3320 (string), [h39] line 3329 (string)
+  src/main.zig:3270-3270  sha256:f2364d66c52ee0ca
+> 3320 |         const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "--max-columns=40", "-e", "pat", "--", "f.txt" };
+> 3329 |         const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "-e", "pat", "--", "f.txt" };
+    (brief form: full text in the spill)
+
+UNCERTAINTY
+- 3 code reference(s) not linked to a declaration: h41, h42, h43
+- not analysed: aliases (const x = y.sort), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 681 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: true   budget: 28000 bytes   full: 16   brief only: 3   omitted: 0
+  brief only (full text in the spill): REFERENCES:text:src/main.zig#fn:runSearch, TESTS:text:src/main.zig#test:parseArgs: -k, --kamikaze, --dataflow, --exclude-dir, --no-hidden, TESTS:text:src/main.zig#test:parseArgs: --max-columns (M9), valor y errores de uso
+  spill: evidence/agent-native/m11/bench/run_2026-11-11_r2_sonnet/spill/pack_sort_1ce8813f10f5.json  sha256:1ce8813f10f5136f37172c19118c72c187f834c6b212dc9045c6eaf601bf06fb

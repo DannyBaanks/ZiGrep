@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims the src/regex.zig header line only mentions back-references/lookaround with no \\b, contradicting the reference that the header comment lists \\b as unsupported (stale)",
+  "Attributes the 'unsupported' claim to GUIA.md rather than the src/regex.zig header, disputing the user's premise"
+ ],
+ "reason": "The answer correctly says \\b and \\B are supported (error message, README), but it wrongly disputes the header comment's stale claim and hedges about whether the header is stale.",
+ "cost_usd": 0.00714
+}

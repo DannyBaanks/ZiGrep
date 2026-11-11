@@ -1,0 +1,107 @@
+src/main.zig-2285-            .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
+src/main.zig-2286-            .json = opts.json,
+src/main.zig-2287-            .provenance = opts.provenance,
+src/main.zig-2288-        };
+src/main.zig-2289-        const path_label = "(standard input)";
+src/main.zig-2290-        const show_p = opts.show_path orelse false;
+src/main.zig-2291-
+src/main.zig-2292-        const data = stdin_buf.items;
+src/main.zig:2293:        const probe = @min(data.len, scan.binary_probe_bytes);
+src/main.zig-2294-        const utf16_bom = scan.isUtf16Bom(data);
+src/main.zig-2295-        const is_bin = !opts.binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+src/main.zig-2296-        if (is_bin) {
+src/main.zig-2297-            if (opts.mode == .lines) {
+src/main.zig-2298-                std.debug.print("Binary file (standard input) matches\n", .{});
+src/main.zig-2299-            }
+src/main.zig-2300-            return 0;
+src/main.zig-2301-        }
+--
+src/scan.zig-83-    /// "jump to the next match" path cannot be used.
+src/scan.zig-84-    pub fn needs_spans(self: ScanConfig) bool {
+src/scan.zig-85-        return self.only_matching or self.column or self.color or self.replace != null or self.passthru;
+src/scan.zig-86-    }
+src/scan.zig-87-};
+src/scan.zig-88-
+src/scan.zig-89-/// NUL probe window used to decide a file is binary, aligned with GNU grep's
+src/scan.zig-90-/// first-block check and ripgrep's default heuristic.
+src/scan.zig:91:pub const binary_probe_bytes = 8192;
+src/scan.zig-92-
+src/scan.zig-93-/// Checks for UTF-16 Byte Order Marks (BOM):
+src/scan.zig-94-/// 0xFF 0xFE = Little-Endian, 0xFE 0xFF = Big-Endian.
+src/scan.zig-95-/// `--encoding` decides how a file's bytes become the haystack:
+src/scan.zig-96-///   * `none`  -> raw bytes, no BOM sniffing at all (rg's `none`)
+src/scan.zig-97-///   * `auto`  -> BOM sniff only, the default and what this scanner already did
+src/scan.zig-98-///   * `utf-16le` / `utf-16be` -> decode, ignoring any BOM
+src/scan.zig-99-///   * `utf-16` -> BOM decides, else LE (rg does the same)
+--
+src/scan.zig-945-    path: []const u8,
+src/scan.zig-946-    show_path: bool,
+src/scan.zig-947-    mode: Mode,
+src/scan.zig-948-    binary: bool,
+src/scan.zig-949-    config: ScanConfig,
+src/scan.zig-950-    out: *std.ArrayList(u8),
+src/scan.zig-951-    res: *FileScan,
+src/scan.zig-952-) void {
+src/scan.zig:953:    const probe = @min(data.len, binary_probe_bytes);
+src/scan.zig-954-    const utf16_bom = if (config.encoding == .none)
+src/scan.zig-955-        null
+src/scan.zig-956-    else if (forcedBom(config.encoding)) |f|
+src/scan.zig-957-        f
+src/scan.zig-958-    else if (config.encoding == .utf16)
+src/scan.zig-959-        isUtf16Bom(data) orelse .le
+src/scan.zig-960-    else
+src/scan.zig-961-        isUtf16Bom(data);
+--
+src/scan.zig-1073-
+src/scan.zig-1074-        // Did the entire file fit in the scratch buffer?
+src/scan.zig-1075-        if (got < sbuf.len) {
+src/scan.zig-1076-            if (got == 0) {
+src/scan.zig-1077-                if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, "", .file, .{ .fd = fd })) |e| res.err = e;
+src/scan.zig-1078-                return res;
+src/scan.zig-1079-            }
+src/scan.zig-1080-            const data = sbuf[0..got];
+src/scan.zig:1081:            const probe = @min(data.len, binary_probe_bytes);
+src/scan.zig-1082-            const utf16_bom = if (config.encoding == .none)
+src/scan.zig-1083-        null
+src/scan.zig-1084-    else if (forcedBom(config.encoding)) |f|
+src/scan.zig-1085-        f
+src/scan.zig-1086-    else if (config.encoding == .utf16)
+src/scan.zig-1087-        isUtf16Bom(data) orelse .le
+src/scan.zig-1088-    else
+src/scan.zig-1089-        isUtf16Bom(data);
+--
+src/scan.zig-1178-        } else if (owned) |b| {
+src/scan.zig-1179-            gpa.free(b);
+src/scan.zig-1180-        }
+src/scan.zig-1181-    }
+src/scan.zig-1182-
+src/scan.zig-1183-    // --- binary probe ------------------------------------------------------
+src/scan.zig-1184-    // `-a` disables it; otherwise a NUL in the first block means the file is
+src/scan.zig-1185-    // skipped entirely (grep `-I`, ripgrep default).
+src/scan.zig:1186:    const probe = @min(data.len, binary_probe_bytes);
+src/scan.zig-1187-    const utf16_bom = if (config.encoding == .none)
+src/scan.zig-1188-        null
+src/scan.zig-1189-    else if (forcedBom(config.encoding)) |f|
+src/scan.zig-1190-        f
+src/scan.zig-1191-    else if (config.encoding == .utf16)
+src/scan.zig-1192-        isUtf16Bom(data) orelse .le
+src/scan.zig-1193-    else
+src/scan.zig-1194-        isUtf16Bom(data);
+--
+src/uring_linux.zig-181-                    }
+src/uring_linux.zig-182-                    continue;
+src/uring_linux.zig-183-                }
+src/uring_linux.zig-184-
+src/uring_linux.zig-185-                // Normal file <= BUFFER_SIZE: scanned completely in the io_uring buffer!
+src/uring_linux.zig-186-                var fs = scan.FileScan{};
+src/uring_linux.zig-187-                if (n > 0) {
+src/uring_linux.zig-188-                    const data = self.buffers[slot_idx][0..n];
+src/uring_linux.zig:189:                    const probe = @min(data.len, scan.binary_probe_bytes);
+src/uring_linux.zig-190-                    const utf16_bom = scan.isUtf16Bom(data);
+src/uring_linux.zig-191-                    const is_bin = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
+src/uring_linux.zig-192-                    if (!is_bin) {
+src/uring_linux.zig-193-                        // Solo los bytes que de verdad se escanean (mismo
+src/uring_linux.zig-194-                        // criterio que el camino síncrono: un binario no suma).
+src/uring_linux.zig-195-                        result.bytes_scanned += n;
+src/uring_linux.zig-196-                        if (utf16_bom) |bom| {
+src/uring_linux.zig-197-                            if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {

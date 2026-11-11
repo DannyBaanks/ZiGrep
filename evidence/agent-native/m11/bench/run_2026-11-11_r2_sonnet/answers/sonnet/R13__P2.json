@@ -1,0 +1,18 @@
+{
+ "qid": "R13",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "7fb8e49030b3d02adcfffc93663f1d2f7322f8fcacbf598bd69013d8ac66ddee",
+ "answer": "**Short answer: probably not for regex, but the context can't confirm it end to end.** The README text itself is not in the context, so I can't check its wording.\n\n**Fixed-string path (`-F`):** a test expects `-i` with `.fixed = true` to match `ÑANDÚ` against `ñandú` (src/search.zig:583-584). The test is not run (NOT_DEMONSTRATED). The non-regex path also lowercases with `toLowerByte` (src/search.zig:401), whose implementation isn't shown.\n\n**Regex path:** case folding is ASCII-only.\n- `byteSet` adds only `a-z`/`A-Z` counterparts (src/regex.zig:74-77).\n- `parseClass` folds only `a-z` (src/regex.zig:277-285).\n- `litByte` uses `std.ascii` (src/regex.zig:512).\n\n`ñand.` contains a regex metacharacter, so it takes the regex path. Pattern bytes `ñ` and `Ñ` are multi-byte UTF-8 and would not be case-paired by `byteSet`. So `ñand.` likely wouldn't match `ÑANDÚ`, and the README claim likely doesn't hold for regexes.\n\n**Missing:** the README/GUIA text, `toLowerByte`, `findCi`, and any regex test with Latin-1 letters.",
+ "usage": {
+  "cost_usd": 0.042822,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.52,
+ "headers": {}
+}

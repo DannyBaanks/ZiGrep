@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: message 'Binary file (standard input) matches', exit 0 unconditionally from the stdin path with a NUL in the first 8192 bytes, noting GNU grep would exit 1; extra details (stderr hedging, lines mode) do not contradict it.",
+ "cost_usd": 0.006874
+}

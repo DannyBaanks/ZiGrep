@@ -1,0 +1,18 @@
+{
+ "qid": "R10",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "cfdeac41c7a69990139eefc37c3dac2957d81e50a9d2a29b89dd4374c8410c95",
+ "answer": "**Accepted values.** `parseEncoding` recognizes exactly these names: `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, and `latin1` (src/scan.zig:108-114). Any other string returns `null` (src/scan.zig:115). The callers then fall back to `.auto` (src/main.zig:2285, 2433, 2608). So an unrecognized value is not rejected here, at least in the code shown.\n\n**`--encoding=utf-16` with no BOM.** The context does not say. It shows only that `\"utf-16\"` maps to the `.utf16` enum variant (src/scan.zig:111). The decoding logic that handles BOM detection, and any default byte order when there is no BOM, isn't included. Also missing are the `Encoding` enum definition and any README/GUIA documentation of `--encoding`. To answer, I'd need the scan code that consumes `.utf16`, or the docs for the flag.",
+ "usage": {
+  "cost_usd": 0.017104,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.55,
+ "headers": {}
+}

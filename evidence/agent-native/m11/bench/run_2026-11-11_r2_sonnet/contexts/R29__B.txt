@@ -1,0 +1,131 @@
+src/main.zig-320-    basic_regexp: bool = false,
+src/main.zig-321-    /// `-S`: insensitive unless the pattern has an uppercase letter (rg).
+src/main.zig-322-    smart_case: bool = false,
+src/main.zig-323-    /// `-t TYPE` (include) / `--type-not TYPE` (exclude) counts.
+src/main.zig-324-    type_include: [8]types.Type = undefined,
+src/main.zig-325-    type_include_count: usize = 0,
+src/main.zig-326-    type_exclude: [8]types.Type = undefined,
+src/main.zig-327-    type_exclude_count: usize = 0,
+src/main.zig:328:    /// `--type-list`: print the type registry and exit.
+src/main.zig-329-    print_type_list: bool = false,
+src/main.zig-330-    /// `--binary-files=TYPE` (grep): text = -a, without-match = default.
+src/main.zig-331-    binary_files: BinaryFiles = .without_match,
+src/main.zig-332-    /// `--exclude-from=FILE` (grep): globs, one per line.
+src/main.zig-333-    exclude_from: [8][]const u8 = undefined,
+src/main.zig-334-    exclude_from_count: usize = 0,
+src/main.zig-335-    /// `--max-depth=N` (rg; long only, `-d` is grep's --directories).
+src/main.zig-336-    max_depth: usize = 0,
+--
+src/main.zig-687-        } else {
+src/main.zig-688-            if (!no_messages) std.debug.print("zgrep: could not run: {s}\n", .{argv.items[0]});
+src/main.zig-689-            ok = false;
+src/main.zig-690-        }
+src/main.zig-691-    }
+src/main.zig-692-    return ok;
+src/main.zig-693-}
+src/main.zig-694-
+src/main.zig:695:/// `-t py` / `--type-not py`: adds the registry's extensions to the include
+src/main.zig-696-/// or exclude lists. An unknown name is a usage error, like rg.
+src/main.zig-697-fn addType(opts: *Options, name: []const u8, include: bool) usage_error!void {
+src/main.zig-698-    const t = types.lookup(name) orelse {
+src/main.zig-699-        opts.fail = .{ .what = "unknown type name (see --type-list)", .arg = name };
+src/main.zig-700-        return error.Usage;
+src/main.zig-701-    };
+src/main.zig-702-    const list = if (include) &opts.type_include else &opts.type_exclude;
+src/main.zig-703-    const count = if (include) &opts.type_include_count else &opts.type_exclude_count;
+--
+src/main.zig-721-        'g', 'G' => 1024 * 1024 * 1024,
+src/main.zig-722-        't', 'T' => 1024 * 1024 * 1024 * 1024,
+src/main.zig-723-        else => 1,
+src/main.zig-724-    };
+src/main.zig-725-    if (mult != 1) v = v[0 .. v.len - 1];
+src/main.zig-726-    return (parseCount(v) orelse return null) *| mult;
+src/main.zig-727-}
+src/main.zig-728-
+src/main.zig:729:/// `-t`/`--type-not`: the registry's extensions become include/ext filters.
+src/main.zig-730-fn applyTypes(filter_engine: *filter.FilterEngine, opts: *const Options) void {
+src/main.zig-731-    for (opts.type_include[0..opts.type_include_count]) |t| {
+src/main.zig-732-        for (t.exts) |ext| filter_engine.addIncludedExts(ext) catch {};
+src/main.zig-733-    }
+src/main.zig-734-    for (opts.type_exclude[0..opts.type_exclude_count]) |t| {
+src/main.zig-735-        for (t.exts) |ext| filter_engine.addExcludedExts(ext) catch {};
+src/main.zig-736-    }
+src/main.zig-737-}
+--
+src/main.zig-2093-            .include_out = opts.cache_include_out,
+src/main.zig-2094-            .depth = opts.cache_depth,
+src/main.zig-2095-            .dry_run = opts.cache_dry_run,
+src/main.zig-2096-            .force = opts.cache_force,
+src/main.zig-2097-        });
+src/main.zig-2098-        return code;
+src/main.zig-2099-    }
+src/main.zig-2100-
+src/main.zig:2101:    // `--type-list` is an answer too: the registry, on stdout, exit 0.
+src/main.zig-2102-    if (opts.print_type_list) {
+src/main.zig-2103-        var buf: std.ArrayList(u8) = .empty;
+src/main.zig-2104-        defer buf.deinit(gpa);
+src/main.zig-2105-        types.writeList(&buf, gpa) catch {
+src/main.zig-2106-            std.debug.print("zgrep: out of memory\n", .{});
+src/main.zig-2107-            return 2;
+src/main.zig-2108-        };
+src/main.zig-2109-        _ = platform.writeStdout(init.io, buf.items);
+--
+src/types.zig:1://! Static type registry for `-t` / `--type-not` / `--type-list`.
+src/types.zig-2-//!
+src/types.zig:3://! Mirrors the rg registry in spirit (name -> extensions) with a curated
+src/types.zig-4-//! subset: enough for everyday source trees, not the 150 languages rg lists.
+src/types.zig-5-//! Unknown type names are a usage error, exactly like rg.
+src/types.zig-6-const std = @import("std");
+src/types.zig-7-const Allocator = std.mem.Allocator;
+src/types.zig-8-
+src/types.zig-9-pub const Type = struct {
+src/types.zig-10-    name: []const u8,
+src/types.zig-11-    exts: []const []const u8,
+src/types.zig-12-};
+src/types.zig-13-
+src/types.zig:14:pub const registry = [_]Type{
+src/types.zig-15-    .{ .name = "asm", .exts = &.{ ".s", ".S", ".asm" } },
+src/types.zig-16-    .{ .name = "bash", .exts = &.{".sh", ".bash", ".zsh"} },
+src/types.zig-17-    .{ .name = "c", .exts = &.{ ".c", ".h", ".H", ".hh", ".hpp", ".hxx" } },
+src/types.zig-18-    .{ .name = "clojure", .exts = &.{ ".clj", ".cljs", ".cljc", ".edn" } },
+src/types.zig-19-    .{ .name = "cmake", .exts = &.{".cmake"} },
+src/types.zig-20-    .{ .name = "cpp", .exts = &.{ ".cpp", ".cc", ".cxx", ".c++", ".hpp", ".hxx", ".hh", ".inl" } },
+src/types.zig-21-    .{ .name = "csharp", .exts = &.{ ".cs", ".csx" } },
+src/types.zig-22-    .{ .name = "css", .exts = &.{".css", ".scss", ".sass", ".less"} },
+--
+src/types.zig-59-    .{ .name = "vim", .exts = &.{".vim"} },
+src/types.zig-60-    .{ .name = "yaml", .exts = &.{ ".yaml", ".yml" } },
+src/types.zig-61-    .{ .name = "zig", .exts = &.{".zig", ".zon"} },
+src/types.zig-62-    .{ .name = "zsh", .exts = &.{".zsh", ".zshrc"} },
+src/types.zig-63-};
+src/types.zig-64-
+src/types.zig-65-/// Looks a type up by name (case-insensitive, like rg).
+src/types.zig-66-pub fn lookup(name: []const u8) ?Type {
+src/types.zig:67:    for (registry) |t| {
+src/types.zig-68-        if (std.ascii.eqlIgnoreCase(t.name, name)) return t;
+src/types.zig-69-    }
+src/types.zig-70-    return null;
+src/types.zig-71-}
+src/types.zig-72-
+src/types.zig-73-/// Appends `--type-list` to `buf`: one `name: ext1, ext2` per line.
+src/types.zig-74-pub fn writeList(buf: *std.ArrayList(u8), gpa: Allocator) Allocator.Error!void {
+src/types.zig:75:    for (registry) |t| {
+src/types.zig-76-        try buf.appendSlice(gpa, t.name);
+src/types.zig-77-        try buf.append(gpa, ':');
+src/types.zig-78-        for (t.exts, 0..) |ext, i| {
+src/types.zig-79-            if (i != 0) try buf.append(gpa, ',');
+src/types.zig-80-            try buf.append(gpa, ' ');
+src/types.zig-81-            try buf.appendSlice(gpa, ext);
+src/types.zig-82-        }
+src/types.zig-83-        try buf.append(gpa, '\n');
+--
+src/types.zig-96-    defer buf.deinit(std.testing.allocator);
+src/types.zig-97-    try writeList(&buf, std.testing.allocator);
+src/types.zig-98-    const out = buf.items;
+src/types.zig-99-    var count: usize = 0;
+src/types.zig-100-    var it = std.mem.splitScalar(u8, out, '\n');
+src/types.zig-101-    while (it.next()) |line| {
+src/types.zig-102-        if (line.len > 0) count += 1;
+src/types.zig-103-    }
+src/types.zig:104:    try std.testing.expectEqual(registry.len, count);
+src/types.zig-105-}

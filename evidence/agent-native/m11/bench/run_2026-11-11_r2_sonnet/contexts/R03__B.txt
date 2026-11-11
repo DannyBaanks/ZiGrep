@@ -1,0 +1,35 @@
+src/filter.zig-9-//!      --include-ext=EXT1,EXT2
+src/filter.zig-10-//!      --exclude=GLOB
+src/filter.zig-11-//!      --include=GLOB
+src/filter.zig-12-//!   4. Zero-cost fast filtering in raw dirent buffers before statx/openat.
+src/filter.zig-13-const std = @import("std");
+src/filter.zig-14-const Allocator = std.mem.Allocator;
+src/filter.zig-15-const vfs = @import("vfs.zig");
+src/filter.zig-16-
+src/filter.zig:17:pub const default_excluded_dirs = [_][]const u8{
+src/filter.zig-18-    ".git",
+src/filter.zig-19-    ".zig-cache",
+src/filter.zig-20-    "__pycache__",
+src/filter.zig-21-    "node_modules",
+src/filter.zig-22-    ".venv",
+src/filter.zig-23-    "venv",
+src/filter.zig-24-    "target",
+src/filter.zig-25-    ".cache",
+--
+src/filter.zig-246-    /// `--exclude-ext`), as in ripgrep, where `--no-ignore` keeps `-g` globs.
+src/filter.zig-247-    /// An early `return false` on `no_ignore` used to cancel all of them.
+src/filter.zig-248-    pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+src/filter.zig-249-        if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+src/filter.zig-250-            return true;
+src/filter.zig-251-        }
+src/filter.zig-252-
+src/filter.zig-253-        if (self.use_defaults) {
+src/filter.zig:254:            for (default_excluded_dirs) |d| {
+src/filter.zig-255-                if (std.mem.eql(u8, dir_name, d)) return true;
+src/filter.zig-256-            }
+src/filter.zig-257-        }
+src/filter.zig-258-
+src/filter.zig-259-        for (self.excluded_dirs.items) |ex| {
+src/filter.zig-260-            if (matchPattern(dir_name, ex)) return true;
+src/filter.zig-261-        }
+src/filter.zig-262-

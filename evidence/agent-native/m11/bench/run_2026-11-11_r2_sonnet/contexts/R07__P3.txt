@@ -1,0 +1,125 @@
+CONTEXT PACK `isResult`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `isResult` in fn:isResult
+  src/batch.zig:76-83  sha256:b94c96f947efc26c  relation: declaration (pattern match, heuristic)
+    76 | /// Eventos que son resultados (lo que un agente cuenta como "hallazgos").
+>   77 | fn isResult(line: []const u8) bool {
+    78 |     const rest = line[json_prefix.len..];
+    79 |     inline for (.{ "match", "occurrence", "file", "count" }) |t| {
+    80 |         if (std.mem.startsWith(u8, rest, "\"type\":\"" ++ t ++ "\"")) return true;
+    81 |     }
+    82 |     return false;
+    83 | }
+
+REFERENCES
+src/batch.zig in fn:event
+  [h2] line 311 `isResult`: unresolved (lexical_only; 1 declaration(s) named isResult; none is linked by checkable evidence)
+  src/batch.zig:304-348  sha256:b0a3ede042c1dae7
+   304 |     fn event(self: *Emitter, line: []const u8) Allocator.Error!void {
+   305 |         if (self.compact) return self.compactEvent(line);
+   306 |         if (!std.mem.startsWith(u8, line, json_prefix)) {
+   307 |             self.dropped_non_event += 1;
+   308 |             self.q_dropped += 1;
+   309 |             return;
+   310 |         }
+>  311 |         const result = isResult(line);
+   312 |         self.line_buf.clearRetainingCapacity();
+   313 |         try self.line_buf.appendSlice(self.gpa, json_prefix);
+   314 |         if (self.query_id) |id| {
+   315 |             try self.line_buf.appendSlice(self.gpa, "\"query_id\":");
+   316 |             try self.line_buf.appendSlice(self.gpa, id);
+   317 |             try self.line_buf.append(self.gpa, ',');
+   318 |         }
+   319 |         try self.line_buf.appendSlice(self.gpa, line[json_prefix.len..]);
+   320 |         try self.line_buf.append(self.gpa, '\n');
+   321 |         // Siempre: summary.output_tokens_est es un dato del contrato, no un
+   322 |         // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+   323 |         const est = estimateTokens(self.line_buf.items);
+   324 | 
+   325 |         if (self.reason == null) {
+   326 |             if (result) {
+   327 |                 if (self.max_results) |m| {
+   328 |                     if (self.returned >= m) self.reason = .max_results;
+   329 |                 }
+   330 |             }
+   331 |             if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
+   332 |         }
+   333 |         if (self.reason != null) {
+   334 |             self.spillEvent(self.line_buf.items);
+   335 |             if (result) {
+   336 |                 self.omitted += 1;
+   337 |                 self.q_omitted += 1;
+   338 |             }
+   339 |             return;
+   340 |         }
+   341 |         try self.staged.appendSlice(self.gpa, self.line_buf.items);
+   342 |         self.output_bytes += self.line_buf.items.len;
+   343 |         self.output_tokens_est += est;
+   344 |         if (result) {
+   345 |             self.returned += 1;
+   346 |             self.q_returned += 1;
+   347 |         }
+   348 |     }
+
+STRUCTURE
+src/batch.zig (637 lines, 38 declarations; '*' = contains a hit)
+       26-26    container Reason
+       28-33    fn reasonName
+       49-72    fn estimateTokens
+  *    77-83    fn isResult
+       85-93    container Lock
+       87-89      fn lock
+       90-92      fn unlock
+  *    95-466   container Emitter
+      145-152     fn deinit
+      154-163     fn spillWrite
+      168-195     fn spillOpen
+      197-201     fn spillQueryMarker
+      204-208     fn spillEvent
+      210-212     fn install
+      214-216     fn uninstall
+      218-224     fn sinkWrite
+      227-242     fn feed
+      244-247     fn overTokenBudget
+      249-302     fn compactEvent
+  *   304-348     fn event
+      350-355     fn flushStaged
+      358-364     fn drainCarry
+      366-382     fn beginQuery
+      385-408     fn endQuery
+      411-465     fn summary
+      468-472   fn appendInt
+      477-483   container Query
+      485-488   container ParseError
+      490-495   container RawQuery
+      499-499     fn parseQueries
+      499-540     fn parseQueries
+      544-556   test Emitter: añade query_id y cuenta resultados
+      558-566   test Emitter: una línea partida entre dos escrituras es un solo evento
+      568-579   test Emitter: --max-results corta, sigue contando lo omitido y no cuenta el contexto
+      581-592   test Emitter: --max-output-tokens nunca parte un evento
+      594-603   test estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII
+      605-612   test Emitter: lo que no es evento zgrep/1 no entra al stream
+      614-636   test parseQueries: ids string y entero, rechaza duplicados y campos desconocidos
+
+HISTORY
+[h1] src/batch.zig:77 last changed by 32dbbf3c5c 2026-11-11 "M3: lote (--queries-file) y presupuesto (--max-results, --max-output-tokens) con truncado explicito" (git blame)
+src/batch.zig: last commit 207ed95	2026-11-11	fix(M8): compilar en Windows (0600 es POSIX; alli permisos por defecto)
+
+UNCERTAINTY
+- 1 code reference(s) not linked to a declaration: h2
+- not analysed: aliases (const x = y.isResult), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 601 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 10

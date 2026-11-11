@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Suggests scan.zig is \"likely where the scanner uses it\", implying the field is consumed, whereas the reference says nothing reads it"
+ ],
+ "reason": "The answer correctly traces the plumbing (parse, Options, ScanConfig) but never concludes the flag is a no-op, and hedges toward it being used, so it misses the key point.",
+ "cost_usd": 0.006658
+}

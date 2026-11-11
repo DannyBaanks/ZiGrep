@@ -1,0 +1,18 @@
+{
+ "qid": "R26",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f98cadaaa45930a77286301a5e430412d73167202883ab47e1529efc9ba7ae2f",
+ "answer": "Yes, it appears so. `src/walk.zig:11` declares `pub const walk_max_depth = 512;`, and `walkOne` checks `if (depth > walk_max_depth) return error.TooDeep;` at `src/walk.zig:62`. That check is independent of the `max_depth: usize` parameter (`src/walk.zig:59`), so a hard cap of 512 applies regardless of whether a user-supplied max depth is set.\n\nCaveats:\n- The context only shows `walkOne`. I can't see how `depth` is incremented, how recursion is invoked, or how `max_depth` defaults when `--max-depth` is absent.\n- Only `src`, `README.md`, and `GUIA.md` were searched. The other 698 files weren't, so other uses of the constant are unknown.\n- The declaration match is heuristic, not parser-based.",
+ "usage": {
+  "cost_usd": 0.010052,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.95,
+ "headers": {}
+}

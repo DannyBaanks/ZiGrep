@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The list of accepted values is correct, but the answer says it cannot determine what utf-16 does with no BOM, whereas the reference says the BOM decides and it falls back to little-endian; it also leaves the meaning of auto, none and the other values unexplained.",
+ "cost_usd": 0.0064540000000000005
+}

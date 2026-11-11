@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Opens with \"Most likely yes\", which contradicts the reference's definite \"No\" about case-insensitive search"
+ ],
+ "reason": "The analysis (0xC3 in 0xC0..0xDE sets has_upper, so the search is case-sensitive) matches the reference, but the headline \"Most likely yes\" contradicts it and the answer hedges on the conclusion.",
+ "cost_usd": 0.00726
+}

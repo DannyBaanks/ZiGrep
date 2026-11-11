@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly locates estimateTokens in src/batch.zig and infers it is not plain bytes/4 and weights digits and non-ASCII, but it hedges and omits the formula (zgrep-classes-v1, weighted classes, scale, BPE calibration) and that it replaced bytes/4.",
+ "cost_usd": 0.007038
+}

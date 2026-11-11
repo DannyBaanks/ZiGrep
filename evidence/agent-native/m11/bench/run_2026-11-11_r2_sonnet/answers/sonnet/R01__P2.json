@@ -1,0 +1,18 @@
+{
+ "qid": "R01",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "baf840f337aa03806ca461f30d936c32c4726237819026f6516851068af24723",
+ "answer": "**Syntax supported:** `*` (any run of characters), `?` (single character), and a trailing `/`, which is stripped before matching (src/filter.zig:49, 52-54). The matcher's loop treats only `?`, `*`, and literal equality specially (src/filter.zig:61, 64).\n\n**Is `[abc]` a character class?** No. In the code shown, `[` is compared as an ordinary literal character, so `[abc]` would match only the literal text `[abc]` (src/filter.zig:61). Nothing handles brackets.\n\n**Caveats:**\n- The context shows `matchPattern` being used for excluded and included patterns (src/filter.zig:285-286, 306-309). It doesn't show the CLI parsing of `--exclude`/`--include`, so I can't confirm that every such flag goes through this function. `--include` extensions use `matchesExt`, which isn't shown (src/filter.zig:297-298).\n- Tests cover only `*`, `?`, and trailing `/` (src/filter.zig:322-327). None covers brackets.",
+ "usage": {
+  "cost_usd": 0.022436,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.61,
+ "headers": {}
+}

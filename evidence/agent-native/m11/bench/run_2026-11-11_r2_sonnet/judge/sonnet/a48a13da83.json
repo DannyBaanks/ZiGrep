@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Headline answer \"Probably yes\" and the statement that ignore_case is set to true because ñandú contains no uppercase letters contradict the reference, which says the search stays case-sensitive",
+  "Claims the byte check leaves has_upper false for ñandú; in fact the 0xC3 lead byte makes has_upper true"
+ ],
+ "reason": "The answer identified the correct mechanism (0xC3 lead byte falls in 0xC0..0xDE) but concluded 'probably yes' and hedged, whereas the reference definitively says no, the search stays case-sensitive.",
+ "cost_usd": 0.007906
+}

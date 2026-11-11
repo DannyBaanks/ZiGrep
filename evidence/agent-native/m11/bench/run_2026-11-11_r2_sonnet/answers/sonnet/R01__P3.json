@@ -1,0 +1,18 @@
+{
+ "qid": "R01",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "dc0e0358240d981ed573693bbe375819fe5bf744c65b80b1228138f095f089bc",
+ "answer": "**Supported syntax:** only `*` and `?`, plus a trailing `/` that is stripped.\n\n- The doc comment says the matcher \"supports * and ? and trailing /\" (src/filter.zig:49).\n- The code strips a trailing `/` (src/filter.zig:52-54). `?` matches any single character (src/filter.zig:61), and `*` matches any run of characters (src/filter.zig:64-67, 77-79).\n- Tests cover `*.zig`, `test_*.zig`, `target/`, and `file?.log` (src/filter.zig:322-327).\n\n**Is `[abc]` a character class?** No. The matcher has no `[` handling. Any character other than `?` or `*` is compared literally (`p[p_idx] == name[n_idx]`, src/filter.zig:61). So `[abc]` matches only the literal text `[abc]`.\n\n**Caveat:** the context shows `matchPattern` applied to excluded and included patterns (src/filter.zig:286, 309) and in `preApplies` (src/main.zig:790). It doesn't show how `--exclude`/`--include` flags are parsed, so I can't confirm the CLI doesn't preprocess them before they reach the matcher. README and GUIA hits for this topic are absent.",
+ "usage": {
+  "cost_usd": 0.025654,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.83,
+ "headers": {}
+}

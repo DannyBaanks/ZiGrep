@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Strings/integers, unknown fields rejected, duplicate ids rejected, blank lines ignored and no half-run all match the reference, but the answer hedges that it is unclear whether other id types are accepted and does not say ids must be non-negative integers.",
+ "cost_usd": 0.0068639999999999994
+}

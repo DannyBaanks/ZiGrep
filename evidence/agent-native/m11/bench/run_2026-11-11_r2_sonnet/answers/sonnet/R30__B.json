@@ -1,0 +1,18 @@
+{
+ "qid": "R30",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f4d40a5838bf6a762d962839271090508b435ae099143ec596251831d55188ca",
+ "answer": "The context doesn't answer this. It contains no measurements of peak RSS or timing for a 4 GB file on NVMe, and no benchmarks from README.md or GUIA.md (the matches shown are only in src/scan.zig).\n\nWhat it does show:\n- `mmap_threshold` is defined as 256 KiB (src/scan.zig:157).\n- Files at or above that size are searched through a read-only memory map (src/scan.zig:910-917), while smaller files are read into an allocated buffer (src/scan.zig:1143-1149).\n\nBecause the 4 GB file would be memory-mapped, resident memory would depend on page cache behavior. The context gives no figure for it, though.\n\nTo answer, I'd need benchmark or performance sections from README.md or GUIA.md, or actual measurements, for example from running `/usr/bin/time -v zgrep ... bigfile`.",
+ "usage": {
+  "cost_usd": 0.011460000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.11,
+ "headers": {}
+}

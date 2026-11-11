@@ -1,0 +1,18 @@
+{
+ "qid": "R12",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ceb7008edc49dbf2a7056b233b8e210b024ba332ab3360b58deb0a6f8e5ac199",
+ "answer": "The context only partly answers this, and only for the one helper function it contains.\n\n**Trailing `\\r` printed?** With `--crlf` on, the visible line end excludes the `\\r`. `visibleLineEnd` returns `e - 1` when `crlf` is set, the line is non-empty (`e > from`), and `data[e - 1] == '\\r'` (src/scan.zig:247). The doc comment says the same: the visible end is the `\\n` position \"minus the `\\r` when `--crlf` is on\" (src/scan.zig:242-243). So the `\\r` is not part of the visible line. That suggests it isn't printed, but the printing code isn't in the context.\n\n**One terminator or two?** Callers \"must still advance with the RAW end (the byte after `\\n`)\" (src/scan.zig:244). So `\\r\\n` is consumed as a single line terminator. The `\\r` is trimmed only from the visible end, and the line advance is based on `\\n`. A lone `\\r` is not treated as a terminator (src/scan.zig:246).\n\n**Missing:** the callers and the output/printing code, which would confirm the behavior end to end.",
+ "usage": {
+  "cost_usd": 0.010853999999999999,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.0,
+ "headers": {}
+}

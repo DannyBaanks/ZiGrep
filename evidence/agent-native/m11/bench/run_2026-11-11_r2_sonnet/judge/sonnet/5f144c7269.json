@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "States that the option means/does \"stop once a non-matching line follows a match\" as if implemented, and suggests the stopping logic is probably elsewhere in scan.zig, whereas the reference says nothing reads the field and it has no effect"
+ ],
+ "reason": "The answer correctly traces parsing and copying into ScanConfig and notes no reader was found, but it fails to conclude the flag is a no-op and speculates that the logic probably exists elsewhere.",
+ "cost_usd": 0.007214
+}

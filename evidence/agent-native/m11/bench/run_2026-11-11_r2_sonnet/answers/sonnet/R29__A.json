@@ -1,0 +1,18 @@
+{
+ "qid": "R29",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "1bff9f913264734c1787b0e7c7422d523f7ed17e28ec4d714f7cfb07ae2d2f9a",
+ "answer": "The context doesn't answer this. It shows only that `src/types.zig` defines a static type registry mapping type names to extensions (src/types.zig:1-3, src/types.zig:14), and that `-t` turns the registry's extensions into include/ext filters (src/main.zig:695, src/main.zig:729).\n\nThat suggests `-t` filters by extension, which would not match a file named exactly `Dockerfile`, since it has no extension. But the actual contents of the registry entries are not shown. I can't see whether a `docker` type exists, or whether the registry supports exact filenames or globs.\n\nTo answer definitively, I'd need the body of `registry` in `src/types.zig` (lines 14–66) and the filter logic around `src/main.zig:695-729`.",
+ "usage": {
+  "cost_usd": 0.006994,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.79,
+ "headers": {}
+}

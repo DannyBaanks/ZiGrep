@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states the information is unavailable and notes mmap_threshold is 256 KiB in src/scan.zig, consistent with the reference; it does not invent figures.",
+ "cost_usd": 0.006008
+}

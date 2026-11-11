@@ -1,0 +1,18 @@
+{
+ "qid": "R10",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f55d5d3f1e2566edb1081aa767d5a8f6bc7bba9ca14fdfc4a890858356a66ae4",
+ "answer": "**Accepted values:** `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, and `latin1` (src/scan.zig:107-114). Anything else makes `parseEncoding` return `null` (src/scan.zig:115). Callers then fall back to `.auto` (src/main.zig:2285, 2433, 2608), so an unrecognized name is silently treated as `auto`, at least in the shown call sites.\n\n**What `--encoding=utf-16` does with a BOM-less file:** the context doesn't say. It only shows that the string `\"utf-16\"` maps to the `.utf16` enum variant (src/scan.zig:111). The code that interprets `.utf16` (BOM detection, defaulting to LE/BE, or any fallback) isn't in the results. To answer, I'd need the scan/decoding code that handles `Encoding.utf16`, likely elsewhere in src/scan.zig, plus any README/GUIA text on `--encoding`. The search covered only the identifier `parseEncoding`.",
+ "usage": {
+  "cost_usd": 0.019164,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.7,
+ "headers": {}
+}

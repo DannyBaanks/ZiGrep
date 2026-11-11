@@ -1,0 +1,18 @@
+{
+ "qid": "R21",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a8e40188d4207e8b523faa96a8c338d5b3e72b105c4000d67b2f8a37f5b9a278",
+ "answer": "In zgrep, `--color=auto` is effectively the same as `never`; it does not do TTY detection.\n\n- The `ColorMode` enum has three values, `never`, `always`, and `auto` (src/main.zig:237).\n- The doc comment says `auto` is \"deliberately folded to `never`\", because deciding it properly would need `isatty(stdout)`, which \"is not worth the flag\" (src/main.zig:235-236).\n- The `Options.color` field comment says \"auto degrades to never off a TTY\" (src/main.zig:307). That wording suggests color might still apply on a TTY, but the declaration comment contradicts it.\n\nThe context doesn't include the argument-parsing code that handles `--color=auto`, so I can't confirm the folding there. The README and GUIA.md showed no hits, so there is no documentation to check against.",
+ "usage": {
+  "cost_usd": 0.0165,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.65,
+ "headers": {}
+}

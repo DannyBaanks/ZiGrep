@@ -1,0 +1,18 @@
+{
+ "qid": "R29",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ffc8c336373ea4b9f6f62b0f3fa24d99752d5210d3baaa9a9255764c3dd84cd4",
+ "answer": "The context doesn't answer this definitively.\n\nWhat it shows:\n- `-t` filters work by extension: the registry maps type names to extensions, and `applyTypes` feeds each `t.exts` into `addIncludedExts` (src/main.zig:729-733; src/types.zig:3, \"name -> extensions\").\n- An unknown type name is a usage error (src/main.zig:696-700).\n\nWhat's missing:\n- The actual contents of `registry` (src/types.zig:14 onward). The pack shows only the declaration line, so I can't tell whether a `docker` type exists or what it lists.\n- How `FilterEngine.addIncludedExts` matches names. It might match exact filenames like `Dockerfile`, which has no extension, but that code isn't shown.\n\nSince filtering is extension-based, a file named exactly `Dockerfile` would plausibly not match. Verifying that would require the `registry` entries and the `filter` module, neither of which is in this context.",
+ "usage": {
+  "cost_usd": 0.023544000000000002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.46,
+ "headers": {}
+}

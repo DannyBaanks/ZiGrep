@@ -1,0 +1,18 @@
+{
+ "qid": "R05",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9f5ce29dd7e31dbe94b79106c0d6104febb3333f04d0d1751cb7821470c20349",
+ "answer": "The context only shows where `parseQueries` is defined and used, not its body, so it can't answer most of this.\n\nWhat it does show:\n- `parseQueries(arena, text, err_out)` returns `error{ Invalid, OutOfMemory }![]Query` (src/batch.zig:499).\n- A test is named \"parseQueries: ids string y entero, rechaza duplicados y campos desconocidos\" (src/batch.zig:614). That suggests ids may be strings or integers, and that duplicate ids and unknown fields are rejected with `error.Invalid`. Two `expectError(error.Invalid, ...)` calls are at src/batch.zig:628 and 633, but their inputs aren't shown, so I can't confirm which case each covers.\n- The caller in src/main.zig:1914 handles errors from `parseQueries` with a `catch |e| switch (e)`.\n\nNot answerable from this context:\n- Blank-line handling.\n- Whether a bad line aborts before any query runs or leaves the batch half-run. The parse happens as a separate call returning the whole `[]Query` (src/batch.zig:499), which hints at parse-then-run, but the execution code isn't shown.\n\nTo answer fully, I'd need the body of `parseQueries` (src/batch.zig:499–613), the test body (614–640), the error handling after src/main.zig:1914, and any README/GUIA description of `--queries-file`.",
+ "usage": {
+  "cost_usd": 0.009126,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.39,
+ "headers": {}
+}

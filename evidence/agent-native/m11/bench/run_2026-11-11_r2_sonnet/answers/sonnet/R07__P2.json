@@ -1,0 +1,18 @@
+{
+ "qid": "R07",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "5e6761d4f35516cd04026b0e55fd2698a595f518b4f04522a404426d944f0e3e",
+ "answer": "**Result event types:** `isResult` treats an event as a result if its JSON line starts with type `match`, `occurrence`, `file`, or `count` (src/batch.zig:76-83, specifically the list at line 79). Any other event type is not a result.\n\n**Context lines:** The context doesn't say. The list at src/batch.zig:79 doesn't include a \"context\" type, so if context lines are emitted as a separate event type, they would not be counted by `isResult`. However, I can't confirm what type name context lines use, or whether they're emitted separately at all, from this excerpt.\n\n**How the limit works:** Only result events increment `returned` (src/batch.zig:344-347). Once `returned >= max_results`, the reason is set to `.max_results` (src/batch.zig:326-329). After that, later events are spilled, and result events are counted as omitted (src/batch.zig:333-338). Non-result events are not counted toward the limit, though they are also dropped once the limit has been reached.\n\n**Missing:** the `--max-results` flag's documentation (README/GUIA) and the event type definitions for context lines.",
+ "usage": {
+  "cost_usd": 0.013566000000000002,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.98,
+ "headers": {}
+}

@@ -1,0 +1,6 @@
+src/batch.zig:499:pub fn parseQueries(arena: Allocator, text: []const u8, err_out: *ParseError) error{ Invalid, OutOfMemory }![]Query {
+src/batch.zig:614:test "parseQueries: ids string y entero, rechaza duplicados y campos desconocidos" {
+src/batch.zig:618:    const ok = try parseQueries(arena.allocator(),
+src/batch.zig:628:    try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+src/batch.zig:633:    try std.testing.expectError(error.Invalid, parseQueries(arena.allocator(),
+src/main.zig:1914:    const queries = batch.parseQueries(arena, text, &perr) catch |e| switch (e) {

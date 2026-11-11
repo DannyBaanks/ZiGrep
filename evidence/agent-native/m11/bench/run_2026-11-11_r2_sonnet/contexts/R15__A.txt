@@ -1,0 +1,2 @@
+src/regex.zig:659:const max_states = 3000;
+src/regex.zig:810:        if (self.states.items.len >= max_states) {

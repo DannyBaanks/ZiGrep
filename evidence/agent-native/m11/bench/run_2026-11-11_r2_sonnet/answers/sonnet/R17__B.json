@@ -1,0 +1,18 @@
+{
+ "qid": "R17",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "65af1a812cfb5af7d548c1fd3d54d279d61e556f154b3912df488c21acf58e67",
+ "answer": "zgrep probes **up to 4 regular files**, in the **root directory**, on the **main thread** before the thread pool is created (src/kamikaze.zig:743-745). If a match is found right away, it returns true without spawning any threads (src/kamikaze.zig:745-746).\n\nThe probe runs per root. A wrapper loops over `roots` and calls `tryQuickQuietProbe` on each one. On a hit, it sets `stats.early_aborted = true` and returns true (src/kamikaze.zig:814-818). So with multiple roots, the limit applies to each root separately.\n\nThe context doesn't show the body of `tryQuickQuietProbe`, so I can't confirm the 4-file limit in code. That figure comes from the doc comment only.",
+ "usage": {
+  "cost_usd": 0.00932,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.0,
+ "headers": {}
+}

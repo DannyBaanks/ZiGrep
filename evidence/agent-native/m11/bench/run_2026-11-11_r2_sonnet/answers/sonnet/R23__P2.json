@@ -1,0 +1,18 @@
+{
+ "qid": "R23",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "65eda5fda1f6dde87774e59278d34d8e55f98ebfaf7a7c15668e64d4560b739b",
+ "answer": "In `runSearch`, zgrep forces `opts.sort = true` in four cases when `--sort` wasn't passed:\n\n- **`--exec`** (`opts.exec_cmd != null`): it needs to know which files matched, which only the ordered path keeps (src/main.zig:2186-2190).\n- **`--heading`**: the streaming path would interleave per-file groups, so headers could point at the wrong cluster (src/main.zig:2191-2195).\n- **`--pre`** (`opts.pre_cmd != null`): it runs per file and needs the ordered path (src/main.zig:2196-2197).\n- **Several explicit file operands, all regular files**: they are answered in argument order (src/main.zig:2357-2362).\n\nAliases: `--deterministic` is equivalent to `--sort` (src/main.zig:968-969). Conversely, `-k`/`--kamikaze` sets `sort = false` (src/main.zig:944-946, 1606-1608).\n\nNot shown: whether other code paths (e.g. `--queries-file` batch) set it. The batch runner passes `--sort` explicitly (src/main.zig:1925).",
+ "usage": {
+  "cost_usd": 0.054397999999999995,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.67,
+ "headers": {}
+}

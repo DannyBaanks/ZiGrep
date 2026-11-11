@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Units, case-insensitivity, optional '+', and powers of 1024 match the reference, but the answer does not give the default (0 = unlimited) and says it cannot determine it, and it leaves unsuffixed-as-bytes unconfirmed.",
+ "cost_usd": 0.0061719999999999995
+}

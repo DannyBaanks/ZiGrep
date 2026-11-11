@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer says \\b is supported and the header comment is stale, citing the same error message and help text as the reference; the caveat about not seeing the matching code does not contradict it.",
+ "cost_usd": 0.006028
+}

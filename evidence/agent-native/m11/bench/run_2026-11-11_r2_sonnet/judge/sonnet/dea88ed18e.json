@@ -1,0 +1,8 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "States deeper files are scanned with the trampoline flag, implying files are searched; reference says nothing is searched because shouldRecurseSubdirs always returns false due to the ceiling."
+ ],
+ "reason": "It correctly derives both flags and the depth-0 skip, but does not reach the definite conclusion that nothing is searched, and implies deeper files are scanned.",
+ "cost_usd": 0.0070940000000000005
+}

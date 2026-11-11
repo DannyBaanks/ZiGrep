@@ -1,0 +1,18 @@
+{
+ "qid": "R13",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f5315d3a096e925b564a5497914dc502e59a540ee8c47b9065c7d9c13a81e8c3",
+ "answer": "The context does not contain enough to answer definitively.\n\nWhat it shows:\n- `src/regex.zig` has `icase` handling at lines 74 and 277 (inside the regex engine), and `litByte` at line 509 uses `std.ascii.toLower` for icase, which is ASCII-only (src/regex.zig:509).\n- Fixed-string icase has Latin-1 tests: `ñandú` and `ÁRBOL` built with `.fixed = true` (src/search.zig:583, 585). That's the fixed path, not regex.\n- Regex icase tests only use ASCII (src/regex.zig:1148, 1150).\n\nWhat is missing:\n- The bodies of regex.zig:74 and :277, which show how case folding is done for sets/literals, and whether non-ASCII bytes/codepoints get folded.\n- The README text itself (no README.md lines matched `icase`), so I can't verify what it claims.\n- Any regex test with `Ñ`/`ñ`, or how `.` handles multibyte UTF-8.\n\nSo I can't say whether `ñand.` matches `ÑANDÚ`, or whether the README claim holds for regex. The only hint is ASCII-only lowering at src/regex.zig:509, which suggests possible doubt, but that is just one helper.",
+ "usage": {
+  "cost_usd": 0.012046,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.28,
+ "headers": {}
+}

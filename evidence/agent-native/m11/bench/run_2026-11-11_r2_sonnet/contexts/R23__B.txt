@@ -1,0 +1,454 @@
+src/kamikaze.zig-713-            searcher,
+src/kamikaze.zig-714-            full_path,
+src/kamikaze.zig-715-            show_path,
+src/kamikaze.zig-716-            mode,
+src/kamikaze.zig-717-            binary,
+src/kamikaze.zig-718-            scan_config,
+src/kamikaze.zig-719-            &local_out,
+src/kamikaze.zig-720-            scratch,
+src/kamikaze.zig:721:            null, // el camino ordenado (`--sort`) no tiene muestra de motor
+src/kamikaze.zig-722-        );
+src/kamikaze.zig-723-        if (context_mode and !scan_config.json) scan.insertGroupSeparator(&local_out, gpa, before_len);
+src/kamikaze.zig-724-
+src/kamikaze.zig-725-        stats.files_scanned += 1;
+src/kamikaze.zig-726-        stats.bytes_scanned += res.bytes;
+src/kamikaze.zig-727-        const is_hit = if (mode == .files_without_match) !res.matched else res.matched;
+src/kamikaze.zig-728-        if (is_hit) {
+src/kamikaze.zig-729-            stats.matched_files += 1;
+--
+src/main.zig-180-    \\                    also consider zig-out (DANGER: installs live there)
+src/main.zig-181-    \\      --cache-no-global
+src/main.zig-182-    \\                    do not include ~/.cache/zig
+src/main.zig-183-    \\      --binary-files=TYPE
+src/main.zig-184-    \\                    text | without-match (zgrep never prints binary
+src/main.zig-185-    \\                    content, so 'binary' is rejected, not faked)
+src/main.zig-186-    \\  -k, --kamikaze, --dataflow
+src/main.zig-187-    \\                    streaming dataflow with concurrent kamikaze swarm (default)
+src/main.zig:188:    \\      --sort, --deterministic
+src/main.zig-189-    \\                    emit results in deterministic order by path (disables streaming)
+src/main.zig-190-    \\  -N, --nav, --befunge SPEC
+src/main.zig-191-    \\                    Befunge 2D vector navigation (^, v, >, <, u, d, r, l)
+src/main.zig-192-    \\                    combos: v^ / du (ceiling maxdepth 1), ^v / ud (trampoline root skip)
+src/main.zig-193-    \\      --exclude-dir=DIR
+src/main.zig-194-    \\                    skip directory matching DIR (comma-separated or globs)
+src/main.zig-195-    \\      --exclude-ext=EXT
+src/main.zig-196-    \\                    skip file extensions (e.g. log,tmp,lock)
+--
+src/main.zig-247-pub const Options = struct {
+src/main.zig-248-    mode: Mode = .lines,
+src/main.zig-249-    algo: Algo = .auto,
+src/main.zig-250-    threads: usize = 0, // 0 = auto (use the CPU count)
+src/main.zig-251-    show_path: ?bool = null,
+src/main.zig-252-    show_stats: bool = false,
+src/main.zig-253-    binary: bool = false,
+src/main.zig-254-    kamikaze: bool = true,
+src/main.zig:255:    sort: bool = false,
+src/main.zig-256-    use_uring: bool = false,
+src/main.zig-257-    /// `sync` | `uring` | `auto` (default `auto`). `--uring` sigue siendo un
+src/main.zig-258-    /// alias exacto de `uring`. `auto` arranca en el enjambre síncrono y
+src/main.zig-259-    /// promociona a io_uring si la sonda ve el árbol frío; `sync` reproduce
+src/main.zig-260-    /// el comportamiento anterior byte a byte.
+src/main.zig-261-    io_engine_mode: io_engine.Mode = .auto,
+src/main.zig-262-    invert_match: bool = false,
+src/main.zig-263-    max_count: ?usize = null,
+--
+src/main.zig-938-                i += 1;
+src/main.zig-939-                if (i >= args.len) {
+src/main.zig-940-                    opts.fail = .{ .what = "option requires an argument", .arg = a };
+src/main.zig-941-                    return error.Usage;
+src/main.zig-942-                }
+src/main.zig-943-                opts.threads = try parseThreadCount(opts, args[i], "bad value for --threads");
+src/main.zig-944-            } else if (std.mem.eql(u8, body, "kamikaze") or std.mem.eql(u8, body, "dataflow")) {
+src/main.zig-945-                opts.kamikaze = true;
+src/main.zig:946:                opts.sort = false;
+src/main.zig-947-            } else if (std.mem.eql(u8, body, "uring") or std.mem.eql(u8, body, "io-uring")) {
+src/main.zig-948-                opts.use_uring = true;
+src/main.zig-949-                opts.io_engine_mode = .uring;
+src/main.zig-950-            } else if (std.mem.startsWith(u8, a, "--io-engine=")) {
+src/main.zig-951-                const value = a["--io-engine=".len..];
+src/main.zig-952-                if (std.mem.eql(u8, value, "sync")) {
+src/main.zig-953-                    opts.use_uring = false;
+src/main.zig-954-                    opts.io_engine_mode = .sync;
+--
+src/main.zig-960-                    opts.io_engine_mode = .auto;
+src/main.zig-961-                } else {
+src/main.zig-962-                    opts.fail = .{
+src/main.zig-963-                        .what = "bad value for --io-engine (expected auto|sync|uring)",
+src/main.zig-964-                        .arg = value,
+src/main.zig-965-                    };
+src/main.zig-966-                    return error.Usage;
+src/main.zig-967-                }
+src/main.zig:968:            } else if (std.mem.eql(u8, body, "sort") or std.mem.eql(u8, body, "deterministic")) {
+src/main.zig:969:                opts.sort = true;
+src/main.zig-970-                opts.kamikaze = false;
+src/main.zig-971-            } else if (std.mem.startsWith(u8, body, "nav=") or std.mem.startsWith(u8, body, "befunge=")) {
+src/main.zig-972-                const spec = if (std.mem.startsWith(u8, body, "nav="))
+src/main.zig-973-                    body["nav=".len..]
+src/main.zig-974-                else
+src/main.zig-975-                    body["befunge=".len..];
+src/main.zig-976-                opts.nav_plan = nav.NavPlan.parse(spec) catch {
+src/main.zig-977-                    opts.fail = .{ .what = "invalid Befunge navigation spec (use ^, v, >, <, u, d, r, l)", .arg = spec };
+--
+src/main.zig-1600-                    opts.nav_plan = nav.NavPlan.parse(value) catch {
+src/main.zig-1601-                        opts.fail = .{ .what = "invalid Befunge navigation spec", .arg = value };
+src/main.zig-1602-                        return error.Usage;
+src/main.zig-1603-                    };
+src/main.zig-1604-                    ci = chars.len;
+src/main.zig-1605-                },
+src/main.zig-1606-                'k' => {
+src/main.zig-1607-                    opts.kamikaze = true;
+src/main.zig:1608:                    opts.sort = false;
+src/main.zig-1609-                },
+src/main.zig-1610-                'c' => opts.mode = .count,
+src/main.zig-1611-                'l' => opts.mode = .files,
+src/main.zig-1612-                'L' => opts.mode = .files_without_match,
+src/main.zig-1613-                'q' => opts.mode = .quiet,
+src/main.zig-1614-                'H' => opts.show_path = true,
+src/main.zig-1615-                'h' => opts.show_path = false,
+src/main.zig-1616-                'a' => opts.binary = true,
+--
+src/main.zig-1884-    if (vo.queries_file != null) return "--queries-file cannot nest";
+src/main.zig-1885-    if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
+src/main.zig-1886-    if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
+src/main.zig-1887-    if (vo.max_columns != null) return "--max-columns is per call: put it on the command line, not in \"flags\"";
+src/main.zig-1888-    return null;
+src/main.zig-1889-}
+src/main.zig-1890-
+src/main.zig-1891-/// `--queries-file FILE|-`: every JSONL query runs in THIS process, in file
+src/main.zig:1892:/// order, as `zgrep --json --sort <global flags> <query flags> -e PATTERN -- PATHS`.
+src/main.zig-1893-/// Each event carries `query_id`; each query ends with `query_end`; the stream
+src/main.zig-1894-/// ends with `summary`. Exit status: 2 if any query failed, else 0 if any
+src/main.zig:1895:/// matched, else 1. `--sort` makes the batch deterministic, so it is
+src/main.zig-1896-/// byte-comparable with N separate invocations (`batch_conformance.py`).
+src/main.zig-1897-fn runBatch(
+src/main.zig-1898-    init: std.process.Init,
+src/main.zig-1899-    arena: Allocator,
+src/main.zig-1900-    args: []const [:0]const u8,
+src/main.zig-1901-    global_operands: []const [:0]const u8,
+src/main.zig-1902-    queries_path: []const u8,
+src/main.zig-1903-    gopts: *const Options,
+--
+src/main.zig-1917-            return 2;
+src/main.zig-1918-        },
+src/main.zig-1919-        error.OutOfMemory => return e,
+src/main.zig-1920-    };
+src/main.zig-1921-
+src/main.zig-1922-    // The global part of every query's argv: the command line minus
+src/main.zig-1923-    // --queries-file, the default paths and a `--` (re-added before the paths).
+src/main.zig-1924-    var base: std.ArrayList([:0]const u8) = .empty;
+src/main.zig:1925:    try base.appendSlice(arena, &.{ args[0], "--json", "--sort" });
+src/main.zig-1926-    {
+src/main.zig-1927-        var i: usize = 1;
+src/main.zig-1928-        while (i < args.len) : (i += 1) {
+src/main.zig-1929-            const a = args[i];
+src/main.zig-1930-            // Batch-level options belong to the call, not to each query.
+src/main.zig-1931-            var skip_value = false;
+src/main.zig-1932-            var skip_self = false;
+src/main.zig-1933-            if (std.mem.eql(u8, a, "--spill") or std.mem.startsWith(u8, a, "--spill=")) continue;
+--
+src/main.zig-2182-        v
+src/main.zig-2183-    else
+src/main.zig-2184-        !(operands.len == 1 and isRegularFile(init.io, operands[0]));
+src/main.zig-2185-
+src/main.zig-2186-    // `--exec` needs to know WHICH files matched, which only the ordered
+src/main.zig-2187-    // path keeps; the streaming pipeline reports a single boolean. For v1 the
+src/main.zig-2188-    // exec therefore runs on the sorted path, after the scan. This changes
+src/main.zig-2189-    // nothing about the bytes read, only the order the commands run in.
+src/main.zig:2190:    if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+src/main.zig-2191-    // `--heading` groups by file, and the streaming path emits in completion
+src/main.zig-2192-    // order: two files' groups would interleave and a header would point at
+src/main.zig:2193:    // the wrong cluster. rg keeps the argument order, which is what --sort
+src/main.zig-2194-    // reproduces.
+src/main.zig:2195:    if (opts.heading and !opts.sort) opts.sort = true;
+src/main.zig-2196-    // --pre also runs per file, so it needs the ordered path.
+src/main.zig:2197:    if (opts.pre_cmd != null and !opts.sort) opts.sort = true;
+src/main.zig-2198-    // find -exec has no normal output. The quiet early-exits below are what
+src/main.zig-2199-    // make `-q` fast, but they would stop the scan at the FIRST match and the
+src/main.zig-2200-    // command would never reach the other files, so they stay off with --exec.
+src/main.zig-2201-    if (opts.exec_cmd != null) opts.mode = .quiet;
+src/main.zig-2202-
+src/main.zig-2203-    const t0 = nowMonotonicNs(init.io);
+src/main.zig-2204-
+src/main.zig-2205-    // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+--
+src/main.zig-2353-        if (info.kind != .directory and info.kind != .file) continue;
+src/main.zig-2354-        if (info.kind != .file) all_files = false;
+src/main.zig-2355-        try valid_operands.append(arena, op);
+src/main.zig-2356-    }
+src/main.zig-2357-    // Several explicit FILES are answered in argument order, like GNU grep
+src/main.zig-2358-    // (and like rg in practice). The streaming swarm pops its work LIFO, so
+src/main.zig-2359-    // `zgrep pat a b c` used to print c, b, a: an agent that zips the output
+src/main.zig-2360-    // with its own argument list got it backwards. Directories keep the
+src/main.zig:2361:    // streaming path (rg does not promise an order there either; --sort does).
+src/main.zig:2362:    if (valid_operands.items.len > 1 and all_files) opts.sort = true;
+src/main.zig-2363-
+src/main.zig-2364-    if (valid_operands.items.len == 0 and had_error) {
+src/main.zig-2365-        return 2;
+src/main.zig-2366-    }
+src/main.zig-2367-
+src/main.zig-2368-    // rg prints the header only with more than one input: with a single
+src/main.zig-2369-    // file it would waste a line. The rule is about the FILES, not about the
+src/main.zig-2370-    // operands: `zgrep --heading pat dir/` prints the header even when the
+src/main.zig-2371-    // directory holds one file, because that is what rg does. The file list
+src/main.zig-2372-    // is only known on the ordered path, and `--heading` forces it.
+src/main.zig-2373-    // Output separator is per-run, not per-line.
+src/main.zig-2374-    scan.out_sep = if (opts.null_data) 0 else '\n';
+src/main.zig-2375-
+src/main.zig-2376-    // --- Kamikaze Scout & Streaming Dataflow Path (Default) ----------------
+src/main.zig:2377:    if (!opts.sort) {
+src/main.zig-2378-        var k_stats: kamikaze.KamikazeStats = .{};
+src/main.zig-2379-    var engine_state: io_engine.State = .{};
+src/main.zig-2380-        var filter_engine = filter.FilterEngine.init(gpa);
+src/main.zig-2381-        defer filter_engine.deinit();
+src/main.zig-2382-
+src/main.zig-2383-        filter_engine.no_ignore = opts.no_ignore;
+src/main.zig-2384-        filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
+src/main.zig-2385-        filter_engine.skip_hidden = opts.skip_hidden;
+--
+src/main.zig-2397-            try filter_engine.addExcludedPattern(p);
+src/main.zig-2398-        }
+src/main.zig-2399-        for (opts.include_patterns[0..opts.include_patterns_count]) |p| {
+src/main.zig-2400-            try filter_engine.addIncludedPattern(p);
+src/main.zig-2401-        }
+src/main.zig-2402-        applyTypes(&filter_engine, &opts);
+src/main.zig-2403-        // `--exclude-from` has to be loaded on THIS path too: the ordered path
+src/main.zig-2404-        // did it and the streaming one did not, so the globs were silently
+src/main.zig:2405:        // ignored unless `--sort` was passed.
+src/main.zig-2406-        loadExcludeFrom(init.io, arena, &filter_engine, &opts);
+src/main.zig-2407-
+src/main.zig-2408-        // The upward `.dataignore` / `.gitignore` walk is *not* done here: the
+src/main.zig-2409-        // pipeline defers it until it knows the tree is too big for the
+src/main.zig-2410-        // zero-thread micro-tree fast path.
+src/main.zig-2411-
+src/main.zig-2412-        const scan_cfg = scan.ScanConfig{
+src/main.zig-2413-            .invert = opts.invert_match,
+--
+src/main.zig-2980-        try std.testing.expect(o.no_default_ignore);
+src/main.zig-2981-        try std.testing.expectEqual(@as(usize, 1), o.exclude_exts_count);
+src/main.zig-2982-        try std.testing.expectEqualStrings("log,tmp", o.exclude_exts[0]);
+src/main.zig-2983-        try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);
+src/main.zig-2984-        try std.testing.expectEqualStrings("zig", o.include_exts[0]);
+src/main.zig-2985-    }
+src/main.zig-2986-    {
+src/main.zig-2987-        var o: Options = .{};
+src/main.zig:2988:        const a = [_][:0]const u8{ "zgrep", "--sort", "pat", "dir" };
+src/main.zig-2989-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:2990:        try std.testing.expect(o.sort);
+src/main.zig-2991-        try std.testing.expect(!o.kamikaze);
+src/main.zig-2992-    }
+src/main.zig-2993-    {
+src/main.zig-2994-        var o: Options = .{};
+src/main.zig-2995-        const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+src/main.zig-2996-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-2997-        try std.testing.expect(o.nav_plan.has_trampoline);
+src/main.zig-2998-        try std.testing.expect(!o.nav_plan.has_ceiling);
+--
+src/main.zig-3003-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3004-        try std.testing.expect(o.nav_plan.has_ceiling);
+src/main.zig-3005-        try std.testing.expect(!o.nav_plan.has_trampoline);
+src/main.zig-3006-    }
+src/main.zig-3007-    {
+src/main.zig-3008-        var o: Options = .{};
+src/main.zig-3009-        const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+src/main.zig-3010-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:3011:        try std.testing.expect(o.sort);
+src/main.zig-3012-        try std.testing.expect(!o.kamikaze);
+src/main.zig-3013-    }
+src/main.zig-3014-}
+src/main.zig-3015-
+src/main.zig-3016-test "expandExecArgv: {} substitution and find -exec appending" {
+src/main.zig-3017-    const gpa = std.testing.allocator;
+src/main.zig-3018-    {
+src/main.zig-3019-        const argv = expandExecArgv(gpa, "echo {}", "a.txt");
+--
+src/main.zig-3312-        var o: Options = .{};
+src/main.zig-3313-        const a = [_][:0]const u8{ "zgrep", "--json", "--max-columns" };
+src/main.zig-3314-        try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
+src/main.zig-3315-    }
+src/main.zig-3316-    // En lote es de la llamada: una consulta no puede pedirla en "flags".
+src/main.zig-3317-    // (El argv de una consulta es el de la llamada + "-e PATTERN" + "--" rutas.)
+src/main.zig-3318-    {
+src/main.zig-3319-        var o: Options = .{};
+src/main.zig:3320:        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "--max-columns=40", "-e", "pat", "--", "f.txt" };
+src/main.zig-3321-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3322-        var go: Options = .{};
+src/main.zig-3323-        const ga = [_][:0]const u8{ "zgrep", "--json", "pat" };
+src/main.zig-3324-        _ = try parseArgs(alloc, &ga, &go);
+src/main.zig-3325-        try std.testing.expect(batchQueryProblem(&o, &go) != null);
+src/main.zig-3326-    }
+src/main.zig-3327-    {
+src/main.zig-3328-        var o: Options = .{};
+src/main.zig:3329:        const a = [_][:0]const u8{ "zgrep", "--json", "--sort", "-e", "pat", "--", "f.txt" };
+src/main.zig-3330-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3331-        var go: Options = .{};
+src/main.zig-3332-        const ga = [_][:0]const u8{ "zgrep", "--json", "pat" };
+src/main.zig-3333-        _ = try parseArgs(alloc, &ga, &go);
+src/main.zig-3334-        try std.testing.expect(batchQueryProblem(&o, &go) == null);
+src/main.zig-3335-    }
+src/main.zig-3336-}
+src/main.zig-3337-
+--
+src/regex.zig-774-                // cannot be resolved while building the state (the byte that
+src/regex.zig-775-                // settles it has not been consumed yet), so `step` resolves it
+src/regex.zig-776-                // on the next byte.
+src/regex.zig-777-                .wb => try self.work.append(self.gpa, id),
+src/regex.zig-778-                .nwb => try self.work.append(self.gpa, id),
+src/regex.zig-779-                .match => try self.work.append(self.gpa, id),
+src/regex.zig-780-            }
+src/regex.zig-781-        }
+src/regex.zig:782:        std.mem.sort(u32, self.work.items, {}, std.sort.asc(u32));
+src/regex.zig-783-        return self.work.items;
+src/regex.zig-784-    }
+src/regex.zig-785-
+src/regex.zig-786-    /// Does the interned node list mean "a match completed"?
+src/regex.zig-787-    fn has_match(list: []const u32, match_node: u32) bool {
+src/regex.zig-788-        for (list) |id| {
+src/regex.zig-789-            if (id == match_node) return true;
+src/regex.zig-790-        }
+--
+src/walk.zig-111-        }
+src/walk.zig-112-
+src/walk.zig-113-        const child = try vfs.joinPathSentinel(gpa, dir, entry.name);
+src/walk.zig-114-        try items.append(gpa, .{ .path = child, .kind = kind });
+src/walk.zig-115-    }
+src/walk.zig-116-
+src/walk.zig-117-    // Keep directory traversal deterministic; Befunge '<' reverses siblings.
+src/walk.zig-118-    if (nav_plan != null and nav_plan.?.reverse_siblings) {
+src/walk.zig:119:        std.sort.pdq(Item, items.items, {}, Item.greaterThan);
+src/walk.zig-120-    } else {
+src/walk.zig:121:        std.sort.pdq(Item, items.items, {}, Item.lessThan);
+src/walk.zig-122-    }
+src/walk.zig-123-
+src/walk.zig-124-    for (items.items) |item| {
+src/walk.zig-125-        if (item.kind == .directory) {
+src/walk.zig-126-            // rg's --max-depth counts from the root, so depth 0 is the root
+src/walk.zig-127-            // itself: `--max-depth 1` never descends into a subdirectory.
+src/walk.zig-128-            if (max_depth != 0 and depth + 1 >= max_depth) {
+src/walk.zig-129-                gpa.free(item.path);
+--
+README.md-17-  are Linux-only and make no claim about Windows performance.
+README.md-18-
+README.md-19-The latest release is `v0.3.2`. The `main` branch is `0.4.0-dev`.
+README.md-20-
+README.md-21-```sh
+README.md-22-zigrep "Searcher" src/                  # literal search over a tree
+README.md-23-zigrep 'fn\s+\w+\(' /path/to/project    # regular expression (linear time)
+README.md-24-zigrep -i "ñandú" docs/                 # case-insensitive, ASCII + Latin-1
+README.md:25:zigrep --sort "pattern" .               # deterministic, GNU grep traversal order
+README.md-26-zigrep --json "pattern" src/            # JSONL events (schema zgrep/1)
+README.md-27-```
+README.md-28-
+README.md-29-## Installation
+README.md-30-
+README.md-31-### Linux
+README.md-32-
+README.md-33-```sh
+--
+README.md-105-- **GNU grep:** `-F`, `-E`, `-G`, `-e`, `-f`, `-x`, `-w`, `-i`, `-v`, `-c`,
+README.md-106-  `-l`, `-L`, `-q`, `-m`, `-A/-B/-C`, `-H/-h`, `-a`, `-Z`, `-z`, `-b`, `-o`.
+README.md-107-- **ripgrep:** `-S`, `-t`, `--type-not`, `--type-list`, `--max-depth`, `--max-filesize`,
+README.md-108-  `--column`, `--count-matches`, `--replace`, `--passthru`, `--heading`,
+README.md-109-  `--vimgrep`, `-U`, `--pre`, `--encoding`, `--crlf`.
+README.md-110-- **Filtering:** `--include`, `--exclude`, `--exclude-from`, `--exclude-dir`,
+README.md-111-  `--include-ext`, `--exclude-ext`, `--no-ignore`, `--no-hidden`. Ignore rules
+README.md-112-  come from `.gitignore` and `.dataignore`.
+README.md:113:- **ZiGrep-specific:** `--sort`, `--io-engine=sync|uring|auto`, `--algo`,
+README.md-114-  `--stats`, `--force-swarm`, `--nav` (directory navigation plans), `--exec`,
+README.md-115-  `--cache` (inspect and clean Zig build caches).
+README.md-116-
+README.md-117-Since 0.4.0, line numbers are off by default, as in GNU grep and in ripgrep when
+README.md-118-its output is piped. Pass `-n` to enable them, or use `--pretty`.
+README.md-119-
+README.md-120-The regex dialect matches ripgrep's:
+README.md-121-`.`, `[a-z]`, `[^x]`, `[[:alpha:]]`, `\d`, `\w`, `\s`, `*`, `+`, `?`, `{n,m}`,
+--
+README.md-208-- **5,338 files, 655 MB:** 5-6 threads are best (68.80 ms against 152 ms
+README.md-209-  single-threaded). At 12 threads, contention between hyperthread pairs raises
+README.md-210-  the time to about 84 ms.
+README.md-211-
+README.md-212-## Design
+README.md-213-
+README.md-214-- **Work-stealing traversal.** Workers act both as directory scanners and as file
+README.md-215-  searchers, and traverse depth-first per branch. Output is streamed as results
+README.md:216:  arrive, unless `--sort` is given. `--sort` keeps the GNU grep order through
+README.md-217-  ordered tickets, and a file with no match releases its ticket with one atomic
+README.md-218-  write instead of being buffered.
+README.md-219-- **Direct directory reads.** On Linux, `getdents64` feeds 32 KB batches through
+README.md-220-  a VFS layer (`src/vfs.zig`), with no `readdir()` or per-entry `stat()`. Ignore
+README.md-221-  rules prune branches before `openat`/`statx`. Besides `.gitignore` and
+README.md-222-  `.dataignore`, found by walking up to the repository root, a built-in list
+README.md-223-  skips `.git`, `node_modules`, `target`, `.zig-cache` and `.venv`.
+README.md-224-  `--no-default-ignore` disables that list.
+--
+GUIA.md-286-
+GUIA.md-287-Ejemplos reales:
+GUIA.md-288-
+GUIA.md-289-```sh
+GUIA.md-290-# buscar en todo un árbol (enjambre concurrente kamikaze por defecto)
+GUIA.md-291-zigrep "const" workspace/assembly
+GUIA.md-292-
+GUIA.md-293-# búsqueda determinista ordenada por ruta (compatible con GNU grep)
+GUIA.md:294:zigrep --sort "const" workspace/assembly
+GUIA.md-295-
+GUIA.md-296-# expresiones regulares lineales (Thompson NFA + Lazy DFA, sin backtracking catastrófico)
+GUIA.md-297-zigrep 'fn\s+\w+\(' /ruta/al/proyecto
+GUIA.md-298-
+GUIA.md-299-# insensibilidad a mayúsculas con soporte Unicode Latin-1 (á/Á, ñ/Ñ, ü/Ü, etc.)
+GUIA.md-300-zigrep -i "ñandú" docs/
+GUIA.md-301-
+GUIA.md-302-# navegación 2D Befunge: techo (solo archivos en raíz a profundidad 0, rebota carpetas)
+--
+GUIA.md-375-`--stats` imprime `micro_path=yes|no` por stderr:
+GUIA.md-376-
+GUIA.md-377-```sh
+GUIA.md-378-zigrep --stats -F "const" . 2>&1 >/dev/null | grep micro_path
+GUIA.md-379-# kamikaze: dirs=… files=… micro_path=yes elapsed_s=… throughput_MBps=…
+GUIA.md-380-```
+GUIA.md-381-
+GUIA.md-382-`micro_path=yes` ⇒ 0 hilos, sin walk de ignorados. `micro_path=no` ⇒ el
+GUIA.md:383:enjambre (árbol ≥ 2 MB, varias rutas, `--sort`, `--force-swarm`, …).
+GUIA.md-384-
+GUIA.md-385-### Cómo se interpreta el resultado
+GUIA.md-386-
+GUIA.md-387-| Código de salida | Significado |
+GUIA.md-388-|---|---|
+GUIA.md-389-| `0` | hubo al menos una coincidencia |
+GUIA.md-390-| `1` | no hubo coincidencias |
+GUIA.md-391-| `2` | error: patrón ausente, ruta inexistente, opción desconocida |
+--
+GUIA.md-711-| 3 | varios ficheros sueltos | `zgrep p a b c` imprimía c, b, a | orden de los argumentos, como `grep` |
+GUIA.md-712-| 4 | `--json --exec` | texto libre del hijo en el stream JSONL | error de uso, rc 2, stdout vacío |
+GUIA.md-713-
+GUIA.md-714-El bug 1 lo tapaba el propio oráculo: el caso `--column` le pasaba `-n` a zgrep
+GUIA.md-715-para igualar a `rg`. Ahora el caso va sin `-n`, a propósito.
+GUIA.md-716-
+GUIA.md-717-Sigue igual, y queda documentado en `evidence/agent-native/contract.md`: con
+GUIA.md-718-**directorios** el orden es el de terminación del enjambre (como `rg`); para un
+GUIA.md:719:orden fijo, `--sort`. `-N` es la navegación Befunge, no el `--no-line-number`
+GUIA.md-720-de `rg`.
+GUIA.md-721-
+GUIA.md-722-## 4n. Lote y presupuesto: `--queries-file`, `--max-results`, `--max-output-tokens` (0.4.0-dev, M3)
+GUIA.md-723-
+GUIA.md-724-Para un agente, N preguntas sobre el mismo árbol eran N procesos y N salidas que
+GUIA.md-725-juntar a mano. Ahora es **una llamada**: un fichero JSONL con una consulta por
+GUIA.md-726-línea (o `-` para leerlo de stdin).
+GUIA.md-727-
+--
+GUIA.md-744-{"schema":"zgrep/1","query_id":"hit","type":"match","path":"b.txt","line":2,"column":1,"byte_start":10,"byte_end":13,"match":"HIT","text":"HIT here","inverted":false}
+GUIA.md-745-{"schema":"zgrep/1","query_id":"hit","type":"query_end","rc":0,"returned":2,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+GUIA.md-746-{"schema":"zgrep/1","query_id":"beta","type":"match","path":"b.txt","line":1,"column":1,"byte_start":0,"byte_end":4,"match":"beta","text":"beta line","inverted":false}
+GUIA.md-747-{"schema":"zgrep/1","query_id":"beta","type":"query_end","rc":0,"returned":1,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+GUIA.md-748-{"schema":"zgrep/1","query_id":"nada","type":"query_end","rc":1,"returned":0,"omitted":0,"truncated":false,"dropped_non_event":0,"error":null}
+GUIA.md-749-{"schema":"zgrep/1","type":"summary","queries":3,"returned":3,"omitted":0,"truncated":false,"reason":null,"output_bytes":496,"max_results":null,"max_output_tokens":null,"token_estimate":"bytes/4","dropped_non_event":0}
+GUIA.md-750-```
+GUIA.md-751-
+GUIA.md:752:* Cada consulta corre como `zgrep --json --sort <flags globales> <"flags"> -e
+GUIA.md-753-  <"pattern"> -- <"paths" o las rutas de la línea>`. Las banderas globales
+GUIA.md-754-  (`-i`, `-w`, `-C2`...) valen para todas; `"flags"` añade por consulta.
+GUIA.md-755-* Cada evento lleva `query_id`; cada consulta cierra con `query_end` (`rc`,
+GUIA.md-756-  `returned`, `omitted`, `truncated`, `error`); el stream cierra con `summary`.
+GUIA.md:757:* Orden determinista (`--sort`): el lote es byte a byte lo mismo que N procesos
+GUIA.md:758:  separados con `--json --sort` (`evidence/agent-native/batch_conformance.py`).
+GUIA.md-759-* Una consulta inválida falla **sola** (`query_end` con `rc` 2 y el motivo); un
+
+[output truncated by the harness at 28000 bytes; the rest was not delivered]

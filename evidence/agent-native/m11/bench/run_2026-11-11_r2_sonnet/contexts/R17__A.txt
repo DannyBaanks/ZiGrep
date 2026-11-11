@@ -1,0 +1,2 @@
+src/kamikaze.zig:746:fn tryQuickQuietProbe(
+src/kamikaze.zig:815:        if (tryQuickQuietProbe(io, gpa, searcher, root, filter_engine, binary, scan_config)) {

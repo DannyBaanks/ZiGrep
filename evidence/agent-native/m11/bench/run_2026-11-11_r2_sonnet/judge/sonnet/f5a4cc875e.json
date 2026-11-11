@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The activation conditions (global vs local, Linux only, lock file) match the reference, but the answer admits it cannot say how a zig process is recognised (exe basename exactly 'zig', ' (deleted)' stripped), missing half the question.",
+ "cost_usd": 0.006895999999999999
+}

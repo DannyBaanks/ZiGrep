@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three points: `\\+` is the one-or-more quantifier, bare `+` is a literal, and a leading `*` is a literal. The only differences are the function's location (src/search.zig vs src/bre.zig) and extra detail on `a*b`, neither of which contradicts the reference.",
+ "cost_usd": 0.00663
+}

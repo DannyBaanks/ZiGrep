@@ -1,0 +1,18 @@
+{
+ "qid": "R13",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f555220b14d4fbc8f5b59c3802ca95c67c3fb844d95d0bf012e825df8b9f100e",
+ "answer": "**Short answer: the context suggests no for regex patterns, though it can't be confirmed by execution.**\n\n- **Regex path:** `byteSet` only folds ASCII letters (`a–z`/`A–Z`, ±32) (src/regex.zig:74-77). `parseClass` does the same for `a..z` (src/regex.zig:277-285). `litByte` uses `std.ascii.toLower` (src/regex.zig:509-512). Nothing here folds `ñ`/`Ñ`, which are multi-byte in UTF-8 (assuming UTF-8 input; the encoding isn't shown). So `ñand.` with `-i` very likely won't match `ÑANDÚ`. Also, `.` would need to match the multi-byte `Ú`; that handling isn't shown.\n- **Literal path:** the Latin-1 test only covers `-F` (`.fixed = true`) (src/search.zig:583-586). It uses `toLowerByte` and `isCaseFoldable` (src/search.zig:92-100, bodies not shown). So folding appears to be literal-only.\n- **README:** not in the context, so I can't verify its statement. The regex tests only exercise ASCII (src/regex.zig:1148-1150).",
+ "usage": {
+  "cost_usd": 0.047462,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.87,
+ "headers": {}
+}

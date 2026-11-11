@@ -1,0 +1,44 @@
+CONTEXT PACK `max_states`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 2 in 1 file(s); by role: code 2
+  declarations found by pattern: 1
+
+BLOCKS
+src/regex.zig:651-667  sha256:92ff33707c203f0e
+   651 | 
+   652 | const match_state: u32 = 0;
+   653 | 
+   654 | /// Word byte for `\b`: ASCII alphanumerics and `_` (the same class the engine
+   655 | /// uses for -w).
+   656 | fn isWordByte(b: u8) bool {
+   657 |     return std.ascii.isAlphanumeric(b) or b == '_';
+   658 | }
+>  659 | const max_states = 3000;
+   660 | 
+   661 | const State = struct {
+   662 |     nodes: []const u32,
+   663 |     /// -1 unknown, 0 no, 1 yes: does the state accept at end of line?
+   664 |     accept_end: i8 = -1,
+   665 |     /// True when the state's NFA set contains the match node: a match just
+   666 |     /// completed. Used by the span runner (`nextMatch`) to recover WHERE.
+   667 |     accepting: bool = false,
+src/regex.zig:807-818  sha256:c9ad1bfc2220bfc4
+   807 |     fn intern(self: *Dfa, nodes: []const u32) Allocator.Error!u32 {
+   808 |         const key = std.mem.sliceAsBytes(nodes);
+   809 |         if (self.index.get(key)) |id| return id;
+>  810 |         if (self.states.items.len >= max_states) {
+   811 |             // Cache full: flush and start over. Callers must not reuse old ids.
+   812 |             const copy = try self.gpa.dupe(u32, nodes);
+   813 |             defer self.gpa.free(copy);
+   814 |             try self.reset();
+   815 |             return self.internFresh(copy);
+   816 |         }
+   817 |         return self.internFresh(nodes);
+   818 |     }
+
+TRUNCATION
+  truncated: false   items: 2

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "It correctly identifies max_states = 3000 and the cap check, but does not state that the cache is flushed and the search continues without error or fallback, hedging where the reference is definite.",
+ "cost_usd": 0.0055060000000000005
+}

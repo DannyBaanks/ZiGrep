@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer reaches the correct conclusion (regex folds ASCII only, so `ñand.` does not match `ÑANDÚ`, and the README claim fails for regexes) with correct supporting evidence, but it hedges with 'probably' and 'likely' where the reference is definite, and it does not confirm that the README claim holds only for literal patterns.",
+ "cost_usd": 0.00757
+}

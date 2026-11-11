@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly lists match, occurrence, file and count as result types, but hedges on whether context lines count, whereas the reference definitively says context (and passthru, provenance, query_end, summary) do not count.",
+ "cost_usd": 0.005726
+}

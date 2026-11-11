@@ -1,0 +1,18 @@
+{
+ "qid": "R20",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3393ae49189c994475d8d2a4bc3890d2027333c787a8f745e3d93729c2e7d9f0",
+ "answer": "Most likely yes. The smart-case check is in `src/main.zig:2206-2217`. When `-S` is set and `-i` is not, it scans every byte of every pattern. It flags an uppercase letter if the byte is `A`–`Z` (line 2210) or is in the Latin-1 uppercase range 0xC0–0xDE except 0xD7 (line 2211). If none is found, it sets `opts.ignore_case = true` (line 2216).\n\nThe check works on single bytes, not decoded characters. `ñandú` is lowercase, and I'm assuming it is UTF-8 encoded, since the context doesn't say how patterns are encoded. In UTF-8, `ñ` is the bytes 0xC3 0xB1, and `ú` is 0xC3 0xBA. The byte 0xC3 falls inside 0xC0–0xDE, so line 2211 would set `has_upper = true`. Smart case would then not enable case-insensitivity, and the search would be case-sensitive.\n\nThe Latin-1 comment on line 2211 suggests the code assumes Latin-1 bytes. That assumption does not hold for UTF-8 patterns.\n\nThe context doesn't include the pattern encoding or any test for this case, so I can't confirm it.",
+ "usage": {
+  "cost_usd": 0.018568,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.3,
+ "headers": {}
+}

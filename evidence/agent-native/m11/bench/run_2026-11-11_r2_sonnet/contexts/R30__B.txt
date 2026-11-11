@@ -1,0 +1,53 @@
+src/scan.zig-149-            if (len > 0) try out.appendSlice(gpa, buf[0..len]);
+src/scan.zig-150-        }
+src/scan.zig-151-    }
+src/scan.zig-152-    return out.toOwnedSlice(gpa);
+src/scan.zig-153-}
+src/scan.zig-154-
+src/scan.zig-155-/// mmap below this size is rarely a win over a plain read; the read path
+src/scan.zig-156-/// exists mainly as a fallback for mappings the kernel refuses.
+src/scan.zig:157:pub const mmap_threshold = 256 * 1024;
+src/scan.zig-158-
+src/scan.zig-159-pub const FileScan = struct {
+src/scan.zig-160-    matched: bool = false,
+src/scan.zig-161-    lines: usize = 0,
+src/scan.zig-162-    /// Matches, not lines (only filled when `--count-matches` is on).
+src/scan.zig-163-    matches: usize = 0,
+src/scan.zig-164-    /// Bytes actually searched (excludes binary skips and failures).
+src/scan.zig-165-    bytes: usize = 0,
+--
+src/scan.zig-902-                return res;
+src/scan.zig-903-            }
+src/scan.zig-904-            processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
+src/scan.zig-905-            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
+src/scan.zig-906-            return res;
+src/scan.zig-907-        }
+src/scan.zig-908-    }
+src/scan.zig-909-
+src/scan.zig:910:    if (size >= mmap_threshold) {
+src/scan.zig-911-        if (std.Io.File.MemoryMap.create(io, file, .{
+src/scan.zig-912-            .len = size,
+src/scan.zig-913-            .protection = .{ .read = true, .write = false },
+src/scan.zig-914-        })) |map_value| {
+src/scan.zig-915-            var map = map_value;
+src/scan.zig-916-            defer map.destroy(io);
+src/scan.zig-917-            processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
+src/scan.zig-918-            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
+--
+src/scan.zig-1135-        return res;
+src/scan.zig-1136-    }
+src/scan.zig-1137-
+src/scan.zig-1138-    // --- obtain a readable view of the whole file -------------------------
+src/scan.zig-1139-    var data: []const u8 = &.{};
+src/scan.zig-1140-    var mapped = false;
+src/scan.zig-1141-    var owned: ?[]u8 = null;
+src/scan.zig-1142-
+src/scan.zig:1143:    if (size < mmap_threshold) {
+src/scan.zig-1144-        // Small file: one bounded read beats mmap's page-fault setup.
+src/scan.zig-1145-        const buf = gpa.alloc(u8, size) catch {
+src/scan.zig-1146-            res.err = .NOMEM;
+src/scan.zig-1147-            return res;
+src/scan.zig-1148-        };
+src/scan.zig-1149-        owned = buf;
+src/scan.zig-1150-        if (readFully(fd, buf)) |e| {
+src/scan.zig-1151-            gpa.free(buf);

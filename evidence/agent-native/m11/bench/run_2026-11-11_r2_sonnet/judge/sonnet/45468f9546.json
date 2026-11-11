@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: visibleLineEnd trims the \\r so it isn't in the visible line, and CRLF is one terminator since lines split on \\n; the hedging about printing code is minor and the past-bug detail is not required.",
+ "cost_usd": 0.006462
+}

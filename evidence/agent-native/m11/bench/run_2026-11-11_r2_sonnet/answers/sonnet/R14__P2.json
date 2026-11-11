@@ -1,0 +1,18 @@
+{
+ "qid": "R14",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "7ee2ff7daa9e107bd218fe265b263acb86791cb9c77286ddc33f318364ff0efe",
+ "answer": "**Yes, `\\b` is supported. The header comment in src/regex.zig is stale.**\n\n- The header comment at src/regex.zig:17-18 lists `\\b` under \"Not supported\", and its supported-syntax list (src/regex.zig:11-16) doesn't mention it.\n- The code contradicts that comment. The error string in `escapeByte` says \"back-references and lookaround are not supported; \\\\b and \\\\B ARE\" (src/regex.zig:210).\n- The CLI help text says \"word boundaries \\b and \\B are supported (zero-width assertions)\" (src/main.zig:225). Only back-references and lookaround are listed as unsupported (src/main.zig:226).\n\nThe context only shows the error message and help text, not the actual `\\b` parsing or matching code. It also has no tests, so I can't confirm the behavior from an implementation. The search covered only `src`, `README.md` and `GUIA.md`, and only for the word \"lookaround\".",
+ "usage": {
+  "cost_usd": 0.014178,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.44,
+ "headers": {}
+}

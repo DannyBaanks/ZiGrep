@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all three points: `\\+` becomes ERE `+`, bare `+` becomes a literal, and a leading `*` is a literal.",
+ "cost_usd": 0.006058
+}

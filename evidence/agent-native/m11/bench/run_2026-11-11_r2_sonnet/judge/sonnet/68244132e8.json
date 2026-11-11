@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Units and the 1024 base match the reference, but the answer says the default is not shown, whereas the reference says it is 0 (unlimited); it also omits that multiplication saturates.",
+ "cost_usd": 0.006184
+}

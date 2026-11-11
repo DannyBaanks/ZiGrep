@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer correctly infers string/integer ids, rejection of duplicates and unknown fields, and hints at parse-then-run, but it hedges on these and says blank lines and the half-run question are unanswerable, where the reference is definite (blank lines ignored, fails closed).",
+ "cost_usd": 0.007028
+}

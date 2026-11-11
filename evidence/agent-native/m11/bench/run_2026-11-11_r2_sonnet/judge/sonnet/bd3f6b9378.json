@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says \\r is excluded and CRLF is one terminator based on visibleLineEnd, but hedges on printing and line counting and omits the definite one-terminator conclusion and the past double-count bug.",
+ "cost_usd": 0.006214
+}

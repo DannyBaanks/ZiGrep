@@ -1,0 +1,102 @@
+src/bre.zig-25-///   `}`   ->   `\}`
+src/bre.zig-26-///   `|`   ->   `\|`         literal pipe
+src/bre.zig-27-///   `+`   ->   `\+`         literal plus
+src/bre.zig-28-///   `?`   ->   `\?`         literal question
+src/bre.zig-29-///   `*` at the start of a pattern, branch or group is a LITERAL in BRE
+src/bre.zig-30-///
+src/bre.zig-31-/// Inside `[...]` both dialects agree except for `[[:class:]]`, which is POSIX
+src/bre.zig-32-/// and works in both.
+src/bre.zig:33:pub fn breToEre(arena: std.mem.Allocator, pattern: []const u8) []const u8 {
+src/bre.zig-34-    var out: std.ArrayList(u8) = .empty;
+src/bre.zig-35-    // Zgrep runs are bounded; a failed allocation just returns the pattern
+src/bre.zig-36-    // unchanged, which then fails parsing with a clear message.
+src/bre.zig-37-    breToEreInto(arena, pattern, &out) catch {
+src/bre.zig-38-        out.deinit(arena);
+src/bre.zig-39-        return pattern;
+src/bre.zig-40-    };
+src/bre.zig-41-    if (out.items.len == 0) return "";
+--
+src/bre.zig-144-            else => {
+src/bre.zig-145-                try out.append(arena, c);
+src/bre.zig-146-                at_branch_start = false;
+src/bre.zig-147-            },
+src/bre.zig-148-        }
+src/bre.zig-149-    }
+src/bre.zig-150-}
+src/bre.zig-151-
+src/bre.zig:152:test "breToEre: the inverted escapes" {
+src/bre.zig-153-    const a = std.testing.allocator;
+src/bre.zig-154-    const cases = [_][2][]const u8{
+src/bre.zig-155-        .{ "a\\(b\\)c", "a(b)c" },
+src/bre.zig-156-        .{ "a\\{2\\}", "a{2}" },
+src/bre.zig-157-        .{ "a\\|b", "a|b" },
+src/bre.zig-158-        .{ "a\\+", "a+" },
+src/bre.zig-159-        .{ "a\\?", "a?" },
+src/bre.zig-160-        .{ "a(b)c", "a\\(b\\)c" },
+--
+src/bre.zig-162-        .{ "a|b", "a\\|b" },
+src/bre.zig-163-        .{ "a+b", "a\\+b" },
+src/bre.zig-164-        .{ "a?b", "a\\?b" },
+src/bre.zig-165-        .{ "a*", "a*" },
+src/bre.zig-166-    };
+src/bre.zig-167-    for (cases) |c| {
+src/bre.zig-168-        var arena = std.heap.ArenaAllocator.init(a);
+src/bre.zig-169-        defer arena.deinit();
+src/bre.zig:170:        const got = breToEre(arena.allocator(), c[0]);
+src/bre.zig-171-        try std.testing.expectEqualStrings(c[1], got);
+src/bre.zig-172-    }
+src/bre.zig-173-}
+src/bre.zig-174-
+src/bre.zig:175:test "breToEre: a leading * stays literal" {
+src/bre.zig-176-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+src/bre.zig-177-    defer arena.deinit();
+src/bre.zig:178:    try std.testing.expectEqualStrings("\\*ab", breToEre(arena.allocator(), "*ab"));
+src/bre.zig:179:    try std.testing.expectEqualStrings("a*b", breToEre(arena.allocator(), "a*b"));
+src/bre.zig:180:    try std.testing.expectEqualStrings("(ab)*c", breToEre(arena.allocator(), "\\(ab\\)*c"));
+src/bre.zig-181-}
+src/bre.zig-182-
+src/bre.zig:183:test "breToEre: classes are left alone" {
+src/bre.zig-184-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+src/bre.zig-185-    defer arena.deinit();
+src/bre.zig:186:    try std.testing.expectEqualStrings("[abc]", breToEre(arena.allocator(), "[abc]"));
+src/bre.zig-187-    // In BRE a `+` after a class is a LITERAL plus, so it must be escaped.
+src/bre.zig:188:    try std.testing.expectEqualStrings("[[:digit:]]\\+", breToEre(arena.allocator(), "[[:digit:]]+"));
+src/bre.zig-189-    // A `(` inside a class is a literal in both dialects.
+src/bre.zig:190:    try std.testing.expectEqualStrings("[(]", breToEre(arena.allocator(), "[(]"));
+src/bre.zig-191-}
+--
+src/search.zig-385-        s.kind = .never;
+src/search.zig-386-        return s;
+src/search.zig-387-    }
+src/search.zig-388-
+src/search.zig-389-    if (patterns.len == 1 and !o.line) {
+src/search.zig-390-        const pure: ?[]const u8 = if (o.fixed)
+src/search.zig-391-            patterns[0]
+src/search.zig-392-        else blk: {
+src/search.zig:393:            const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+src/search.zig-394-            const n = try regex.parse(arena, src, .{});
+src/search.zig-395-            break :blk try regex.asPureLiteral(arena, n);
+src/search.zig-396-        };
+src/search.zig-397-        if (pure) |lit| {
+src/search.zig-398-            const text = try gpa.dupe(u8, lit);
+src/search.zig-399-            if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+src/search.zig-400-            if (o.icase) for (text) |*c| {
+src/search.zig-401-                c.* = toLowerByte(c.*);
+--
+src/search.zig-404-            s.icase = o.icase;
+src/search.zig-405-            s.word = o.word;
+src/search.zig-406-            return s;
+src/search.zig-407-        }
+src/search.zig-408-    }
+src/search.zig-409-
+src/search.zig-410-    const nodes = try arena.alloc(*regex.Node, patterns.len);
+src/search.zig-411-    for (patterns, 0..) |p, idx| {
+src/search.zig:412:        const src = if (o.basic) bre.breToEre(arena, p) else p;
+src/search.zig-413-        var n = if (o.fixed)
+src/search.zig-414-            try regex.literalNode(arena, src, o.icase)
+src/search.zig-415-        else
+src/search.zig-416-            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+src/search.zig-417-        if (o.line) n = try regex.lineWrap(arena, n);
+src/search.zig-418-        if (o.word) n = try regex.wordWrap(arena, n);
+src/search.zig-419-        nodes[idx] = n;
+src/search.zig-420-    }

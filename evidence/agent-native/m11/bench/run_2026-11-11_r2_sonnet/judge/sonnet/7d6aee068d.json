@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The when-file-utf16 logic matches the reference, but the answer fails to list the full value set (file, file-utf16, pre, stdin) and says it cannot confirm other values.",
+ "cost_usd": 0.006616
+}

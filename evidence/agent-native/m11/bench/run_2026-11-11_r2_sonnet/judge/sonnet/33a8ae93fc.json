@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists all seven values correctly and states that utf-16 without a BOM falls back to little-endian, matching the reference; the extra caveats and fallback-to-auto details don't contradict it.",
+ "cost_usd": 0.006344
+}

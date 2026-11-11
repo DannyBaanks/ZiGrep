@@ -1,0 +1,9 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "With `auto`, zgrep colors output when writing to a terminal — the reference says zgrep does not check isatty and auto never colours, even on a TTY",
+  "Implies auto behaves differently on TTY vs non-TTY, whereas it always degrades to never"
+ ],
+ "reason": "The answer claims auto colors on a TTY, contradicting the reference that auto is always equivalent to never.",
+ "cost_usd": 0.006304
+}

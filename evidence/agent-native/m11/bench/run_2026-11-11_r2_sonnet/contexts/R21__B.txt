@@ -1,0 +1,53 @@
+src/main.zig-229-    \\when no PATH is given or when PATH is '-', standard input is read.
+src/main.zig-230-    \\
+src/main.zig-231-    \\exit status: 0 match found, 1 no match, 2 error
+src/main.zig-232-    \\
+src/main.zig-233-;
+src/main.zig-234-
+src/main.zig-235-/// `--color` tri-state. `auto` is deliberately folded to `never`: deciding
+src/main.zig-236-/// it properly needs isatty(stdout), which is not worth the flag.
+src/main.zig:237:pub const ColorMode = enum { never, always, auto };
+src/main.zig-238-
+src/main.zig-239-/// `--binary-files=TYPE` (grep). zgrep only has two honest answers: hunt the
+src/main.zig-240-/// file and print the matches, or pretend it does not match. `binary` in grep
+src/main.zig-241-/// means "print matches but suppress binary content", which this engine cannot
+src/main.zig-242-/// do, so it is rejected at parse time instead of silently accepted.
+src/main.zig-243-pub const BinaryFiles = enum { text, without_match };
+src/main.zig-244-
+src/main.zig-245-pub const usage_error = error{Usage};
+--
+src/main.zig-300-    /// `-f FILE`: patterns come from files as well.
+src/main.zig-301-    pattern_files: [16][]const u8 = undefined,
+src/main.zig-302-    pattern_files_count: usize = 0,
+src/main.zig-303-    /// `-o`: one output line per (non-empty) match.
+src/main.zig-304-    only_matching: bool = false,
+src/main.zig-305-    /// `--column`: print the 1-based byte column of the first match (rg).
+src/main.zig-306-    column: bool = false,
+src/main.zig-307-    /// `--color=always|never|auto` (auto degrades to never off a TTY).
+src/main.zig:308:    color: ColorMode = .never,
+src/main.zig-309-    /// `--replace=TEXT` (rg): substitute every match with TEXT. The rest of
+src/main.zig-310-    /// the line survives (rg); with `-o` the record is just the replacement.
+src/main.zig-311-    replace: ?[]const u8 = null,
+src/main.zig-312-    /// `--passthru`: also print lines that do not match.
+src/main.zig-313-    passthru: bool = false,
+src/main.zig-314-    /// `--exec=CMD`: run CMD for every file with matches (find -exec style).
+src/main.zig-315-    /// Turns off the normal output; the command's streams are inherited.
+src/main.zig-316-    exec_cmd: ?[]const u8 = null,
+--
+src/main.zig-3361-    }
+src/main.zig-3362-    // --pretty la enciende tambien (es alias de --color=always --heading
+src/main.zig-3363-    // --line-number; con el default apagado por fin tiene sentido)
+src/main.zig-3364-    {
+src/main.zig-3365-        var o4: Options = .{};
+src/main.zig-3366-        const a4 = [_][:0]const u8{ "zgrep", "--pretty", "pat", "f.txt" };
+src/main.zig-3367-        _ = try parseArgs(alloc, &a4, &o4);
+src/main.zig-3368-        try std.testing.expect(o4.show_line_no);
+src/main.zig:3369:        try std.testing.expectEqual(ColorMode.always, o4.color);
+src/main.zig-3370-        try std.testing.expect(o4.heading);
+src/main.zig-3371-    }
+src/main.zig-3372-    // --json NO implica numeracion: los campos la llevan
+src/main.zig-3373-    {
+src/main.zig-3374-        var o5: Options = .{};
+src/main.zig-3375-        const a5 = [_][:0]const u8{ "zgrep", "--json", "pat", "f.txt" };
+src/main.zig-3376-        _ = try parseArgs(alloc, &a5, &o5);
+src/main.zig-3377-        try std.testing.expect(!o5.show_line_no);

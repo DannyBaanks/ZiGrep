@@ -1,0 +1,66 @@
+src/scan.zig-897-                res.err = mapIoError(err);
+src/scan.zig-898-                return res;
+src/scan.zig-899-            };
+src/scan.zig-900-            if (read != size) {
+src/scan.zig-901-                res.err = .IO;
+src/scan.zig-902-                return res;
+src/scan.zig-903-            }
+src/scan.zig-904-            processBuffer(gpa, searcher, buffer[0..read], path, show_path, mode, binary, config, out, &res);
+src/scan.zig:905:            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, buffer[0..read], provSourceOf(buffer[0..read], config), mtime_from)) |err| res.err = err;
+src/scan.zig-906-            return res;
+src/scan.zig-907-        }
+src/scan.zig-908-    }
+src/scan.zig-909-
+src/scan.zig-910-    if (size >= mmap_threshold) {
+src/scan.zig-911-        if (std.Io.File.MemoryMap.create(io, file, .{
+src/scan.zig-912-            .len = size,
+src/scan.zig-913-            .protection = .{ .read = true, .write = false },
+src/scan.zig-914-        })) |map_value| {
+src/scan.zig-915-            var map = map_value;
+src/scan.zig-916-            defer map.destroy(io);
+src/scan.zig-917-            processBuffer(gpa, searcher, map.memory, path, show_path, mode, binary, config, out, &res);
+src/scan.zig:918:            if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, map.memory, provSourceOf(map.memory, config), mtime_from)) |err| res.err = err;
+src/scan.zig-919-            return res;
+src/scan.zig-920-        } else |_| {}
+src/scan.zig-921-    }
+src/scan.zig-922-
+src/scan.zig-923-    const data = gpa.alloc(u8, size) catch {
+src/scan.zig-924-        res.err = .NOMEM;
+src/scan.zig-925-        return res;
+src/scan.zig-926-    };
+--
+src/scan.zig-929-        res.err = mapIoError(err);
+src/scan.zig-930-        return res;
+src/scan.zig-931-    };
+src/scan.zig-932-    if (read != size) {
+src/scan.zig-933-        res.err = .IO;
+src/scan.zig-934-        return res;
+src/scan.zig-935-    }
+src/scan.zig-936-    processBuffer(gpa, searcher, data, path, show_path, mode, binary, config, out, &res);
+src/scan.zig:937:    if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, provSourceOf(data, config), mtime_from)) |err| res.err = err;
+src/scan.zig-938-    return res;
+src/scan.zig-939-}
+src/scan.zig-940-
+src/scan.zig-941-fn processBuffer(
+src/scan.zig-942-    gpa: Allocator,
+src/scan.zig-943-    searcher: *const Searcher,
+src/scan.zig-944-    data: []const u8,
+src/scan.zig-945-    path: []const u8,
+--
+src/scan.zig-1222-    // `-c` reports every scanned file, including binary-skipped ones as 0,
+src/scan.zig-1223-    // which is what `grep -c` does.
+src/scan.zig-1224-    if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, if (utf16_bom != null) .file_utf16 else .file, .{ .fd = fd })) |e| res.err = e;
+src/scan.zig-1225-    return res;
+src/scan.zig-1226-}
+src/scan.zig-1227-
+src/scan.zig-1228-/// The portable path decides UTF-16 inside `processBuffer`; this repeats
+src/scan.zig-1229-/// that decision so the provenance event can say how the offsets relate.
+src/scan.zig:1230:fn provSourceOf(data: []const u8, config: ScanConfig) ProvSource {
+src/scan.zig-1231-    if (config.encoding == .none) return .file;
+src/scan.zig-1232-    if (forcedBom(config.encoding) != null or config.encoding == .utf16) return .file_utf16;
+src/scan.zig-1233-    return if (isUtf16Bom(data) != null) .file_utf16 else .file;
+src/scan.zig-1234-}
+src/scan.zig-1235-
+src/scan.zig-1236-pub const ProvSource = enum {
+src/scan.zig-1237-    file,
+src/scan.zig-1238-    file_utf16,

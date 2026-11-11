@@ -1,0 +1,18 @@
+{
+ "qid": "R21",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "4856cba788581092e6f2e95ec469502a91ce913220ae7ca85fff6261d3462c3c",
+ "answer": "In zgrep, `--color=auto` is effectively the same as `never`. The context contains two statements that describe this slightly differently:\n\n- The `ColorMode` enum doc comment says `auto` is \"deliberately folded to `never`\". Deciding it properly would need `isatty(stdout)`, which \"is not worth the flag\" (src/main.zig:235-237).\n- The `Options.color` field comment says \"auto degrades to never off a TTY\" (src/main.zig:307). That wording suggests a TTY check might exist, which conflicts with the enum comment.\n\nThe context does not include the `--color` argument parsing code, so I can't confirm which comment matches the real behavior. The only test shown covers `--pretty`, which sets `ColorMode.always` (src/main.zig:3369). It does not test `auto`.",
+ "usage": {
+  "cost_usd": 0.015438,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.96,
+ "headers": {}
+}

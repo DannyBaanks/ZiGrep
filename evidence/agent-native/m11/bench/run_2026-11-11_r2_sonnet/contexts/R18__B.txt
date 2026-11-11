@@ -1,0 +1,101 @@
+src/main.zig-2989-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-2990-        try std.testing.expect(o.sort);
+src/main.zig-2991-        try std.testing.expect(!o.kamikaze);
+src/main.zig-2992-    }
+src/main.zig-2993-    {
+src/main.zig-2994-        var o: Options = .{};
+src/main.zig-2995-        const a = [_][:0]const u8{ "zgrep", "-m", "^v", "pat", "dir" };
+src/main.zig-2996-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig:2997:        try std.testing.expect(o.nav_plan.has_trampoline);
+src/main.zig-2998-        try std.testing.expect(!o.nav_plan.has_ceiling);
+src/main.zig-2999-    }
+src/main.zig-3000-    {
+src/main.zig-3001-        var o: Options = .{};
+src/main.zig-3002-        const a = [_][:0]const u8{ "zgrep", "--nav=v^", "pat", "dir" };
+src/main.zig-3003-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3004-        try std.testing.expect(o.nav_plan.has_ceiling);
+src/main.zig:3005:        try std.testing.expect(!o.nav_plan.has_trampoline);
+src/main.zig-3006-    }
+src/main.zig-3007-    {
+src/main.zig-3008-        var o: Options = .{};
+src/main.zig-3009-        const a = [_][:0]const u8{ "zgrep", "--deterministic", "pat", "dir" };
+src/main.zig-3010-        _ = try parseArgs(alloc, &a, &o);
+src/main.zig-3011-        try std.testing.expect(o.sort);
+src/main.zig-3012-        try std.testing.expect(!o.kamikaze);
+src/main.zig-3013-    }
+--
+src/nav.zig-29-    right = 2, // '>' or 'r'
+src/nav.zig-30-    left = 3,  // '<' or 'l'
+src/nav.zig-31-};
+src/nav.zig-32-
+src/nav.zig-33-pub const NavPlan = struct {
+src/nav.zig-34-    ops: [32]NavOp = undefined,
+src/nav.zig-35-    len: usize = 0,
+src/nav.zig-36-    has_ceiling: bool = false,      // "v^" or "du"
+src/nav.zig:37:    has_trampoline: bool = false,   // "^v" or "ud"
+src/nav.zig-38-    reverse_siblings: bool = false, // '<' or 'l'
+src/nav.zig-39-
+src/nav.zig-40-    pub fn parse(spec: []const u8) !NavPlan {
+src/nav.zig-41-        var plan = NavPlan{};
+src/nav.zig-42-        for (spec) |c| {
+src/nav.zig-43-            const op: NavOp = switch (c) {
+src/nav.zig-44-                'v', 'd', 'D' => .down,
+src/nav.zig-45-                '^', 'u', 'U' => .up,
+--
+src/nav.zig-57-        // Detect 2D vector contraposition combos
+src/nav.zig-58-        var i: usize = 0;
+src/nav.zig-59-        while (i + 1 < plan.len) : (i += 1) {
+src/nav.zig-60-            const a = plan.ops[i];
+src/nav.zig-61-            const b = plan.ops[i + 1];
+src/nav.zig-62-            if (a == .down and b == .up) {
+src/nav.zig-63-                plan.has_ceiling = true;
+src/nav.zig-64-            } else if (a == .up and b == .down) {
+src/nav.zig:65:                plan.has_trampoline = true;
+src/nav.zig-66-            }
+src/nav.zig-67-        }
+src/nav.zig-68-
+src/nav.zig-69-        for (plan.ops[0..plan.len]) |op| {
+src/nav.zig-70-            if (op == .left) plan.reverse_siblings = true;
+src/nav.zig-71-        }
+src/nav.zig-72-
+src/nav.zig-73-        return plan;
+src/nav.zig-74-    }
+src/nav.zig-75-
+src/nav.zig-76-    /// Determines whether regular files at the given directory depth should be scanned.
+src/nav.zig-77-    pub inline fn shouldScanFiles(self: NavPlan, depth: usize) bool {
+src/nav.zig-78-        if (self.len == 0) return true;
+src/nav.zig-79-        // Trampoline (^v / ud): Skip files in the root level (depth 0), but scan deeper.
+src/nav.zig:80:        if (self.has_trampoline and depth == 0) return false;
+src/nav.zig-81-        return true;
+src/nav.zig-82-    }
+src/nav.zig-83-
+src/nav.zig-84-    /// Determines whether subdirectories at the given directory depth should be descended into.
+src/nav.zig-85-    pub inline fn shouldRecurseSubdirs(self: NavPlan, depth: usize) bool {
+src/nav.zig-86-        if (self.len == 0) return true;
+src/nav.zig-87-        // Ceiling (v^ / du): Bounce back at depth 0, do not enter subdirectories.
+src/nav.zig-88-        if (self.has_ceiling and depth >= 0) return false;
+--
+src/nav.zig-105-    try std.testing.expectEqual(NavOp.left, p2.ops[2]);
+src/nav.zig-106-    try std.testing.expectEqual(NavOp.up, p2.ops[3]);
+src/nav.zig-107-}
+src/nav.zig-108-
+src/nav.zig-109-test "nav: contraposition combos: ceiling and trampoline" {
+src/nav.zig-110-    // Ceiling: v^ or du (depth limit = 0 subdirs)
+src/nav.zig-111-    const ceiling = try NavPlan.parse("v^");
+src/nav.zig-112-    try std.testing.expect(ceiling.has_ceiling);
+src/nav.zig:113:    try std.testing.expect(!ceiling.has_trampoline);
+src/nav.zig-114-    try std.testing.expect(ceiling.shouldScanFiles(0));
+src/nav.zig-115-    try std.testing.expect(!ceiling.shouldRecurseSubdirs(0));
+src/nav.zig-116-
+src/nav.zig-117-    // Trampoline: ^v or ud (leapfrog root files, dive into subdirs)
+src/nav.zig-118-    const trampoline = try NavPlan.parse("^v");
+src/nav.zig-119-    try std.testing.expect(!trampoline.has_ceiling);
+src/nav.zig:120:    try std.testing.expect(trampoline.has_trampoline);
+src/nav.zig-121-    try std.testing.expect(!trampoline.shouldScanFiles(0)); // root files skipped!
+src/nav.zig-122-    try std.testing.expect(trampoline.shouldScanFiles(1));  // subfolder files scanned!
+src/nav.zig-123-    try std.testing.expect(trampoline.shouldRecurseSubdirs(0));
+src/nav.zig-124-
+src/nav.zig-125-    // Reverse sibling flag
+src/nav.zig-126-    const rev = try NavPlan.parse("dl");
+src/nav.zig-127-    try std.testing.expect(rev.reverse_siblings);
+src/nav.zig-128-}

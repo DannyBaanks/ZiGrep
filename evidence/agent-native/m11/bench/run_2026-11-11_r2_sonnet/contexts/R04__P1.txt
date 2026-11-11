@@ -1,0 +1,105 @@
+CONTEXT PACK `breToEre`  (zpack/0, prototype; sections=blocks)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 13 in 2 file(s); by role: code 10, string 3
+  declarations found by pattern: 1
+
+BLOCKS
+src/bre.zig:33-43  sha256:52d30e2b2fe505d5
+>   33 | pub fn breToEre(arena: std.mem.Allocator, pattern: []const u8) []const u8 {
+    34 |     var out: std.ArrayList(u8) = .empty;
+    35 |     // Zgrep runs are bounded; a failed allocation just returns the pattern
+    36 |     // unchanged, which then fails parsing with a clear message.
+    37 |     breToEreInto(arena, pattern, &out) catch {
+    38 |         out.deinit(arena);
+    39 |         return pattern;
+    40 |     };
+    41 |     if (out.items.len == 0) return "";
+    42 |     return out.toOwnedSlice(arena) catch pattern;
+    43 | }
+src/bre.zig:152-173  sha256:5647ec75309d3c88
+>  152 | test "breToEre: the inverted escapes" {
+   153 |     const a = std.testing.allocator;
+   154 |     const cases = [_][2][]const u8{
+   155 |         .{ "a\\(b\\)c", "a(b)c" },
+   156 |         .{ "a\\{2\\}", "a{2}" },
+   157 |         .{ "a\\|b", "a|b" },
+   158 |         .{ "a\\+", "a+" },
+   159 |         .{ "a\\?", "a?" },
+   160 |         .{ "a(b)c", "a\\(b\\)c" },
+   161 |         .{ "a{2}", "a\\{2\\}" },
+   162 |         .{ "a|b", "a\\|b" },
+   163 |         .{ "a+b", "a\\+b" },
+   164 |         .{ "a?b", "a\\?b" },
+   165 |         .{ "a*", "a*" },
+   166 |     };
+   167 |     for (cases) |c| {
+   168 |         var arena = std.heap.ArenaAllocator.init(a);
+   169 |         defer arena.deinit();
+>  170 |         const got = breToEre(arena.allocator(), c[0]);
+   171 |         try std.testing.expectEqualStrings(c[1], got);
+   172 |     }
+   173 | }
+src/bre.zig:175-181  sha256:fee3ad9458c19ac4
+>  175 | test "breToEre: a leading * stays literal" {
+   176 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   177 |     defer arena.deinit();
+>  178 |     try std.testing.expectEqualStrings("\\*ab", breToEre(arena.allocator(), "*ab"));
+>  179 |     try std.testing.expectEqualStrings("a*b", breToEre(arena.allocator(), "a*b"));
+>  180 |     try std.testing.expectEqualStrings("(ab)*c", breToEre(arena.allocator(), "\\(ab\\)*c"));
+   181 | }
+src/bre.zig:183-191  sha256:8c0cab12ec430ca2
+>  183 | test "breToEre: classes are left alone" {
+   184 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+   185 |     defer arena.deinit();
+>  186 |     try std.testing.expectEqualStrings("[abc]", breToEre(arena.allocator(), "[abc]"));
+   187 |     // In BRE a `+` after a class is a LITERAL plus, so it must be escaped.
+>  188 |     try std.testing.expectEqualStrings("[[:digit:]]\\+", breToEre(arena.allocator(), "[[:digit:]]+"));
+   189 |     // A `(` inside a class is a literal in both dialects.
+>  190 |     try std.testing.expectEqualStrings("[(]", breToEre(arena.allocator(), "[(]"));
+   191 | }
+src/search.zig:376-376  sha256:b32002d9bfec3936
+   376 | pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) BuildError!Searcher {
+src/search.zig:385-420  sha256:9844a4d83cd246a2
+   385 |         s.kind = .never;
+   386 |         return s;
+   387 |     }
+   388 | 
+   389 |     if (patterns.len == 1 and !o.line) {
+   390 |         const pure: ?[]const u8 = if (o.fixed)
+   391 |             patterns[0]
+   392 |         else blk: {
+>  393 |             const src = if (o.basic) bre.breToEre(arena, patterns[0]) else patterns[0];
+   394 |             const n = try regex.parse(arena, src, .{});
+   395 |             break :blk try regex.asPureLiteral(arena, n);
+   396 |         };
+   397 |         if (pure) |lit| {
+   398 |             const text = try gpa.dupe(u8, lit);
+   399 |             if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+   400 |             if (o.icase) for (text) |*c| {
+   401 |                 c.* = toLowerByte(c.*);
+   402 |             };
+   403 |             var s = Searcher.init(text, o.algo);
+   404 |             s.icase = o.icase;
+   405 |             s.word = o.word;
+   406 |             return s;
+   407 |         }
+   408 |     }
+   409 | 
+   410 |     const nodes = try arena.alloc(*regex.Node, patterns.len);
+   411 |     for (patterns, 0..) |p, idx| {
+>  412 |         const src = if (o.basic) bre.breToEre(arena, p) else p;
+   413 |         var n = if (o.fixed)
+   414 |             try regex.literalNode(arena, src, o.icase)
+   415 |         else
+   416 |             try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+   417 |         if (o.line) n = try regex.lineWrap(arena, n);
+   418 |         if (o.word) n = try regex.wordWrap(arena, n);
+   419 |         nodes[idx] = n;
+   420 |     }
+
+TRUNCATION
+  truncated: false   items: 6

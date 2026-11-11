@@ -1,0 +1,18 @@
+{
+ "qid": "R03",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "a2e154c1775c4336a93a1fac69430b58008655545cd5cbc23a5c06e412520f54",
+ "answer": "The context only shows part of the list, so I can't give a full answer.\n\n**Visible entries** in `default_excluded_dirs` (src/filter.zig:17-25): `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`. The output is truncated after line 25 (the `--` separator), so more entries may follow.\n\n**`dist` / `build`:** Not in the visible lines (src/filter.zig:18-25). I can't confirm they're absent, since lines after 25 were cut off by the context window. The README.md and GUIA.md matches don't appear in the output either.\n\n**Related behavior:**\n- Defaults apply only when `use_defaults` is true (src/filter.zig:253-257).\n- Hidden directories (names starting with `.`) are also skipped when `skip_hidden` is set (src/filter.zig:249-251).\n- User-supplied `excluded_dirs` patterns are checked additionally (src/filter.zig:259-261).\n\nTo settle it, view src/filter.zig from line 17 through the closing `};` of the array.",
+ "usage": {
+  "cost_usd": 0.01021,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.65,
+ "headers": {}
+}

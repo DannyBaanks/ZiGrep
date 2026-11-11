@@ -1,0 +1,176 @@
+CONTEXT PACK `matchPattern`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 15 in 2 file(s); by role: code 14, string 1
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `matchPattern` in fn:matchPattern
+  src/filter.zig:49-82  sha256:2266eaf0d11c836a  relation: declaration (pattern match, heuristic)
+    49 | /// High-performance wildcard matcher (supports * and ? and trailing /).
+>   50 | pub fn matchPattern(name: []const u8, pattern: []const u8) bool {
+    51 |     var p = pattern;
+    52 |     if (p.len > 0 and p[p.len - 1] == '/') {
+    53 |         p = p[0 .. p.len - 1];
+    54 |     }
+    55 |     var n_idx: usize = 0;
+    56 |     var p_idx: usize = 0;
+    57 |     var star_idx: ?usize = null;
+    58 |     var match_idx: usize = 0;
+    59 | 
+    60 |     while (n_idx < name.len) {
+    61 |         if (p_idx < p.len and (p[p_idx] == '?' or p[p_idx] == name[n_idx])) {
+    62 |             n_idx += 1;
+    63 |             p_idx += 1;
+    64 |         } else if (p_idx < p.len and p[p_idx] == '*') {
+    65 |             star_idx = p_idx;
+    66 |             match_idx = n_idx;
+    67 |             p_idx += 1;
+    68 |         } else if (star_idx != null) {
+    69 |             p_idx = star_idx.? + 1;
+    70 |             match_idx += 1;
+    71 |             n_idx = match_idx;
+    72 |         } else {
+    73 |             return false;
+    74 |         }
+    75 |     }
+    76 | 
+    77 |     while (p_idx < p.len and p[p_idx] == '*') {
+    78 |         p_idx += 1;
+    79 |     }
+    80 | 
+    81 |     return p_idx == p.len;
+    82 | }
+
+REFERENCES
+src/filter.zig in fn:isDirExcluded
+  [h2] line 260 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h3] line 264 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  src/filter.zig:248-268  sha256:7fc410ed3fc6dae8
+   248 |     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+   249 |         if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
+   250 |             return true;
+   251 |         }
+   252 | 
+   253 |         if (self.use_defaults) {
+   254 |             for (default_excluded_dirs) |d| {
+   255 |                 if (std.mem.eql(u8, dir_name, d)) return true;
+   256 |             }
+   257 |         }
+   258 | 
+   259 |         for (self.excluded_dirs.items) |ex| {
+>  260 |             if (matchPattern(dir_name, ex)) return true;
+   261 |         }
+   262 | 
+   263 |         for (self.ignore_patterns.items) |pat| {
+>  264 |             if (matchPattern(dir_name, pat)) return true;
+   265 |         }
+   266 | 
+   267 |         return false;
+   268 |     }
+src/filter.zig in fn:isFileExcluded
+  [h4] line 286 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h5] line 290 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h6] line 309 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  src/filter.zig:270-318  sha256:8ae29162c3259610
+   270 |     pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
+   271 |         if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
+   272 |             return true;
+   273 |         }
+   274 | 
+   275 |         if (self.use_defaults) {
+   276 |             for (default_excluded_exts) |ext| {
+   277 |                 if (matchesExt(file_name, ext)) return true;
+   278 |             }
+   279 |         }
+   280 | 
+   281 |         for (self.excluded_exts.items) |ext| {
+   282 |             if (matchesExt(file_name, ext)) return true;
+   283 |         }
+   284 | 
+   285 |         for (self.excluded_patterns.items) |pat| {
+>  286 |             if (matchPattern(file_name, pat)) return true;
+   287 |         }
+   288 | 
+   289 |         for (self.ignore_patterns.items) |pat| {
+>  290 |             if (matchPattern(file_name, pat)) return true;
+   291 |         }
+   292 | 
+   293 |         // If specific extensions or patterns were requested via --include,
+   294 |         // any file not matching at least one is excluded:
+   295 |         if (self.included_exts.items.len > 0) {
+   296 |             var matched = false;
+   297 |             for (self.included_exts.items) |ext| {
+   298 |                 if (matchesExt(file_name, ext)) {
+   299 |                     matched = true;
+   300 |                     break;
+   301 |                 }
+   302 |             }
+   303 |             if (!matched) return true;
+   304 |         }
+   305 | 
+   306 |         if (self.included_patterns.items.len > 0) {
+   307 |             var matched = false;
+   308 |             for (self.included_patterns.items) |pat| {
+>  309 |                 if (matchPattern(file_name, pat)) {
+   310 |                     matched = true;
+   311 |                     break;
+   312 |                 }
+   313 |             }
+   314 |             if (!matched) return true;
+   315 |         }
+   316 | 
+   317 |         return false;
+   318 |     }
+src/main.zig in fn:preApplies
+  [h14] line 790 `filter.matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h15] line 790 `filter.matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  src/main.zig:787-791  sha256:bf3a90b9002667ba
+   787 | fn preApplies(glob: ?[]const u8, path: []const u8) bool {
+   788 |     const g = glob orelse return true;
+   789 |     const name = std.fs.path.basename(path);
+>  790 |     return filter.matchPattern(name, g) or filter.matchPattern(path, g);
+   791 | }
+mentions inside comments or strings (1): textual only, not a dependency
+  [h7] src/filter.zig:321 (string) test "matchPattern wildcards" {
+
+TESTS
+src/filter.zig in test:matchPattern wildcards  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h8] line 322 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h9] line 323 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h10] line 324 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h11] line 325 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h12] line 326 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  [h13] line 327 `matchPattern`: unresolved (lexical_only; 1 declaration(s) named matchPattern; none is linked by checkable evidence)
+  src/filter.zig:321-328  sha256:0737ddb4172fedc8
+   321 | test "matchPattern wildcards" {
+>  322 |     try std.testing.expect(matchPattern("foo.zig", "*.zig"));
+>  323 |     try std.testing.expect(matchPattern("test_foo.zig", "test_*.zig"));
+>  324 |     try std.testing.expect(matchPattern("target", "target/"));
+>  325 |     try std.testing.expect(matchPattern("file1.log", "file?.log"));
+>  326 |     try std.testing.expect(!matchPattern("file10.log", "file?.log"));
+>  327 |     try std.testing.expect(!matchPattern("foo.rs", "*.zig"));
+   328 | }
+src/filter.zig in test:matchPattern wildcards: textual mention(s) only, not a code reference: [h7] line 321 (string)
+  src/filter.zig:321-328  sha256:0737ddb4172fedc8
+>  321 | test "matchPattern wildcards" {
+   322 |     try std.testing.expect(matchPattern("foo.zig", "*.zig"));
+   323 |     try std.testing.expect(matchPattern("test_foo.zig", "test_*.zig"));
+   324 |     try std.testing.expect(matchPattern("target", "target/"));
+   325 |     try std.testing.expect(matchPattern("file1.log", "file?.log"));
+   326 |     try std.testing.expect(!matchPattern("file10.log", "file?.log"));
+   327 |     try std.testing.expect(!matchPattern("foo.rs", "*.zig"));
+   328 | }
+
+UNCERTAINTY
+- 13 code reference(s) not linked to a declaration: h2, h3, h4, h5, h6, h8, h9, h10, h11, h12, h13, h14, h15
+- not analysed: aliases (const x = y.matchPattern), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 570 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 12

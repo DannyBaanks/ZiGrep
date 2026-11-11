@@ -1,0 +1,18 @@
+{
+ "qid": "R01",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "9d59e8ab790e817f1796588bda0bbf9eab78f8fc196c1c0a0f5ed3fb3b9a7cb1",
+ "answer": "The context shows only partial evidence, and it does not confirm `[abc]` support.\n\nWhat the tests show (src/filter.zig:321-327):\n- `*` is a wildcard: `matchPattern(\"foo.zig\", \"*.zig\")` and `\"test_*.zig\"` match (src/filter.zig:322-323).\n- `?` matches a single character: `\"file?.log\"` matches `file1.log` but not `file10.log` (src/filter.zig:325-326).\n- A trailing `/` is tolerated: `\"target\"` matches `\"target/\"` (src/filter.zig:324).\n\nIs `[abc]` a character class? The context doesn't say. The tests don't cover brackets, and the body of `matchPattern` (src/filter.zig:50) isn't shown. The README.md and GUIA.md searches returned no hits for this term either.\n\nTo answer definitively, I'd need the implementation of `matchPattern` at src/filter.zig:50 onward, or any docs describing glob syntax.",
+ "usage": {
+  "cost_usd": 0.008556000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.13,
+ "headers": {}
+}

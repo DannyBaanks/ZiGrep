@@ -1,0 +1,2 @@
+src/filter.zig:17:pub const default_excluded_dirs = [_][]const u8{
+src/filter.zig:254:            for (default_excluded_dirs) |d| {

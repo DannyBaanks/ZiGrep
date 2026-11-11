@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer hedges and says it can't determine the result, though it leans toward 'would not match'; the reference definitively says No, with the specific mechanism (matchesExt requires a '.' before the extension) and the rg contrast.",
+ "cost_usd": 0.006012
+}

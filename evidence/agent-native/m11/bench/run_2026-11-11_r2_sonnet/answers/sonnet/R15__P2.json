@@ -1,0 +1,18 @@
+{
+ "qid": "R15",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "49d79aa751681ef8e2cfd03c5f0a715c5187bae2be6370114db7410d4090a4d4",
+ "answer": "When the cache fills, the DFA flushes it and starts over.\n\nIn `Dfa.intern` (src/regex.zig:807-818), the function first looks up the node set in `self.index` and returns the existing id if found (808-809). If not found and `self.states.items.len >= max_states` (src/regex.zig:810), where `max_states` is 3000 (src/regex.zig:659), it takes the \"cache full\" path (src/regex.zig:811):\n\n1. It duplicates the current `nodes` slice (812), freeing the copy on exit (813).\n2. It calls `self.reset()` (814), which discards the cached states.\n3. It interns the copied nodes as a fresh state (815).\n\nThe comment states callers must not reuse old ids (src/regex.zig:811), since they become invalid after the reset.\n\nNot shown: the implementation of `reset()` and `internFresh`, and how the search loop handles the invalidated ids. Those would need to be checked in the context to confirm the behavior beyond this function.",
+ "usage": {
+  "cost_usd": 0.01004,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.65,
+ "headers": {}
+}

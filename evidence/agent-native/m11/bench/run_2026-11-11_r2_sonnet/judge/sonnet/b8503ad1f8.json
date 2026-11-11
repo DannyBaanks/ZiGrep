@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: up to 4 regular files in the root directory, on the main thread, before the thread pool is created, with the `while (probed < 4)` loop. It omits the README's three-file discrepancy, but the question does not ask about it.",
+ "cost_usd": 0.0061140000000000005
+}

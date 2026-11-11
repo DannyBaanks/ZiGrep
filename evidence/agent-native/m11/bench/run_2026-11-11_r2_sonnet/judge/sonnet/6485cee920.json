@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the information is unavailable and that it cannot say whether dist or build are in the list; the reference states the full list and that neither is included."
+ ],
+ "reason": "The answer declines to answer, whereas the reference gives a definite list and says neither dist nor build is excluded.",
+ "cost_usd": 0.006144
+}

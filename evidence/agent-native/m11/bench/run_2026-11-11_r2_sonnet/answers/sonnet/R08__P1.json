@@ -1,0 +1,18 @@
+{
+ "qid": "R08",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "932dfffef7e9d4cafe8b5ed7a9075e8833dd6d625e6059a1f6e35454653cfbc0",
+ "answer": "**When a cache is ACTIVA.** In `add`, a target is `active` if either `hasLockFile(io, target_path)` or `procsHomeActive(...)` is true (src/clean.zig:283). The context does not show `hasLockFile`, so I can't say what it checks. Also, the \"ACTIVA\" label itself isn't in the context; I'm assuming it corresponds to the `active` field.\n\n**`procsHomeActive`** (src/clean.zig:141-191):\n- Returns false on non-Linux (142).\n- Scans numeric directories in `/proc` (152-157).\n- Reads `/proc/<pid>/exe` and strips a trailing \" (deleted)\" (158-164).\n\n**Recognising a Zig compiler.** The exe's basename must be exactly `zig` or `zig.exe` (170-172). The comment explains that an earlier substring match on `/zig` falsely matched the tool itself (165-169).\n\n**Once a process is a compiler:**\n- For `.global_cache`, any such process makes it active (173-176).\n- Otherwise, it's active if the process cwd equals the parent directory of the cache path, or is inside it (177-186).\n- It's also active if the exe path starts with the cache path (187).",
+ "usage": {
+  "cost_usd": 0.015228,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.2,
+ "headers": {}
+}

@@ -1,0 +1,31 @@
+src/main.zig:2224:        .icase = opts.ignore_case,
+src/regex.zig:57:    icase: bool,
+src/regex.zig:74:        if (self.icase) {
+src/regex.zig:277:        if (self.icase) {
+src/regex.zig:336:    icase: bool = false,
+src/regex.zig:345:    var p: Parser = .{ .a = arena, .src = pattern, .icase = o.icase, .dot_newline = o.dot_newline };
+src/regex.zig:352:pub fn literalNode(arena: Allocator, text: []const u8, icase: bool) CompileError!*Node {
+src/regex.zig:353:    var p: Parser = .{ .a = arena, .src = text, .icase = icase };
+src/regex.zig:466:/// `icase`, a letter pair {a,A} counts and the run is returned lower-cased.
+src/regex.zig:467:pub fn requiredLiteral(arena: Allocator, n: *const Node, icase: bool) CompileError!?[]u8 {
+src/regex.zig:482:            .set => |s| byte = litByte(s, icase),
+src/regex.zig:497:fn litByte(s: Set, icase: bool) ?u8 {
+src/regex.zig:509:    if (second == null) return if (icase) std.ascii.toLower(f) else f;
+src/regex.zig:510:    if (!icase) return null;
+src/regex.zig:1148:    try std.testing.expect(try testMatch("hello", "Say HeLLo", .{ .icase = true }));
+src/regex.zig:1150:    try std.testing.expect(try testMatch("[a-c]x", "BX", .{ .icase = true }));
+src/search.zig:121:    icase: bool = false,
+src/search.zig:221:        if (self.icase) return self.findCi(hay, start);
+src/search.zig:352:    icase: bool = false,
+src/search.zig:399:            if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
+src/search.zig:400:            if (o.icase) for (text) |*c| {
+src/search.zig:404:            s.icase = o.icase;
+src/search.zig:414:            try regex.literalNode(arena, src, o.icase)
+src/search.zig:416:            try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+src/search.zig:427:    s.icase = o.icase;
+src/search.zig:432:        if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
+src/search.zig:437:                pf.icase = o.icase;
+src/search.zig:568:    const ci = try build(pa, &.{"HeLLo"}, .{ .icase = true });
+src/search.zig:583:    const latin_ci = try build(pa, &.{"ñandú"}, .{ .icase = true, .fixed = true });
+src/search.zig:585:    const latin_upper = try build(pa, &.{"ÁRBOL"}, .{ .icase = true, .fixed = true });
+src/search.zig:608:    const s = try build(pa, &.{"CAT"}, .{ .line = true, .icase = true });

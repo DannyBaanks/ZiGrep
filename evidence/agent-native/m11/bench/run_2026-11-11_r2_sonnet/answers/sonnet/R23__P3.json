@@ -1,0 +1,18 @@
+{
+ "qid": "R23",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "0c0203f158bde8d8a23d3252e800135b92b2b07709628bc3257b15c5c0123c23",
+ "answer": "In `runSearch`, zgrep forces `opts.sort = true` in these cases:\n\n- **`--exec`**: when `opts.exec_cmd != null` (src/main.zig:2190). It needs to know which files matched, and only the ordered path keeps that (src/main.zig:2186-2189).\n- **`--heading`**: when `opts.heading` is set (src/main.zig:2195). Streaming emits in completion order, so file groups would interleave (src/main.zig:2191-2194).\n- **`--pre`**: when `opts.pre_cmd != null` (src/main.zig:2197). It runs per file and needs the ordered path (src/main.zig:2196).\n- **Multiple explicit file operands**: when more than one valid operand is given and all are files (src/main.zig:2362). Output then follows argument order (src/main.zig:2357-2361).\n\nThe last case is a condition on operands, not an option.\n\nThe batch runner (`--queries-file`) also passes `--sort` to each query it runs (src/main.zig:1925).\n\nConversely, `-k`/`--kamikaze`/`--dataflow` set `sort = false` (src/main.zig:944-946, 1606-1608).",
+ "usage": {
+  "cost_usd": 0.05534,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.75,
+ "headers": {}
+}

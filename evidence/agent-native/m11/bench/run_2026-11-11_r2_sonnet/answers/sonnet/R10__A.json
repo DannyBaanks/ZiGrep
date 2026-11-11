@@ -1,0 +1,18 @@
+{
+ "qid": "R10",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "e6243d005c5a63777794a794a8e53007fc0ef95453e7d2d38c4c3a2196902c28",
+ "answer": "The context doesn't contain enough information to answer.\n\nWhat it does show:\n- `src/scan.zig:107` defines `parseEncoding(name: []const u8) ?Encoding`, which returns an optional, so unrecognized names yield null.\n- `src/main.zig:2285`, `2433` and `2608` call it as `scan.parseEncoding(opts.encoding) orelse .auto`, so an unrecognized value falls back to `.auto`.\n\nWhat is missing:\n- The body of `parseEncoding` (and the `Encoding` enum), which would list the accepted values.\n- Any code that handles BOM detection or the `utf-16` case, so I can't say what happens with a BOM-less file.\n- The `--encoding` option's help text or documentation in `README.md` or `GUIA.md`. The search only matched the function name, so none of it appeared.\n\nTo answer, I'd need `src/scan.zig` around line 107 and wherever `Encoding` is used to decode files.",
+ "usage": {
+  "cost_usd": 0.007142000000000001,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.09,
+ "headers": {}
+}

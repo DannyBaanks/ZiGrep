@@ -1,0 +1,236 @@
+src/main.zig-79-    \\                    file and one positional row per line,
+src/main.zig-80-    \\                    [t,line,col,byte_start,len,text]; see GUIA §4p
+src/main.zig-81-    \\      --spill[=DIR]  with a budget: what it omits is written, exactly as
+src/main.zig-82-    \\                    it would have been printed, to a 0600 JSONL file in
+src/main.zig-83-    \\                    DIR (default $XDG_CACHE_HOME/zgrep/spill); the
+src/main.zig-84-    \\                    summary carries its path, sha256, bytes and events
+src/main.zig-85-    \\      --provenance  with --json: before the events of each file with
+src/main.zig-86-    \\                    output, a provenance event with the sha256 and size
+src/main.zig:87:    \\                    of the bytes searched and the file's mtime_ns
+src/main.zig-88-    \\      --queries-file FILE|-
+src/main.zig-89-    \\                    run every JSONL query {"id","pattern","paths"?,
+src/main.zig-90-    \\                    "flags"?} in this one process (JSON, sorted); each
+src/main.zig-91-    \\                    event carries query_id, each query ends with a
+src/main.zig-92-    \\                    query_end event and the stream with a summary
+src/main.zig-93-    \\      --max-results N
+src/main.zig-94-    \\                    stop emitting results after N (match, occurrence,
+src/main.zig-95-    \\                    file, count) for the whole call; keeps counting
+--
+src/out_json.zig-24-const json_prefix = "{\"schema\":\"zgrep/1\",";
+src/out_json.zig-25-
+src/out_json.zig-26-/// `--json=compact` (schema `zgrep/1c`, M5): la MISMA informacion que zgrep/1
+src/out_json.zig-27-/// en ~0,4x los tokens (medido: evidence/agent-native/m5/format_study.py).
+src/out_json.zig-28-/// Fijado una vez por ejecucion antes de escanear; los hilos solo lo leen.
+src/out_json.zig-29-///
+src/out_json.zig-30-///   * cabecera de stream: `{"schema":"zgrep/1c"}` (una vez);
+src/out_json.zig-31-///   * cabecera de fichero: `{"path":P}` antes de las filas de ese fichero
+src/out_json.zig:32:///     (con `--provenance` lleva ademas sha256_b64u/size/mtime_ns/source:
+src/out_json.zig-33-///     el sha256 en base64url sin relleno, que tokeniza ~44 % mejor que hex);
+src/out_json.zig-34-///   * filas de linea, una por linea JSON: `[t, line, col, byte_start, len,
+src/out_json.zig-35-///     text]` con span, `[t, line, text]` sin span; t = m|c|o|p, con `v` si la
+src/out_json.zig-36-///     linea sale por `-v`. `match` = text[col-1 .. col-1+len] en bytes; solo
+src/out_json.zig-37-///     si NO se deriva asi (`--replace`) va como 7o elemento;
+src/out_json.zig-38-///   * `-l`/`-L`: `["l",P]` / `["L",P]`; `-c`: `["#",P,n]`;
+src/out_json.zig-39-///     `--count-matches`: `["#m",P,n]` (llevan el path: no tienen cabecera).
+src/out_json.zig-40-pub var compact: bool = false;
+--
+src/out_json.zig-194-    try out.appendSlice(gpa, ",\"inverted\":");
+src/out_json.zig-195-    try out.appendSlice(gpa, if (ev.inverted) "true" else "false");
+src/out_json.zig-196-    try out.appendSlice(gpa, "}\n");
+src/out_json.zig-197-}
+src/out_json.zig-198-
+src/out_json.zig-199-/// M4: procedencia del fichero, UNA vez por fichero y ANTES de sus eventos.
+src/out_json.zig-200-/// `sha256` y `size` son de los bytes que zgrep leyó y buscó (no de una
+src/out_json.zig-201-/// relectura): así la afirmación "este match está en este contenido" es
+src/out_json.zig:202:/// verificable con `sha256sum`. `mtime_ns` sale de `statx` (null si no hay
+src/out_json.zig-203-/// fichero, p. ej. stdin). `source`: `file`, `file-utf16` (offsets sobre el
+src/out_json.zig-204-/// texto decodificado, hash del fichero crudo), `pre` (hash de la salida del
+src/out_json.zig-205-/// preprocesador) o `stdin`.
+src/out_json.zig-206-pub fn emitProvenanceEvent(
+src/out_json.zig-207-    out: *std.ArrayList(u8),
+src/out_json.zig-208-    gpa: Allocator,
+src/out_json.zig-209-    path: []const u8,
+src/out_json.zig-210-    sha256: *const [32]u8,
+src/out_json.zig-211-    size: usize,
+src/out_json.zig:212:    mtime_ns: ?i128,
+src/out_json.zig-213-    source: []const u8,
+src/out_json.zig-214-) Allocator.Error!void {
+src/out_json.zig-215-    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"provenance\",\"path\":");
+src/out_json.zig-216-    try appendJsonString(out, gpa, path);
+src/out_json.zig-217-    try out.appendSlice(gpa, ",\"sha256\":\"");
+src/out_json.zig-218-    const hex = std.fmt.bytesToHex(sha256.*, .lower);
+src/out_json.zig-219-    try out.appendSlice(gpa, &hex);
+src/out_json.zig-220-    try out.appendSlice(gpa, "\",\"size\":");
+src/out_json.zig-221-    try appendInt(out, gpa, size);
+src/out_json.zig:222:    try out.appendSlice(gpa, ",\"mtime_ns\":");
+src/out_json.zig:223:    if (mtime_ns) |m| {
+src/out_json.zig-224-        var buf: [48]u8 = undefined;
+src/out_json.zig-225-        const t = std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable;
+src/out_json.zig-226-        try out.appendSlice(gpa, t);
+src/out_json.zig-227-    } else try out.appendSlice(gpa, "null");
+src/out_json.zig-228-    try out.appendSlice(gpa, ",\"source\":\"");
+src/out_json.zig-229-    try out.appendSlice(gpa, source);
+src/out_json.zig-230-    try out.appendSlice(gpa, "\"}\n");
+src/out_json.zig-231-}
+--
+src/out_json.zig-274-    } else {
+src/out_json.zig-275-        try out.append(gpa, ',');
+src/out_json.zig-276-        try appendJsonString(out, gpa, ev.text);
+src/out_json.zig-277-    }
+src/out_json.zig-278-    try out.appendSlice(gpa, "]\n");
+src/out_json.zig-279-}
+src/out_json.zig-280-
+src/out_json.zig-281-/// Cabecera de fichero en `--json=compact`: `{"path":P}` o, con
+src/out_json.zig:282:/// `--provenance`, `{"path":P,"sha256":..,"size":..,"mtime_ns":..,"source":..}`.
+src/out_json.zig-283-pub fn emitCompactFileHeader(
+src/out_json.zig-284-    out: *std.ArrayList(u8),
+src/out_json.zig-285-    gpa: Allocator,
+src/out_json.zig-286-    path: []const u8,
+src/out_json.zig:287:    prov: ?struct { sha256: *const [32]u8, size: usize, mtime_ns: ?i128, source: []const u8 },
+src/out_json.zig-288-) Allocator.Error!void {
+src/out_json.zig-289-    try out.appendSlice(gpa, "{\"path\":");
+src/out_json.zig-290-    try appendJsonString(out, gpa, path);
+src/out_json.zig-291-    if (prov) |p| {
+src/out_json.zig-292-        // base64url sin relleno (RFC 4648 §5): el MISMO hash en 43 caracteres.
+src/out_json.zig-293-        // Medido con un BPE real: 31,9 tokens por hash frente a 56,5 en hex.
+src/out_json.zig-294-        // zgrep/1 sigue en hex (lo que imprime sha256sum).
+src/out_json.zig-295-        try out.appendSlice(gpa, ",\"sha256_b64u\":\"");
+src/out_json.zig-296-        var b64: [43]u8 = undefined;
+src/out_json.zig-297-        _ = std.base64.url_safe_no_pad.Encoder.encode(&b64, p.sha256);
+src/out_json.zig-298-        try out.appendSlice(gpa, &b64);
+src/out_json.zig-299-        try out.appendSlice(gpa, "\",\"size\":");
+src/out_json.zig-300-        try appendInt(out, gpa, p.size);
+src/out_json.zig:301:        try out.appendSlice(gpa, ",\"mtime_ns\":");
+src/out_json.zig:302:        if (p.mtime_ns) |m| {
+src/out_json.zig-303-            var buf: [48]u8 = undefined;
+src/out_json.zig-304-            try out.appendSlice(gpa, std.fmt.bufPrint(&buf, "{d}", .{m}) catch unreachable);
+src/out_json.zig-305-        } else try out.appendSlice(gpa, "null");
+src/out_json.zig-306-        try out.appendSlice(gpa, ",\"source\":\"");
+src/out_json.zig-307-        try out.appendSlice(gpa, p.source);
+src/out_json.zig-308-        try out.append(gpa, '"');
+src/out_json.zig-309-    }
+src/out_json.zig-310-    try out.appendSlice(gpa, "}\n");
+--
+src/scan.zig-1317-/// `--provenance` hashes.
+src/scan.zig-1318-pub fn insertFileHeader(
+src/scan.zig-1319-    out: *std.ArrayList(u8),
+src/scan.zig-1320-    gpa: Allocator,
+src/scan.zig-1321-    path: []const u8,
+src/scan.zig-1322-    start: usize,
+src/scan.zig-1323-    data: []const u8,
+src/scan.zig-1324-    source: ProvSource,
+src/scan.zig:1325:    mtime_ns: ?i128,
+src/scan.zig-1326-    provenance: bool,
+src/scan.zig-1327-) Allocator.Error!void {
+src/scan.zig-1328-    if (!out_json.compact) {
+src/scan.zig:1329:        if (provenance) try insertProvenance(out, gpa, path, start, data, source, mtime_ns);
+src/scan.zig-1330-        return;
+src/scan.zig-1331-    }
+src/scan.zig-1332-    var ev: std.ArrayList(u8) = .empty;
+src/scan.zig-1333-    defer ev.deinit(gpa);
+src/scan.zig-1334-    if (provenance) {
+src/scan.zig-1335-        var digest: [32]u8 = undefined;
+src/scan.zig-1336-        std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+src/scan.zig:1337:        try out_json.emitCompactFileHeader(&ev, gpa, path, .{ .sha256 = &digest, .size = data.len, .mtime_ns = mtime_ns, .source = source.name() });
+src/scan.zig-1338-    } else {
+src/scan.zig-1339-        try out_json.emitCompactFileHeader(&ev, gpa, path, null);
+src/scan.zig-1340-    }
+src/scan.zig-1341-    try out.insertSlice(gpa, start, ev.items);
+src/scan.zig-1342-}
+src/scan.zig-1343-
+src/scan.zig-1344-pub fn insertProvenance(
+src/scan.zig-1345-    out: *std.ArrayList(u8),
+src/scan.zig-1346-    gpa: Allocator,
+src/scan.zig-1347-    path: []const u8,
+src/scan.zig-1348-    start: usize,
+src/scan.zig-1349-    data: []const u8,
+src/scan.zig-1350-    source: ProvSource,
+src/scan.zig:1351:    mtime_ns: ?i128,
+src/scan.zig-1352-) Allocator.Error!void {
+src/scan.zig-1353-    var digest: [32]u8 = undefined;
+src/scan.zig-1354-    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+src/scan.zig-1355-    var ev: std.ArrayList(u8) = .empty;
+src/scan.zig-1356-    defer ev.deinit(gpa);
+src/scan.zig:1357:    try out_json.emitProvenanceEvent(&ev, gpa, path, &digest, data.len, mtime_ns, source.name());
+src/scan.zig-1358-    try out.insertSlice(gpa, start, ev.items);
+src/scan.zig-1359-}
+src/scan.zig-1360-
+src/scan.zig-1361-/// Emits the once-per-file part of `-c`, `-l`, and `-L`.
+src/scan.zig-1362-/// Returns null on success or the errno if the buffer could not grow.
+src/scan.zig-1363-pub fn emitOncePerFile(
+src/scan.zig-1364-    out: *std.ArrayList(u8),
+src/scan.zig-1365-    gpa: Allocator,
+--
+src/scan.zig-2018-    defer out.deinit(gpa);
+src/scan.zig-2019-    try out.appendSlice(gpa, "PREVIO\n");
+src/scan.zig-2020-    const start = out.items.len;
+src/scan.zig-2021-    try out.appendSlice(gpa, "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n");
+src/scan.zig-2022-    try insertProvenance(&out, gpa, "f.txt", start, "abc", .file, 42);
+src/scan.zig-2023-    // sha256("abc"), el vector de prueba de FIPS 180-2.
+src/scan.zig-2024-    try std.testing.expectEqualStrings(
+src/scan.zig-2025-        \\PREVIO
+src/scan.zig:2026:        \\{"schema":"zgrep/1","type":"provenance","path":"f.txt","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","size":3,"mtime_ns":42,"source":"file"}
+src/scan.zig-2027-        \\{"schema":"zgrep/1","type":"match"}
+src/scan.zig-2028-        \\
+src/scan.zig-2029-    , out.items);
+src/scan.zig-2030-}
+src/scan.zig-2031-
+src/scan.zig-2032-test "finishFile: sin salida del fichero no hay provenance (no se hashea)" {
+src/scan.zig-2033-    const gpa = std.testing.allocator;
+src/scan.zig-2034-    var out: std.ArrayList(u8) = .empty;
+--
+GUIA.md-803-exacto que se buscó. Con `--json --provenance`, antes de los eventos de cada
+GUIA.md-804-fichero con salida va un evento `provenance`:
+GUIA.md-805-
+GUIA.md-806-```sh
+GUIA.md-807-zgrep --json --provenance HIT a.txt b.txt
+GUIA.md-808-```
+GUIA.md-809-
+GUIA.md-810-```json
+GUIA.md:811:{"schema":"zgrep/1","type":"provenance","path":"a.txt","sha256":"89f3e85d8bd8b4156bafcd5dbef16db596a610cd9707d2097cfaab9e1aebb07b","size":26,"mtime_ns":1794350072429715620,"source":"file"}
+GUIA.md-812-{"schema":"zgrep/1","type":"match","path":"a.txt","line":3,"column":1,"byte_start":8,"byte_end":11,"match":"HIT","text":"HIT","inverted":false}
+GUIA.md:813:{"schema":"zgrep/1","type":"provenance","path":"b.txt","sha256":"9e011eb2d04d64c73b63643ac869ebf9c786846c11852a94ec831293db2bdce4","size":25,"mtime_ns":1794350072429715620,"source":"file"}
+GUIA.md-814-{"schema":"zgrep/1","type":"match","path":"b.txt","line":2,"column":1,"byte_start":10,"byte_end":13,"match":"HIT","text":"HIT here","inverted":false}
+GUIA.md-815-```
+GUIA.md-816-
+GUIA.md-817-Y se comprueba con las herramientas de siempre:
+GUIA.md-818-
+GUIA.md-819-```text
+GUIA.md-820-89f3e85d8bd8b4156bafcd5dbef16db596a610cd9707d2097cfaab9e1aebb07b  a.txt
+GUIA.md-821-9e011eb2d04d64c73b63643ac869ebf9c786846c11852a94ec831293db2bdce4  b.txt
+GUIA.md-822-a.txt size=26 mtime=1794350072,429715620
+GUIA.md-823-b.txt size=25 mtime=1794350072,429715620
+GUIA.md-824-```
+GUIA.md-825-
+GUIA.md-826-* `sha256` y `size` son de **los bytes que zgrep leyó y buscó**, no de una
+GUIA.md-827-  relectura: no hay carrera entre buscar y hashear.
+GUIA.md:828:* `mtime_ns` sale de `statx` sobre el descriptor que se leyó.
+GUIA.md-829-* `source`: `file`, `file-utf16` (hash del fichero crudo; los offsets son del
+GUIA.md-830-  texto decodificado), `pre` (hash de la salida de `--pre`) o `stdin` (hash de
+GUIA.md:831:  lo recibido, `mtime_ns` null).
+GUIA.md-832-* Un evento por fichero y **solo** si ese fichero produjo algún evento: los
+GUIA.md-833-  ficheros sin coincidencias no se hashean. `-c` emite un recuento por fichero,
+GUIA.md-834-  así que con `-c` todos llevan procedencia.
+GUIA.md-835-* Aditivo: quitando los eventos `provenance`, el stream es byte a byte el de
+GUIA.md-836-  siempre. Sin `--json` es error de uso.
+GUIA.md-837-* En lote vale como bandera global o por consulta; el evento lleva `query_id` y
+GUIA.md-838-  no cuenta como resultado para `--max-results` (sí pesa en
+GUIA.md-839-  `--max-output-tokens`).
+--
+GUIA.md-900-que en hex (medido). `zgrep/1` sigue en hex, como `sha256sum`.
+GUIA.md-901-
+GUIA.md-902-```sh
+GUIA.md-903-zgrep --json=compact --provenance HIT a.txt
+GUIA.md-904-```
+GUIA.md-905-
+GUIA.md-906-```json
+GUIA.md-907-{"schema":"zgrep/1c"}
+GUIA.md:908:{"path":"a.txt","sha256_b64u":"ifPoXYvYtBVrr81dvvFttZamEM2XB9IJfPqrnhrrsHs","size":26,"mtime_ns":1794350072429715620,"source":"file"}
+GUIA.md-909-["m",3,1,8,3,"HIT"]
+GUIA.md-910-```
+GUIA.md-911-
+GUIA.md-912-En lote, cada consulta abre con `{"query_id":ID}` y sus filas son de esa
+GUIA.md-913-consulta hasta el `query_end`; `query_end` y `summary` son los de zgrep/1. El
+GUIA.md-914-dialecto es de la llamada: una consulta no puede cambiarlo en `"flags"`.
+GUIA.md-915-
+GUIA.md-916-Verificado sin pérdida (`compact_conformance.py`, en CI): cada caso decodifica a

@@ -1,0 +1,18 @@
+{
+ "qid": "R26",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "f4c077cbef88ff879afb8c302b32ecdc16e1328b6f6c314e5cf5cf31e07a3a03",
+ "answer": "Yes, the context shows a hard limit of 512 levels.\n\n- `src/walk.zig:11` defines `pub const walk_max_depth = 512;`.\n- `src/walk.zig:62` checks `if (depth > walk_max_depth) return error.TooDeep;`. That check runs in the walking function regardless of the `max_depth` parameter (`src/walk.zig:59`).\n- `TooDeep` is a member of the walker's `Error` set (`src/walk.zig:17`).\n\nThe snippet shows the `max_depth: usize` parameter but not how it is derived, so I can't say how `--max-depth` interacts with the limit by default. The README and GUIA matches did not appear in the results, so I can't confirm whether the limit is documented or how `TooDeep` is reported to the user.",
+ "usage": {
+  "cost_usd": 0.008864,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 3.56,
+ "headers": {}
+}

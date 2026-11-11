@@ -1,0 +1,18 @@
+{
+ "qid": "R20",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "557eb2a21a2b395a080318d0dedba2bd89244df86fe86b1511659a05fa7ea2aa",
+ "answer": "**Probably yes, but not reliably.** Smart case is implemented as a byte-level check in `runSearch` (src/main.zig:2205-2217).\n\n- If `-S` is set and `-i` is not, zgrep scans every pattern byte for an uppercase character. If none is found, it sets `opts.ignore_case = true` (src/main.zig:2206, 2216).\n- The check treats only ASCII `A-Z` (src/main.zig:2210) and Latin-1 byte values `0xC0–0xDE`, excluding `0xD7` (src/main.zig:2211), as uppercase.\n- `ñandú` contains no uppercase letters, so `has_upper` stays false and `ignore_case` is set to true.\n\n**Caveat:** the loop iterates over bytes (`for (pat) |c|`, src/main.zig:2209). If the pattern is UTF-8, `ñ` and `ú` are encoded as multibyte sequences. Their lead bytes (`0xC3`) fall inside the `0xC0–0xDE` range, so the check could wrongly flag the pattern as having uppercase. That would leave the search case-sensitive. The context does not show how patterns are encoded or whether a test covers this, so I can't confirm which outcome occurs.",
+ "usage": {
+  "cost_usd": 0.019524,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.28,
+ "headers": {}
+}

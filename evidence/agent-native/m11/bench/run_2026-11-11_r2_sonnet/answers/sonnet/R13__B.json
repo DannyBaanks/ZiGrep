@@ -1,0 +1,18 @@
+{
+ "qid": "R13",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "3165b407bc91acc7e7efcc0f6f288a77f7966d812a292173ccc4ac4024fda6c8",
+ "answer": "**Short answer: almost certainly no for the regex case, based on this context.**\n\n- The regex parser's case folding is ASCII-only. `byteSet` adds the other case only for `a–z`/`A–Z` (src/regex.zig:74-77), and bracket classes do the same (src/regex.zig:277-285). `litByte` also uses `std.ascii` (src/regex.zig:509-512).\n- Patterns are handled byte by byte. `ñ` in UTF-8 is two bytes (not shown in context, but implied by the byte-set design), so `Ñ` would not be a folding partner.\n- The Latin-1 test covers only `-F` with `.fixed = true` (src/search.zig:583-586). Fixed mode with a multi-pattern or regex route still uses `literalNode`, which also calls `byteSet` (src/regex.zig:355). I can't see the code that handles Latin-1 for the literal fast path.\n- No regex test covers Latin-1 folding (src/regex.zig:1147-1155).\n\nSo `ñand.` with `-i` would likely not match `ÑANDÚ`. Even the `.` would have to span a two-byte `Ú`.\n\n**Missing:** the README/GUIA text wasn't in the results, so I can't verify its wording. The `toLowerByte` implementation (src/search.zig:401) and `findCi` weren't shown either.",
+ "usage": {
+  "cost_usd": 0.04306,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 5.87,
+ "headers": {}
+}

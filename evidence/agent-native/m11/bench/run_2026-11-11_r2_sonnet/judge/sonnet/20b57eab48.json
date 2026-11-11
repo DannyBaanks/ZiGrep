@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Answer correctly gives mtime_ns as null for stdin (statx-based), but fails to state that the UTF-16 hash is of the raw file and offsets refer to decoded text, saying instead that it can't determine these.",
+ "cost_usd": 0.0068920000000000006
+}

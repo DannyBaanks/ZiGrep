@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: only `*` and `?` are supported, a trailing `/` is stripped, and `[` is compared literally so `[abc]` is not a character class. It does not mention case-sensitivity, but the question does not ask about it.",
+ "cost_usd": 0.00641
+}

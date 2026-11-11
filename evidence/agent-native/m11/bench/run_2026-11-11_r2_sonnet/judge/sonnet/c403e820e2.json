@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly states the information is not available, and its supporting details (256 KiB mmap_threshold in src/scan.zig, memory-mapping, RSS depends on page cache) match the reference.",
+ "cost_usd": 0.006046
+}

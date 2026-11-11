@@ -1,0 +1,108 @@
+M11 mechanical scores, reader=sonnet
+
+question             A             B            P1            P2            P3    (fact score of the ANSWER / facts AVAILABLE in the context)
+R01 heldout2  0.75/0.50     1.00/0.75     1.00/0.50     1.00/0.75     1.00/0.75 
+R02 heldout2  0.25/0.00     1.00/0.00     1.00/0.00     1.00/0.00     1.00/0.00 
+R03 heldout2  0.25/0.00     0.75/0.50     1.00/0.75     0.25/0.00     0.00/0.00 
+R04 heldout2  0.67/0.33     1.00/0.67     1.00/0.67     1.00/1.00     1.00/1.00 
+R05 heldout2  0.60/0.00     1.00/0.00     0.60/0.00     0.80/0.00     1.00/0.00 
+R06 heldout2  0.50/0.25     0.75/0.75     0.75/0.50     0.75/0.50     0.75/0.50 
+R07 heldout2  0.40/0.00     0.80/0.80     1.00/0.80     1.00/0.80     1.00/0.80 
+R08 heldout2  0.40/0.20     0.80/0.60     1.00/0.80     1.00/0.80     1.00/0.80 
+R09 heldout2  0.33/0.33     0.33/0.33     0.33/0.33     0.33/0.33     0.33/0.33 
+R10 heldout2  0.00/0.00     0.75/0.75     0.50/0.50     0.50/0.50     0.50/0.50 
+R11 heldout2  0.20/0.00     0.60/0.40     0.80/0.40     0.60/0.40     0.80/0.40 
+R12 heldout2  1.00/0.00     1.00/0.50     1.00/0.00     1.00/0.50     1.00/0.50 
+R13 heldout2  1.00/0.50     1.00/0.50     1.00/0.50     0.75/0.50     0.75/0.75 
+R14 heldout2  1.00/0.33     1.00/0.67     1.00/0.67     1.00/0.67     1.00/0.67 
+R15 heldout2  1.00/0.50!    1.00/1.00!    1.00/1.00     1.00/1.00     1.00/1.00 
+R16 heldout2  0.20/0.20     0.60/0.60     0.60/0.60     0.60/0.60     0.80/0.80 
+R17 heldout2  0.33/0.33     1.00/1.00     0.67/0.67     1.00/1.00     1.00/1.00 
+R18 heldout2  0.33/0.67     1.00/0.67     1.00/0.67     0.67/1.00!    0.67/1.00 
+R19 heldout2  0.33/0.00     0.33/1.00     1.00/1.00     1.00/1.00     0.33/1.00 
+R20 heldout2  0.33/0.00     1.00/0.67     1.00/0.67     1.00/0.67     1.00/0.67 
+R21 heldout2  1.00/0.50     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+R22 heldout2  0.50/0.50     1.00/0.75     1.00/0.75     0.75/0.75     1.00/0.75 
+R23 heldout2  1.00/0.67     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+R24 heldout2  0.33/0.00     1.00/0.67     1.00/1.00     1.00/1.00     1.00/1.00 
+R25 heldout2  0.50/0.00     0.75/0.75     0.75/0.75     0.75/0.75     0.75/0.75 
+R26 heldout2  1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00     1.00/1.00 
+R27 heldout2  1.00/0.33     1.00/0.67     1.00/0.67     1.00/0.67     1.00/0.67 
+R28 heldout2  0.50/0.50     0.50/0.50     0.50/0.50     0.50/1.00     0.50/1.00 
+R29 heldout2  0.67/0.33     0.67/0.33     0.67/0.33     0.67/0.67     0.67/0.67 
+R30 heldout2  1.00/0.00     1.00/0.00     1.00/0.00     1.00/0.00     1.00/0.00!
+
+'!' = a forbidden (known-wrong) pattern matched;  'E' = reader error or missing answer
+
+[heldout2]  mean fact score / mean availability / forbidden hits / mean cites / abstentions
+  A   0.579 / 0.266 / 1 / 4.0 / 23
+  B   0.854 / 0.627 / 1 / 5.4 / 21
+  P1  0.872 / 0.601 / 0 / 4.9 / 20
+  P2  0.831 / 0.662 / 1 / 5.0 / 25
+  P3  0.828 / 0.677 / 2 / 5.8 / 21
+[all]  mean fact score / mean availability / forbidden hits / mean cites / abstentions
+  A   0.579 / 0.266 / 1 / 4.0 / 23
+  B   0.854 / 0.627 / 1 / 5.4 / 21
+  P1  0.872 / 0.601 / 0 / 4.9 / 20
+  P2  0.831 / 0.662 / 1 / 5.0 / 25
+  P3  0.828 / 0.677 / 2 / 5.8 / 21
+
+paired by question (fact score), all questions: wins/ties/losses, two-sided sign test p
+  P1 vs A: 17/13/0  p=0.000
+  P1 vs B: 5/22/3  p=0.727
+  P2 vs A: 17/12/1  p=0.000
+  P2 vs B: 3/21/6  p=0.508
+  P3 vs A: 16/12/2  p=0.001
+  P3 vs B: 4/22/4  p=1.000
+
+blinded judge (0 wrong / 1 partial / 2 correct): per question, then mean grade / grade-0 count / wrong claims
+question     A     B    P1    P2    P3
+R01 heldout2   1     1     2     2     2
+R02 heldout2   1     2     2     2     2
+R03 heldout2   0     1     1     0     0
+R04 heldout2   1     2     2     2     2
+R05 heldout2   1     1     1     1     1
+R06 heldout2   1     2     1     1     1
+R07 heldout2   0     1     2     1     2
+R08 heldout2   1     1     1     1     1
+R09 heldout2   0     1     1     1     1
+R10 heldout2   1     2     1     1     1
+R11 heldout2   0     1     1     1     1
+R12 heldout2   0     2     1     1     2
+R13 heldout2   1     1     1     1     1
+R14 heldout2   1     2     2     2     2
+R15 heldout2   1     1     2     1     1
+R16 heldout2   1     1     1     1     1
+R17 heldout2   0     1     1     2     2
+R18 heldout2   0     1     2     1     1
+R19 heldout2   1     2     1     2     2
+R20 heldout2   0     1     1     1     1
+R21 heldout2   0     2     0     1     2
+R22 heldout2   1     1     2     1     1
+R23 heldout2   1     1     1     1     2
+R24 heldout2   0     2     2     1     2
+R25 heldout2   0     1     1     1     1
+R26 heldout2   1     2     1     1     2
+R27 heldout2   1     2     2     2     2
+R28 heldout2   1     1     0     1     1
+R29 heldout2   1     1     1     1     1
+R30 heldout2   2     2     2     2     2
+[heldout2]
+  A   0.67 / 11 / 17
+  B   1.40 / 0 / 9
+  P1  1.30 / 2 / 11
+  P2  1.23 / 1 / 10
+  P3  1.43 / 1 / 7
+[all]
+  A   0.67 / 11 / 17
+  B   1.40 / 0 / 9
+  P1  1.30 / 2 / 11
+  P2  1.23 / 1 / 10
+  P3  1.43 / 1 / 7
+paired by question (judge grade), all questions: wins/ties/losses, two-sided sign test p
+  P1 vs A: 17/12/1  p=0.000
+  P1 vs B: 5/18/7  p=0.774
+  P2 vs A: 16/14/0  p=0.000
+  P2 vs B: 2/21/7  p=0.180
+  P3 vs A: 18/12/0  p=0.000
+  P3 vs B: 4/23/3  p=1.000

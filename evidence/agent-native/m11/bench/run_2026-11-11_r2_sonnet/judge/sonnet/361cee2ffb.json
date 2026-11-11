@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Correctly says yes with walk_max_depth = 512 and error.TooDeep, but hedges where the reference is definite and omits the micro path depth-32 handoff and that --max-depth=0 means no user limit.",
+ "cost_usd": 0.005674
+}

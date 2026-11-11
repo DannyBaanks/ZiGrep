@@ -1,0 +1,18 @@
+{
+ "qid": "R27",
+ "cond": "P1",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "7b4d1a662f85c1e6ca3eb74a32a212f3c44a2bec4b2032e49cae49d8d4fa0484",
+ "answer": "For a UTF-16 file, the provenance event uses `source: \"file-utf16\"`. The sha256 is of the **raw file**, and the offsets refer to the **decoded text** (GUIA.md:829-830; src/out_json.zig:203-205).\n\nFor standard input, `source` is `stdin`, the hash covers what was received, and `mtime_ns` is `null` (GUIA.md:830-831). The code backs this up. `mtime_ns` is an optional value that is written as `null` when absent, \"p. ej. stdin\" (src/out_json.zig:202, 222-227).\n\nThe context doesn't show how the decoding step itself is wired up. It only shows the `insertProvenance` hashing step, which hashes whatever `data` it is given (src/scan.zig:1353-1354). That step doesn't say whether `data` is raw or decoded for UTF-16, so the raw-file claim rests on the docs and doc comment.",
+ "usage": {
+  "cost_usd": 0.031948,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.45,
+ "headers": {}
+}

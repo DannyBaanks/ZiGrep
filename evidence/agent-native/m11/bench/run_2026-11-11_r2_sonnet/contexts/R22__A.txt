@@ -1,0 +1,20 @@
+src/main.zig:316:    exec_cmd: ?[]const u8 = null,
+src/main.zig:1059:                opts.exec_cmd = body["exec=".len..];
+src/main.zig:1061:                opts.exec_cmd = body["execute=".len..];
+src/main.zig:1068:                opts.exec_cmd = args[i];
+src/main.zig:1562:                    opts.exec_cmd = value;
+src/main.zig:1724:    if (opts.json and opts.exec_cmd != null) {
+src/main.zig:1882:    if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
+src/main.zig:2190:    if (opts.exec_cmd != null and !opts.sort) opts.sort = true;
+src/main.zig:2201:    if (opts.exec_cmd != null) opts.mode = .quiet;
+src/main.zig:2493:        if (matched and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+src/main.zig:2563:    if (opts.exec_cmd) |_| {
+src/main.zig:2614:        .exec_mode = opts.exec_cmd != null,
+src/main.zig:2632:            if (opts.mode == .quiet and opts.exec_cmd == null and ctx.found.load(.acquire)) break;
+src/main.zig:2652:        if (opts.mode == .quiet and opts.exec_cmd == null) {
+src/main.zig:2667:        if (opts.mode == .quiet and opts.exec_cmd == null) {
+src/main.zig:2749:    if (opts.exec_cmd) |tmpl| {
+src/main.zig:2770:    if (stats_matched_files > 0 and opts.mode == .quiet and opts.exec_cmd == null) return 0;
+src/main.zig:3050:        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+src/main.zig:3056:        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);
+src/main.zig:3062:        try std.testing.expectEqualStrings("echo {}", o.exec_cmd.?);

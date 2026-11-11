@@ -1,0 +1,18 @@
+{
+ "qid": "R29",
+ "cond": "B",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "981d2455b689cd443f18e2b462b53e82f70e5b551dbee2525b1b3a94a3a01c67",
+ "answer": "The context doesn't show enough to say for certain, but it points toward \"no\".\n\n- The type registry maps type names to file extensions only (`name`, `exts`) (src/types.zig:9-12).\n- `-t` applies a type by adding its extensions as include filters via `addIncludedExts` (src/main.zig:729-733).\n- The visible registry entries (src/types.zig:15-22, 59-62) are all extension-based, such as `.zig`, `.yaml` and `.cmake`. I don't see a `docker` entry, and no entry has exact-filename matching.\n- An unknown type name is a usage error (src/main.zig:698-700).\n\nThe registry lines 23-58 were not shown, so I can't confirm whether a `docker` type exists. I also can't see how `FilterEngine.addIncludedExts` matches. A file named exactly `Dockerfile` has no extension, so an extension-only match would likely skip it. Checking the omitted registry lines and the `filter` module would settle this.",
+ "usage": {
+  "cost_usd": 0.02022,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.6,
+ "headers": {}
+}

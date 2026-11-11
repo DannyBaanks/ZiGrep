@@ -1,0 +1,8 @@
+{
+ "grade": 0,
+ "wrong_claims": [
+  "Claims the list contents are unavailable and it cannot say whether dist or build are included; the reference gives the full list and says neither is in it."
+ ],
+ "reason": "The answer fails to list the default skipped directories or state that dist and build are not among them, so it does not answer the question the reference answers definitively.",
+ "cost_usd": 0.00625
+}

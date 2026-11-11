@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference: only `*` and `?` plus a stripped trailing `/`, and `[abc]` is not a character class but matches the literal text `[abc]`. It omits case-sensitivity, but the question does not ask about it.",
+ "cost_usd": 0.006662
+}

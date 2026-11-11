@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer correctly lists match, occurrence, file and count as results and says context events do not count; the extra caveats about spilled non-result events are not contradicted by the reference.",
+ "cost_usd": 0.005728
+}

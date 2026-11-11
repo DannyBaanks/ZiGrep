@@ -1,0 +1,7 @@
+src/main.zig:2997:        try std.testing.expect(o.nav_plan.has_trampoline);
+src/main.zig:3005:        try std.testing.expect(!o.nav_plan.has_trampoline);
+src/nav.zig:37:    has_trampoline: bool = false,   // "^v" or "ud"
+src/nav.zig:65:                plan.has_trampoline = true;
+src/nav.zig:80:        if (self.has_trampoline and depth == 0) return false;
+src/nav.zig:113:    try std.testing.expect(!ceiling.has_trampoline);
+src/nav.zig:120:    try std.testing.expect(trampoline.has_trampoline);

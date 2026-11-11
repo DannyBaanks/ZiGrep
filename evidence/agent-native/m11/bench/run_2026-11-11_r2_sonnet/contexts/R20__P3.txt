@@ -1,0 +1,130 @@
+CONTEXT PACK `smart_case`  (zpack/0, prototype; sections=all)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 6 in 1 file(s); by role: code 6
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] field `smart_case` in container:Options
+  src/main.zig:322-322  sha256:a17ee415791020dd  relation: declaration (pattern match, heuristic)
+>  322 |     smart_case: bool = false,
+
+REFERENCES
+src/main.zig in fn:parseArgs
+  [h2] line 1070 `opts.smart_case`: unique_field_candidate -> h1 (heuristic; the only field named smart_case in scope is src/main.zig:322; the type of 'opts' was not checked)
+  [h3] line 1530 `opts.smart_case`: unique_field_candidate -> h1 (heuristic; the only field named smart_case in scope is src/main.zig:322; the type of 'opts' was not checked)
+  src/main.zig:877-877  sha256:247a8ac14cf0c047
+   877 | pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Options) usage_error!Parsed {
+  src/main.zig:1062-1078  sha256:5d89259bfaf9a602
+  1062 |             } else if (std.mem.eql(u8, body, "exec") or std.mem.eql(u8, body, "execute")) {
+  1063 |                 i += 1;
+  1064 |                 if (i >= args.len) {
+  1065 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1066 |                     return error.Usage;
+  1067 |                 }
+  1068 |                 opts.exec_cmd = args[i];
+  1069 |             } else if (std.mem.eql(u8, body, "smart-case")) {
+> 1070 |                 opts.smart_case = true;
+  1071 |             } else if (std.mem.startsWith(u8, body, "type=")) {
+  1072 |                 const v = body["type=".len..];
+  1073 |                 addType(opts, v, true) catch return error.Usage;
+  1074 |             } else if (std.mem.eql(u8, body, "type")) {
+  1075 |                 i += 1;
+  1076 |                 if (i >= args.len) {
+  1077 |                     opts.fail = .{ .what = "option requires an argument", .arg = a };
+  1078 |                     return error.Usage;
+  src/main.zig:1522-1538  sha256:042be1f60615c63f
+  1522 |                 // meaning, which is worse than not supporting it.
+  1523 |                 'r', 'I' => {},
+  1524 |                 'E' => {},
+  1525 |                 'G' => opts.basic_regexp = true,
+  1526 |                 'n' => opts.show_line_no = true,
+  1527 |                 's' => opts.no_messages = true,
+  1528 |                 'x' => opts.line_regexp = true,
+  1529 |                 'o' => opts.only_matching = true,
+> 1530 |                 'S' => opts.smart_case = true,
+  1531 |                 'z' => opts.null_data = true,
+  1532 |                 'U' => opts.multiline = true,
+  1533 |                 'p' => {
+  1534 |                     opts.color = .always;
+  1535 |                     opts.heading = true;
+  1536 |                     opts.show_line_no = true;
+  1537 |                 },
+  1538 |                 'b' => opts.byte_offset = true,
+src/main.zig in fn:runSearch
+  [h4] line 2206 `opts.smart_case`: unique_field_candidate -> h1 (heuristic; the only field named smart_case in scope is src/main.zig:322; the type of 'opts' was not checked)
+  src/main.zig:2029-2029  sha256:dd7356da41450ea7
+  2029 | pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
+  src/main.zig:2198-2217  sha256:640b518ca8e2e711
+  2198 |     // find -exec has no normal output. The quiet early-exits below are what
+  2199 |     // make `-q` fast, but they would stop the scan at the FIRST match and the
+  2200 |     // command would never reach the other files, so they stay off with --exec.
+  2201 |     if (opts.exec_cmd != null) opts.mode = .quiet;
+  2202 | 
+  2203 |     const t0 = nowMonotonicNs(init.io);
+  2204 | 
+  2205 |     // `-S`: insensitive unless some pattern has an uppercase letter (rg rule).
+> 2206 |     if (opts.smart_case and !opts.ignore_case) {
+  2207 |         var has_upper = false;
+  2208 |         for (patterns) |pat| {
+  2209 |             for (pat) |c| {
+  2210 |                 if (c >= 'A' and c <= 'Z') has_upper = true;
+  2211 |                 if (c >= 0xC0 and c <= 0xDE and c != 0xD7) has_upper = true; // Latin-1
+  2212 |                 if (has_upper) break;
+  2213 |             }
+  2214 |             if (has_upper) break;
+  2215 |         }
+  2216 |         if (!has_upper) opts.ignore_case = true;
+  2217 |     }
+
+TESTS
+src/main.zig in test:parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h5] line 3079 `o.smart_case`: unique_field_candidate -> h1 (heuristic; the only field named smart_case in scope is src/main.zig:322; the type of 'o' was not checked)
+  [h6] line 3085 `o.smart_case`: unique_field_candidate -> h1 (heuristic; the only field named smart_case in scope is src/main.zig:322; the type of 'o' was not checked)
+  src/main.zig:3071-3093  sha256:e71f620375ec79ca
+  3071 | test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b" {
+  3072 |     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+  3073 |     defer arena.deinit();
+  3074 |     const alloc = arena.allocator();
+  3075 |     {
+  3076 |         var o: Options = .{};
+  3077 |         const a = [_][:0]const u8{ "zgrep", "-S", "pat" };
+  3078 |         _ = try parseArgs(alloc, &a, &o);
+> 3079 |         try std.testing.expect(o.smart_case);
+  3080 |     }
+  3081 |     {
+  3082 |         var o: Options = .{};
+  3083 |         const a = [_][:0]const u8{ "zgrep", "--smart-case", "pat" };
+  3084 |         _ = try parseArgs(alloc, &a, &o);
+> 3085 |         try std.testing.expect(o.smart_case);
+  3086 |     }
+  3087 |     {
+  3088 |         var o: Options = .{};
+  3089 |         const a = [_][:0]const u8{ "zgrep", "-t", "py", "pat" };
+  3090 |         _ = try parseArgs(alloc, &a, &o);
+  3091 |         try std.testing.expectEqual(@as(usize, 1), o.type_include_count);
+  3092 |         try std.testing.expectEqualStrings("py", o.type_include[0].name);
+  3093 |     }
+
+STRUCTURE
+src/main.zig (3648 lines, 70 declarations; '*' = contains a hit; only the 4 with hits shown)
+  *   247-402   container Options
+  *   877-1784  fn parseArgs
+  *  2029-2774  fn runSearch
+  *  3071-3198  test parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-depth, --max-filesize, -b
+
+HISTORY
+[h1] src/main.zig:322 last changed by 69193b76df 2026-11-10 "paridad con rg: -S, -t/-T/--type-list, --max-depth, --max-filesize, --exclude-from, --binary-files, -b" (git blame)
+src/main.zig: last commit 53c34ef	2026-11-11	fix(M9): la ventana leia text[len] al llegar al final de la linea
+
+UNCERTAINTY
+- not analysed: aliases (const x = y.smart_case), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 666 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 11

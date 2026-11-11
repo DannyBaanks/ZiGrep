@@ -1,0 +1,18 @@
+{
+ "qid": "R04",
+ "cond": "P2",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "681c7cbf38f76b757c06c85de400d8d9330ae493da76a102ab9337366a5648a5",
+ "answer": "With `-G`, zgrep translates the BRE pattern to ERE via `breToEre` (src/search.zig:393, 412), and the mapping is as follows:\n\n- **`a\\+b`**: `\\+` means \"one or more\" and becomes `+` in ERE (src/bre.zig:20). The test shows `a\\+` → `a+` (src/bre.zig:158).\n- **`a+b`**: a bare `+` is a literal plus and becomes `\\+` (src/bre.zig:27). The test shows `a+b` → `a\\+b` (src/bre.zig:163).\n- **A leading `*`**: it is a literal at the start of a pattern, branch or group (src/bre.zig:29). The test shows `*ab` → `\\*ab` (src/bre.zig:178). A `*` after something, as in `a*b`, stays a repetition operator (src/bre.zig:179).\n\nThe tests are not executed by the pack, so coverage is not demonstrated.",
+ "usage": {
+  "cost_usd": 0.027058,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.0,
+ "headers": {}
+}

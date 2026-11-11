@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Unknown fields, duplicate ids, blank lines and fail-closed all match the reference, but the answer hedges on id values: it says string or integer without confirming that integers must be non-negative, and says other types are unknown, where the reference is definite.",
+ "cost_usd": 0.006726
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "The answer declines to give a definite answer (says context doesn't cover it), though it correctly describes hasInstallLink protection; the reference gives a definite 'not by default, only with --include-out' answer.",
+ "cost_usd": 0.00613
+}

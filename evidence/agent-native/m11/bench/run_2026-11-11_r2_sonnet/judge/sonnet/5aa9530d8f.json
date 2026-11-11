@@ -1,0 +1,6 @@
+{
+ "grade": 1,
+ "wrong_claims": [],
+ "reason": "Ordering, quiet mode with early exits disabled, and the --json usage error all match the reference, but the answer says it is unclear whether --exec is rejected in a batch (it only cites the per-query flag case) and omits the {} placeholder / path-appending behavior.",
+ "cost_usd": 0.0066820000000000004
+}

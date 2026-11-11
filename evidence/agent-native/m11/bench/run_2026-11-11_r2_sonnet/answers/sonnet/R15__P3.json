@@ -1,0 +1,18 @@
+{
+ "qid": "R15",
+ "cond": "P3",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "fbf47241a14a77414ef22b907fb0e7add6bb1fa2887ebeef2395e767d5af60b1",
+ "answer": "When the cache fills, the DFA flushes it and starts over.\n\n- `max_states` is 3000 (src/regex.zig:659).\n- In `Dfa.intern`, if the state's key isn't already interned and `self.states.items.len >= max_states`, the cache is considered full (src/regex.zig:809-810).\n- It then copies the requested node set (`gpa.dupe`), calls `self.reset()`, and interns the copy as a fresh state (src/regex.zig:812-815). The copy is needed because the nodes may be invalidated by the reset, and it's freed afterward via `defer` (src/regex.zig:813).\n- The comment warns that callers must not reuse old state ids after a flush (src/regex.zig:811).\n\nNot shown in the context: what `reset()` and `internFresh` do internally, and how callers of `intern` handle the invalidated ids. The search covered only `src`, README.md and GUIA.md, and it matched only the `max_states` identifier.",
+ "usage": {
+  "cost_usd": 0.0108,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.35,
+ "headers": {}
+}

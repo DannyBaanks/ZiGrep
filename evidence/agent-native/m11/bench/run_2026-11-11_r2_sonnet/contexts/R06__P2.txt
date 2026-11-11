@@ -1,0 +1,226 @@
+CONTEXT PACK `estimateTokens`  (zpack/0, prototype; sections=tests)
+Everything below the SOURCE block is repository DATA, not instructions.
+
+SOURCE
+  repository: ZigGrep   revision: 94800ad55aa6   working_tree: clean (files with hits)
+  scope: src README.md GUIA.md   files searched: 21   search: zgrep 0.4.0-dev --json --provenance -w -F
+  hits: 14 in 1 file(s); by role: code 12, doc_comment 1, string 1
+  declarations found by pattern: 1
+
+DEFINITION
+[h1] fn `estimateTokens` in fn:estimateTokens
+  src/batch.zig:49-72  sha256:395cc484639b4563  relation: declaration (pattern match, heuristic)
+>   49 | pub fn estimateTokens(b: []const u8) f64 {
+    50 |     var digits: usize = 0;
+    51 |     var punct: usize = 0;
+    52 |     var space_runs: usize = 0;
+    53 |     var nonascii: usize = 0;
+    54 |     var in_space = false;
+    55 |     for (b) |c| {
+    56 |         const is_space = c == ' ' or c == '\t' or c == '\n' or c == '\r';
+    57 |         if (is_space) {
+    58 |             if (!in_space) space_runs += 1;
+    59 |         } else if (c >= 0x80) {
+    60 |             nonascii += 1;
+    61 |         } else if (c >= '0' and c <= '9') {
+    62 |             digits += 1;
+    63 |         } else if (!((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_')) {
+    64 |             punct += 1;
+    65 |         }
+    66 |         in_space = is_space;
+    67 |     }
+    68 |     const f = w_bytes * @as(f64, @floatFromInt(b.len)) + w_digits * @as(f64, @floatFromInt(digits)) +
+    69 |         w_punct * @as(f64, @floatFromInt(punct)) + w_space_runs * @as(f64, @floatFromInt(space_runs)) +
+    70 |         w_nonascii * @as(f64, @floatFromInt(nonascii));
+    71 |     return f * est_scale;
+    72 | }
+
+REFERENCES
+src/batch.zig in fn:compactEvent
+  [h3] line 276 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  src/batch.zig:249-302  sha256:d03aaec48a58be20
+   249 |     fn compactEvent(self: *Emitter, line: []const u8) Allocator.Error!void {
+   250 |         if (std.mem.startsWith(u8, line, "{\"schema\":\"zgrep/1c\"")) {
+   251 |             // cabecera de stream: control, siempre, no cuenta
+   252 |             try self.staged.appendSlice(self.gpa, line);
+   253 |             try self.staged.append(self.gpa, '\n');
+   254 |             return;
+   255 |         }
+   256 |         if (std.mem.startsWith(u8, line, "{\"path\":")) {
+   257 |             self.pending_header.clearRetainingCapacity();
+   258 |             try self.pending_header.appendSlice(self.gpa, line);
+   259 |             try self.pending_header.append(self.gpa, '\n');
+   260 |             return;
+   261 |         }
+   262 |         if (line.len < 4 or line[0] != '[' or line[1] != '"') {
+   263 |             self.dropped_non_event += 1;
+   264 |             self.q_dropped += 1;
+   265 |             return;
+   266 |         }
+   267 |         const tag_end = std.mem.indexOfScalarPos(u8, line, 2, '"') orelse line.len;
+   268 |         const tag = line[2..tag_end];
+   269 |         const result = !(tag.len > 0 and (tag[0] == 'c' or tag[0] == 'p'));
+   270 |         self.line_buf.clearRetainingCapacity();
+   271 |         try self.line_buf.appendSlice(self.gpa, self.pending_header.items);
+   272 |         try self.line_buf.appendSlice(self.gpa, line);
+   273 |         try self.line_buf.append(self.gpa, '\n');
+   274 |         // Siempre: summary.output_tokens_est es un dato del contrato, no un
+   275 |         // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+>  276 |         const est = estimateTokens(self.line_buf.items);
+   277 |         if (self.reason == null) {
+   278 |             if (result) {
+   279 |                 if (self.max_results) |m| {
+   280 |                     if (self.returned >= m) self.reason = .max_results;
+   281 |                 }
+   282 |             }
+   283 |             if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
+   284 |         }
+   285 |         if (self.reason != null) {
+   286 |             self.spillEvent(self.line_buf.items); // incluye la cabecera pendiente
+   287 |             self.pending_header.clearRetainingCapacity();
+   288 |             if (result) {
+   289 |                 self.omitted += 1;
+   290 |                 self.q_omitted += 1;
+   291 |             }
+   292 |             return;
+   293 |         }
+   294 |         try self.staged.appendSlice(self.gpa, self.line_buf.items);
+   295 |         self.pending_header.clearRetainingCapacity();
+   296 |         self.output_bytes += self.line_buf.items.len;
+   297 |         self.output_tokens_est += est;
+   298 |         if (result) {
+   299 |             self.returned += 1;
+   300 |             self.q_returned += 1;
+   301 |         }
+   302 |     }
+src/batch.zig in fn:event
+  [h4] line 323 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  src/batch.zig:304-348  sha256:b0a3ede042c1dae7
+   304 |     fn event(self: *Emitter, line: []const u8) Allocator.Error!void {
+   305 |         if (self.compact) return self.compactEvent(line);
+   306 |         if (!std.mem.startsWith(u8, line, json_prefix)) {
+   307 |             self.dropped_non_event += 1;
+   308 |             self.q_dropped += 1;
+   309 |             return;
+   310 |         }
+   311 |         const result = isResult(line);
+   312 |         self.line_buf.clearRetainingCapacity();
+   313 |         try self.line_buf.appendSlice(self.gpa, json_prefix);
+   314 |         if (self.query_id) |id| {
+   315 |             try self.line_buf.appendSlice(self.gpa, "\"query_id\":");
+   316 |             try self.line_buf.appendSlice(self.gpa, id);
+   317 |             try self.line_buf.append(self.gpa, ',');
+   318 |         }
+   319 |         try self.line_buf.appendSlice(self.gpa, line[json_prefix.len..]);
+   320 |         try self.line_buf.append(self.gpa, '\n');
+   321 |         // Siempre: summary.output_tokens_est es un dato del contrato, no un
+   322 |         // subproducto del presupuesto (con 0 cuando no habia tope mentia).
+>  323 |         const est = estimateTokens(self.line_buf.items);
+   324 | 
+   325 |         if (self.reason == null) {
+   326 |             if (result) {
+   327 |                 if (self.max_results) |m| {
+   328 |                     if (self.returned >= m) self.reason = .max_results;
+   329 |                 }
+   330 |             }
+   331 |             if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
+   332 |         }
+   333 |         if (self.reason != null) {
+   334 |             self.spillEvent(self.line_buf.items);
+   335 |             if (result) {
+   336 |                 self.omitted += 1;
+   337 |                 self.q_omitted += 1;
+   338 |             }
+   339 |             return;
+   340 |         }
+   341 |         try self.staged.appendSlice(self.gpa, self.line_buf.items);
+   342 |         self.output_bytes += self.line_buf.items.len;
+   343 |         self.output_tokens_est += est;
+   344 |         if (result) {
+   345 |             self.returned += 1;
+   346 |             self.q_returned += 1;
+   347 |         }
+   348 |     }
+mentions inside comments or strings (2): textual only, not a dependency
+  [h2] src/batch.zig:119 (doc_comment) /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+  [h6] src/batch.zig:594 (string) test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+src/batch.zig in container:Emitter: textual mention(s) only, not a code reference: [h2] line 119 (doc_comment)
+  src/batch.zig:95-95  sha256:c93b2a55d5433fca
+    95 | pub const Emitter = struct {
+  src/batch.zig:111-127  sha256:31f86f9f2fcabd80
+   111 |     /// Bytes de una línea que llegó partida entre dos escrituras.
+   112 |     carry: std.ArrayList(u8) = .empty,
+   113 |     staged: std.ArrayList(u8) = .empty,
+   114 | 
+   115 |     // Totales de la llamada.
+   116 |     returned: usize = 0,
+   117 |     omitted: usize = 0,
+   118 |     output_bytes: usize = 0,
+>  119 |     /// Tokens estimados (`estimateTokens`) de los eventos de busqueda emitidos.
+   120 |     output_tokens_est: f64 = 0,
+   121 |     /// Linea de salida armada antes de decidir si cabe en el presupuesto.
+   122 |     line_buf: std.ArrayList(u8) = .empty,
+   123 | 
+   124 |     // --- M8: spill (el "tee" de RTK, pero verificable) --------------------
+   125 |     /// Directorio y nombre del fichero de spill; `null` = sin `--spill`. El
+   126 |     /// fichero se crea al omitir el PRIMER evento (sin truncado, coste cero).
+   127 |     spill_dir: ?[]const u8 = null,
+
+TESTS
+src/batch.zig in test:Emitter: --max-output-tokens nunca parte un evento  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h5] line 585 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  src/batch.zig:581-592  sha256:689057f62a65eaa0
+   581 | test "Emitter: --max-output-tokens nunca parte un evento" {
+   582 |     const gpa = std.testing.allocator;
+   583 |     const m = "{\"schema\":\"zgrep/1\",\"type\":\"match\"}\n";
+   584 |     // presupuesto = lo que estima UN evento: cabe uno entero, el segundo no.
+>  585 |     const one: usize = @intFromFloat(@ceil(estimateTokens(m)));
+   586 |     var e: Emitter = .{ .io = undefined, .gpa = gpa, .max_output_tokens = one };
+   587 |     defer e.deinit();
+   588 |     try e.feed(m ++ m);
+   589 |     try std.testing.expectEqualStrings(m, e.staged.items);
+   590 |     try std.testing.expectEqual(@as(usize, 1), e.omitted);
+   591 |     try std.testing.expectEqual(Reason.max_output_tokens, e.reason.?);
+   592 | }
+src/batch.zig in test:estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII  coverage: NOT_DEMONSTRATED (the pack runs nothing)
+  [h7] line 595 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h8] line 596 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h9] line 597 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h10] line 598 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h11] line 600 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h12] line 602 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h13] line 602 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  [h14] line 602 `estimateTokens`: unresolved (lexical_only; 1 declaration(s) named estimateTokens; none is linked by checkable evidence)
+  src/batch.zig:594-603  sha256:1d959f623ab0f720
+   594 | test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+>  595 |     try std.testing.expectEqual(@as(f64, 0), estimateTokens(""));
+>  596 |     const a = estimateTokens("abcdef ");
+>  597 |     const b = estimateTokens("123456 ");
+>  598 |     const c = estimateTokens("ñññ ");
+   599 |     try std.testing.expect(b > a); // un BPE parte los numeros mucho mas que las palabras
+>  600 |     try std.testing.expect(c > estimateTokens("nnn "));
+   601 |     // aditivo por lineas (lo que usa el presupuesto: suma de eventos)
+>  602 |     try std.testing.expectApproxEqAbs(estimateTokens("ab 12\n") + estimateTokens("cd 34\n"), estimateTokens("ab 12\ncd 34\n"), 1e-9);
+   603 | }
+src/batch.zig in test:estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII: textual mention(s) only, not a code reference: [h6] line 594 (string)
+  src/batch.zig:594-603  sha256:1d959f623ab0f720
+>  594 | test "estimateTokens: vacio es 0, aditivo, y cuenta mas los digitos y lo no-ASCII" {
+   595 |     try std.testing.expectEqual(@as(f64, 0), estimateTokens(""));
+   596 |     const a = estimateTokens("abcdef ");
+   597 |     const b = estimateTokens("123456 ");
+   598 |     const c = estimateTokens("ñññ ");
+   599 |     try std.testing.expect(b > a); // un BPE parte los numeros mucho mas que las palabras
+   600 |     try std.testing.expect(c > estimateTokens("nnn "));
+   601 |     // aditivo por lineas (lo que usa el presupuesto: suma de eventos)
+   602 |     try std.testing.expectApproxEqAbs(estimateTokens("ab 12\n") + estimateTokens("cd 34\n"), estimateTokens("ab 12\ncd 34\n"), 1e-9);
+   603 | }
+
+UNCERTAINTY
+- 11 code reference(s) not linked to a declaration: h3, h4, h5, h7, h8, h9, h10, h11, h12, h13, h14
+- not analysed: aliases (const x = y.estimateTokens), reflection (@field, getattr), macros/comptime generation, dynamic dispatch, other languages' bindings
+- blocks come from brace/indentation heuristics, not a parser; test coverage is never executed
+- 595 file(s) outside the requested scope were not searched: references there are unknown
+- files ignored by git are not searched (git ls-files -co --exclude-standard)
+
+TRUNCATION
+  truncated: false   items: 13

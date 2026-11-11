@@ -1,0 +1,35 @@
+src/clean.zig-133-///
+src/clean.zig-134-/// Medido: Zig no deja ficheros de bloqueo; lo que sí queda es el proceso. Dos
+src/clean.zig-135-/// señales, ambas por /proc (solo en Linux; en otros sistemas se omite y se
+src/clean.zig-136-/// dice):
+src/clean.zig-137-///   * la caché GLOBAL es compartida por todos los repos: un `zig` vivo en
+src/clean.zig-138-///     cualquier sitio la deja activa;
+src/clean.zig-139-///   * una caché LOCAL queda activa si algún `zig` tiene su cwd en el repo que
+src/clean.zig-140-///     la contiene (que es exactamente lo que hace `zig build`).
+src/clean.zig:141:fn procsHomeActive(io: std.Io, gpa: Allocator, path: []const u8, kind: Kind) bool {
+src/clean.zig-142-    if (builtin.os.tag != .linux) return false;
+src/clean.zig-143-    const parent = std.fs.path.dirname(path) orelse path;
+src/clean.zig-144-    var stream = vfs.DirStream.open(io, "/proc") catch return false;
+src/clean.zig-145-    defer stream.close();
+src/clean.zig-146-    var buf: [4096]u8 = undefined;
+src/clean.zig-147-    var cwdbuf: [4096]u8 = undefined;
+src/clean.zig-148-    var exebuf: [4096]u8 = undefined;
+src/clean.zig-149-    while (true) {
+--
+src/clean.zig-275-        add(list, dup, .out_dir, io, gpa, home) catch gpa.free(dup);
+src/clean.zig-276-    }
+src/clean.zig-277-}
+src/clean.zig-278-
+src/clean.zig-279-fn add(list: *std.ArrayList(Target), path: [:0]const u8, kind: Kind, io: std.Io, gpa: Allocator, home: []const u8) !void {
+src/clean.zig-280-    const target_path = gpa.dupe(u8, path) catch return error.OutOfMemory;
+src/clean.zig-281-    const size = dirSize(io, path);
+src/clean.zig-282-    const protected = if (kind == .out_dir) hasInstallLink(io, gpa, home, target_path) else false;
+src/clean.zig:283:    const active = hasLockFile(io, target_path) or procsHomeActive(io, gpa, target_path, kind);
+src/clean.zig-284-    try list.append(gpa, .{ .path = target_path, .kind = kind, .size = size, .protected = protected, .active = active });
+src/clean.zig-285-}
+src/clean.zig-286-
+src/clean.zig-287-/// `du`-style: 1.5G, 367M, 79K, 512. One decimal below 10.
+src/clean.zig-288-pub fn humanSize(out: []u8, bytes: u64) []const u8 {
+src/clean.zig-289-    const units = [_]struct { s: []const u8, v: f64 }{ .{ .s = "T", .v = 1e12 }, .{ .s = "G", .v = 1e9 }, .{ .s = "M", .v = 1e6 }, .{ .s = "K", .v = 1e3 } };
+src/clean.zig-290-    for (units) |u| {
+src/clean.zig-291-        const n = @as(f64, @floatFromInt(bytes)) / u.v;

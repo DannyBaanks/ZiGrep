@@ -1,0 +1,18 @@
+{
+ "qid": "R02",
+ "cond": "A",
+ "label": "sonnet",
+ "backend": "claude",
+ "model": "sonnet",
+ "context_sha256": "ec1389e694c9e339abd99da968cd2fedc09c05f9702625bbb077f55f34dde5f7",
+ "answer": "The context doesn't contain enough to answer fully. It only shows where `matchesExt` is defined and called, not its body.\n\nWhat the tests do show (src/filter.zig:331-334):\n- `matchesExt(\"main.zig\", \"zig\")` is true, and a leading dot in the extension is also accepted (`\".zig\"`, line 332).\n- Multi-part extensions work: `\"bundle.min.js\"` matches `\"min.js\"` (line 333).\n- `\"zig.txt\"` doesn't match `\"zig\"` (line 334), so the name must end with the extension, not merely contain it.\n\nFrom that, `a.log` is likely excluded. But the tests don't cover:\n- `catalog`: whether a dot is required before the suffix.\n- `.log`: whether a dotfile with an empty stem counts.\n- `A.LOG`: whether the comparison is case-insensitive.\n\nMissing: the body of `matchesExt` at src/filter.zig:84, and how `--exclude-ext` is parsed and passed in (callers at lines 277-298 are shown only as call sites).",
+ "usage": {
+  "cost_usd": 0.00804,
+  "turns": 1,
+  "models": [
+   "claude-sonnet-5-5"
+  ]
+ },
+ "seconds": 4.48,
+ "headers": {}
+}
