@@ -1,0 +1,146 @@
+{
+  "schema": "m11-questions/1",
+  "repository": "ZiGrep",
+  "frozen_revision_note": "answers verified against src/ at d335b79 (src unchanged since 53c34ef); the run records the exact HEAD",
+  "scope": ["src", "README.md", "GUIA.md"],
+  "scoring": {
+    "required": "each entry is a list of regex alternatives (case-insensitive); the fact counts if ANY alternative matches the answer. fact_score = matched / total",
+    "forbidden": "regexes for wrong conclusions a lexical reading invites; each match is recorded as a candidate induced error (mechanical, then checked by the blinded judge)",
+    "judge": "blinded judge (condition hidden, answers shuffled) grades 0 wrong / 1 partial / 2 correct against the reference, and flags unsupported claims"
+  },
+  "questions": [
+    {
+      "id": "D1", "set": "dev", "symbol": "max_columns",
+      "question": "What happens when a user runs zgrep with `--json --max-columns 0`? Is 0 a way to disable the window?",
+      "reference": "It is a usage error (rc 2): parseArgs rejects 0 with '--max-columns needs a positive number of bytes (a 0-byte window carries nothing)' (src/main.zig ~1745). 0 is NOT a way to disable it from the CLI. Only the internal global out_json.max_columns uses 0 to mean off; that is the default when the flag is absent.",
+      "required": [
+        ["usage error", "error\\.Usage", "\\brc\\s*=?\\s*2\\b", "exit (code|status)\\s*2", "returns? 2", "is rejected", "rejects", "refuses", "not (a valid|allowed|accepted)"],
+        ["positive", "0-byte", "zero-byte", "carries nothing", "silently drop"]
+      ],
+      "forbidden": ["(yes|so)[, ]+(passing |using )?(0|zero) (disables|turns off)", "--max-columns 0 (disables|turns off|means off|is off)"]
+    },
+    {
+      "id": "D2", "set": "dev", "symbol": "max_columns",
+      "question": "Can one query inside a `--queries-file` batch set its own `--max-columns` in its \"flags\"? Where is that decided?",
+      "reference": "No. batchQueryProblem (src/main.zig ~1887) rejects it: '--max-columns is per call: put it on the command line, not in \"flags\"'. runBatch installs the call's value once for the whole stream (out_json.max_columns = gopts.max_columns orelse 0).",
+      "required": [
+        ["\\bno\\b", "cannot", "can't", "not allowed", "rejected", "rejects"],
+        ["per call", "per-call", "command line", "whole (stream|batch|call)"],
+        ["batchQueryProblem"]
+      ],
+      "forbidden": ["(yes|each query) can set (its own )?--max-columns"]
+    },
+    {
+      "id": "D3", "set": "dev", "symbol": "windowOf",
+      "question": "In which cases does windowOf return null, so that the row is emitted whole?",
+      "reference": "windowOf (src/out_json.zig) returns null when: w == 0 (flag off); the row has no span (context, -v, passthru); the text fits (text.len <= w); the span ends past the text; or the emitted text is not the line itself (text != line_bytes, which rules out --replace and -o).",
+      "required": [
+        ["w\\s*==\\s*0", "budget is 0", "max_columns (is )?0", "flag (is )?off", "disabled"],
+        ["no span", "span is null", "without a span", "orelse return null", "context", "passthru"],
+        ["text\\.len\\s*<=\\s*w", "fits", "short enough", "not longer than"],
+        ["sp\\.end\\s*>\\s*ev\\.text\\.len", "span (end|ends)", "past the (end of the )?text", "outside the text"],
+        ["line_bytes", "not the line", "--replace", "replace", "-o\\b"]
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "D4", "set": "dev", "symbol": "win_start",
+      "question": "When does a zgrep/1 JSON event carry the fields win_start and line_len, and what do they mean?",
+      "reference": "Only on a windowed row (text longer than N with a span). win_start = byte offset of the window inside the line; line_len = length of the whole line. A row that fits is byte-identical to pre-M9 output and has neither field.",
+      "required": [
+        ["only (when|on|if)", "only .*window", "solo"],
+        ["offset", "where the window starts", "start of the window", "starts"],
+        ["whole line", "full line", "length of the (entire |whole |full )?line", "line length"]
+      ],
+      "forbidden": ["(always|every (event|row)) (carries|has|includes) win_start"]
+    },
+    {
+      "id": "D5", "set": "dev", "symbol": "batch_running",
+      "question": "Why does runSearch not reset out_json.max_columns to 0 when it runs inside a batch?",
+      "reference": "Because in a batch the column budget is per CALL: runBatch installs it once before the queries, and the per-query argv does not carry --max-columns. If runSearch cleared it, every query would lose the window. So runSearch clears it only when !batch_running.",
+      "required": [
+        ["per call", "per-call", "once for the (whole )?(stream|batch)", "installed (by|in) (the )?(batch|runBatch)", "runBatch (sets|installs)"],
+        ["argv", "query's (flags|arguments)", "not (copied|carried|passed)", "does not carry"],
+        ["!batch_running", "not batch_running", "batch_running (is )?false", "outside (a|the) batch"]
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "D6", "set": "dev", "symbol": "emitLineRow",
+      "question": "In the compact dialect (zgrep/1c), how does a windowed row differ from a normal row?",
+      "reference": "The row tag gets a 'w' suffix (e.g. \"mw\") and two extra positional elements after the text: win_start and line_len. The text element is the window; the match element is only added when it is not derivable inside the window.",
+      "required": [
+        ["\\bw\\b.{0,20}suffix", "suffix.{0,20}\\bw\\b", "\"mw\"", "'mw'", "mw\\b"],
+        ["win_start"],
+        ["line_len"]
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "D7", "set": "dev", "symbol": "parseCount",
+      "question": "How is the numeric value of `--max-columns=abc` parsed, and what does the user get?",
+      "reference": "parseCount (src/main.zig ~813) is std.fmt.parseInt(usize, value, 10) catch null. A non-numeric value returns null and parseArgs fails with 'bad value for --max-columns' (error.Usage, rc 2).",
+      "required": [
+        ["parseInt", "parseCount"],
+        ["bad value for --max-columns"],
+        ["usage", "error\\.Usage", "\\brc\\s*=?\\s*2\\b", "exit (code|status)\\s*2"]
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "H1", "set": "heldout", "symbol": "max_threads",
+      "question": "What is the largest worker-thread count zgrep accepts, where is that limit defined, and what happens with `-j 5000` and with `ZIGREP_THREADS=5000`?",
+      "reference": "1024, defined in src/kamikaze.zig:45 (pub const max_threads: usize = 1024); src/main.zig:818 mirrors it (max_threads = kamikaze.max_threads). -j 5000: parseThreadCount fails with 'thread count out of range (max 1024)' (usage error). ZIGREP_THREADS=5000: runSearch prints 'zgrep: 5000: thread count out of range (max 1024)' and returns 2. kamikaze also clamps the worker count with @min.",
+      "required": [
+        ["1024"],
+        ["kamikaze"],
+        ["out of range"],
+        ["ZIGREP_THREADS.{0,120}(return|exit|rc|error|2)", "(environment|env).{0,80}(error|out of range|return)"]
+      ],
+      "forbidden": ["(silently )?(clamped|capped) to 1024 (instead of|without) (an )?error", "ZIGREP_THREADS.{0,60}(ignored|silently)"]
+    },
+    {
+      "id": "H2", "set": "heldout", "symbol": "spill_dir",
+      "question": "With `--spill` and no directory, where is the spill file written, what is its name, and which struct holds the directory that is finally used for writing?",
+      "reference": "$XDG_CACHE_HOME/zgrep/spill if XDG_CACHE_HOME is set and non-empty, else $HOME/.cache/zgrep/spill (configureSpill, src/main.zig ~1814). The name is spill-<ns>-<pid>.jsonl. The directory used for writing is batch.Emitter.spill_dir (set as em.spill_dir = dir); Options.spill_dir only holds the --spill=DIR value. --spill= with an empty value is a usage error.",
+      "required": [
+        ["XDG_CACHE_HOME"],
+        ["\\.cache/zgrep/spill"],
+        ["spill-.{0,20}\\.jsonl", "pid"],
+        ["Emitter", "em\\.spill_dir", "batch\\.zig"]
+      ],
+      "forbidden": ["(only|just) Options\\.spill_dir (holds|is used)"]
+    },
+    {
+      "id": "H3", "set": "heldout", "symbol": "skip_hidden",
+      "question": "When the user passes `--no-hidden`, which code actually skips the hidden entries, and does it skip hidden directories as well as files?",
+      "reference": "parseArgs sets Options.skip_hidden (src/main.zig ~1419); runSearch copies it into the FilterEngine (filter_engine.skip_hidden = opts.skip_hidden). FilterEngine in src/filter.zig skips both directories (~244) and files (~268) whose name starts with '.'.",
+      "required": [
+        ["FilterEngine", "filter_engine", "filter\\.zig"],
+        ["director"],
+        ["\\bfiles?\\b"],
+        ["start(s|ing)? with (a )?'?\\.'?", "dot", "\\[0\\]\\s*==\\s*'\\.'", "leading (period|dot)"]
+      ],
+      "forbidden": ["only (skips |applies to )?(files|directories)\\b"]
+    },
+    {
+      "id": "H4", "set": "heldout", "symbol": "windowOf",
+      "question": "Which commit fixed a bug in windowOf, and what was the bug?",
+      "reference": "53c34ef ('fix(M9): la ventana leia text[len] al llegar al final de la linea'): when the window reached the end of the line, the UTF-8 alignment loop read text[len], one byte past the slice (panic in Debug/ReleaseSafe, undefined behaviour in ReleaseFast). The fix adds e < ev.text.len to the loop condition.",
+      "required": [
+        ["53c34ef"],
+        ["text\\[len\\]", "past the (end of the )?slice", "out of bounds", "out-of-bounds", "fuera", "beyond the (end|slice)"]
+      ],
+      "forbidden": []
+    },
+    {
+      "id": "H5", "set": "heldout", "symbol": "max_columns",
+      "question": "How many milliseconds does `--max-columns 400` add to a search over a 655 MB monorepo?",
+      "reference": "Not answerable from the repository: no measurement of --max-columns latency exists. The measured effect is on output tokens (about -58 %), not on time. A correct answer says the information is not available.",
+      "required": [
+        ["not (available|measured|in the context|provided|documented|known|answerable)", "no (measurement|data|information|benchmark|timing)", "insufficient", "cannot (be )?(determine|answer|tell)", "doesn't (say|contain|include|provide)", "does not (say|contain|include|provide|mention)"]
+      ],
+      "forbidden": ["adds (about |around |roughly |~)?\\d+(\\.\\d+)?\\s*ms", "\\b\\d+(\\.\\d+)?\\s*(ms|milliseconds) (more|extra|overhead|slower)"]
+    }
+  ]
+}

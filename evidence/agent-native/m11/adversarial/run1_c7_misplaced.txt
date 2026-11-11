@@ -1,0 +1,14 @@
+# First run of adversarial_checks.py (2026-11-11), transcribed from the session's
+# tool output. C7 failed because the instruction-like comment was outside every
+# block the pack delivers (above `fn connect`), so the text never reached the
+# agent. The control was moved inside the block; see the docstring.
+C1  PASS  homonyms
+C2  PASS  false references (comment, string)
+C3  PASS  misleading test
+C4  PASS  stale history
+C5  PASS  reference outside the scope
+C6  PASS  truncation
+C7  FAIL  instruction-like text in the repository
+      observed: flagged=False
+C8  PASS  workspace limits
+TOTAL 7 pass / 1 fail

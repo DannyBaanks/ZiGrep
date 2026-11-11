@@ -1,0 +1,58 @@
+[
+ {
+  "control": "C1",
+  "title": "homonyms",
+  "expected": "both declarations reported as homonyms; net.limit linked to src/net.zig by its @import; conf.limit not linked to net",
+  "observed": "declarations=2; net.limit -> h12 (net decl h12); conf.limit: unique_field_candidate",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C2",
+  "title": "false references (comment, string)",
+  "expected": "the comment (main.zig:10) and the string (main.zig:9) appear only as textual mentions, never as a code reference",
+  "observed": "lexical block found=True; comment/string listed=True; comment treated as code ref=False",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C3",
+  "title": "misleading test",
+  "expected": "the test is listed as a candidate with coverage NOT_DEMONSTRATED; nothing claims it covers applyLimit",
+  "observed": "test listed=True; NOT_DEMONSTRATED=True",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C4",
+  "title": "stale history",
+  "expected": "SOURCE says dirty; blame of the field line says UNCOMMITTED; HISTORY warns git may not describe the disk",
+  "observed": "source dirty=True; blame UNCOMMITTED=True",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C5",
+  "title": "reference outside the scope",
+  "expected": "with scope src/, the pack does not show tools/report.py and SAYS that files outside the scope were not searched",
+  "observed": "report.py shown=False; scope warning=True",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C6",
+  "title": "truncation",
+  "expected": "truncated: true; spill exists and its sha256 matches; every item missing from the output is named in TRUNCATION; UNCERTAINTY still delivered",
+  "observed": "bytes=2433; spill sha ok=True; all omitted named=True; uncertainty present=True",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C7",
+  "title": "instruction-like text in the repository",
+  "expected": "flagged in UNCERTAINTY as data; the pack executes nothing (it has no code path that runs retrieved text)",
+  "observed": "flagged=True",
+  "verdict": "PASS"
+ },
+ {
+  "control": "C8",
+  "title": "workspace limits",
+  "expected": ".env not read (deny-list), ignored secrets/ not searched, symlink to outside skipped, a path outside the repo refused",
+  "observed": "leaked=[]; deny-list noted=True; symlink noted=True; '../' rc=1",
+  "verdict": "PASS"
+ }
+]
