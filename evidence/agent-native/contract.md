@@ -378,3 +378,24 @@ ganado en la primera, falló en la confirmatoria. Crudo:
 alfabetos fuera del corpus (la GUIA aporta español y algunos símbolos).
 `batch_conformance.py` (CI) comprueba el presupuesto con el estimador, no con
 tokens reales: la cota real necesita el tokenizador y corre en local.
+
+## 14. M8: spill verificable (2026-11-11, claude_code)
+
+Interfaz nueva (GUIA §4r): `--spill` / `--spill=DIR`, solo con presupuesto. El
+`summary` añade `spill`: `null` (no hubo omisión, o hubo y no se pidió spill),
+`{path, sha256, bytes, events}` o `{error}`. Idea de RTK ("dice dónde está la
+salida completa"); diferencia: lo recuperado se verifica por hash y reconstruye
+la salida exacta.
+
+| claim | estado | evidencia |
+|---|---|---|
+| emitido + spill == salida sin presupuesto | DEMOSTRADO | `spill_conformance.py` (CI): lote y suelta ordenada, `--json` byte a byte y `--json=compact` por registros, con y sin procedencia, presupuesto por resultados y por tokens |
+| `summary.spill` verificable (sha256, bytes, 0600) | DEMOSTRADO | mismo diferencial; control: un spill alterado deja de coincidir con su sha256 |
+| perezoso: sin truncado no se crea fichero ni cuesta | DEMOSTRADO | diferencial (casos sin truncado) + `m8/spill_cost_output.txt` (control ×~1) |
+| nunca silencioso | DEMOSTRADO | directorio no escribible → `spill.error`, rc y stdout intactos; truncado sin `--spill` → `spill:null` |
+| apto para ir por defecto | **NO**, por los datos | `m8/spill_cost_output.txt`: con truncado fuerte escribe todo lo omitido (MB) y encarece la llamada en proporción; además zgrep no limpia los ficheros |
+
+**NOT_DEMONSTRATED:** limpieza automática de spills viejos (no existe; la
+documenta la GUIA); búsquedas en streaming de directorios sin `--sort` (su orden
+entre ficheros no es fijo, así que la reconstrucción se verifica con `--sort` y
+en lote); Windows (el diferencial es Linux).

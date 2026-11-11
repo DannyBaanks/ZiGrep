@@ -1,0 +1,7 @@
+zgrep: zgrep 0.4.0-dev; reps=15, A/B intercalados
+trunca fuerte: -o needle (~11 MB omitidos), --max-results 10
+   sin --spill   74.49 ms [72.68,76.65]   con --spill  120.45 ms [118.73,122.40]   x1.62   spill medio 11321225 bytes
+trunca compacto: -o needle, --max-results 10
+   sin --spill   72.31 ms [71.42,73.85]   con --spill   92.90 ms [91.00,95.36]   x1.28   spill medio 3260748 bytes
+sin truncado (control): rare, --max-results 100
+   sin --spill    7.26 ms [6.91,7.44]   con --spill    7.16 ms [7.03,7.41]   x0.99   spill medio 0 bytes

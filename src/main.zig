@@ -13,6 +13,7 @@
 //!     can never be blocked, which is what makes the scheme deadlock-free.
 //!   * `ready`       — release/acquire flag per file slot.
 const std = @import("std");
+const builtin = @import("builtin");
 const linux = std.os.linux;
 const platform = @import("platform.zig");
 const search = @import("search.zig");
@@ -77,6 +78,10 @@ const usage =
     \\                    tokens (schema zgrep/1c): a {"path"} header per
     \\                    file and one positional row per line,
     \\                    [t,line,col,byte_start,len,text]; see GUIA §4p
+    \\      --spill[=DIR]  with a budget: what it omits is written, exactly as
+    \\                    it would have been printed, to a 0600 JSONL file in
+    \\                    DIR (default $XDG_CACHE_HOME/zgrep/spill); the
+    \\                    summary carries its path, sha256, bytes and events
     \\      --provenance  with --json: before the events of each file with
     \\                    output, a provenance event with the sha256 and size
     \\                    of the bytes searched and the file's mtime_ns
@@ -325,6 +330,10 @@ pub const Options = struct {
     max_filesize: usize = 0,
     /// M3: `--queries-file FILE` runs every JSONL query in this one process.
     queries_file: ?[]const u8 = null,
+    /// M8: `--spill[=DIR]`: what the budget omits goes to a JSONL file whose
+    /// path, sha256, size and event count travel in the summary.
+    spill: bool = false,
+    spill_dir: ?[]const u8 = null,
     /// M5: `--json=compact` (schema zgrep/1c), same information, ~0.4x tokens.
     json_compact: bool = false,
     /// In a batch, the stream header is written once by the batch, not per query.
@@ -1112,6 +1121,15 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     opts.fail = .{ .what = "bad value for --max-depth", .arg = args[i] };
                     return error.Usage;
                 };
+            } else if (std.mem.eql(u8, body, "spill")) {
+                opts.spill = true;
+            } else if (std.mem.startsWith(u8, body, "spill=")) {
+                opts.spill = true;
+                opts.spill_dir = body["spill=".len..];
+                if (opts.spill_dir.?.len == 0) {
+                    opts.fail = .{ .what = "--spill= needs a directory", .arg = a };
+                    return error.Usage;
+                }
             } else if (std.mem.eql(u8, body, "provenance")) {
                 opts.provenance = true;
             } else if (std.mem.startsWith(u8, body, "queries-file=")) {
@@ -1680,6 +1698,10 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         return error.Usage;
     }
 
+    if (opts.spill and opts.max_results == null and opts.max_output_tokens == null) {
+        opts.fail = .{ .what = "--spill needs --max-results or --max-output-tokens (without a budget nothing is omitted)", .arg = "" };
+        return error.Usage;
+    }
     if (opts.provenance and !opts.json and opts.queries_file == null) {
         opts.fail = .{ .what = "--provenance needs --json (or --queries-file): the hash travels in a provenance event", .arg = "" };
         return error.Usage;
@@ -1742,6 +1764,22 @@ pub fn main(init: std.process.Init) !void {
     std.process.exit(try runCli(init, arena, args));
 }
 
+/// M8: where the spill of this call goes. `--spill=DIR` or
+/// `$XDG_CACHE_HOME/zgrep/spill` (else `~/.cache/zgrep/spill`); the name is
+/// unique per call (wall-clock ns + pid), created exclusive and 0600.
+fn configureSpill(init: std.process.Init, arena: Allocator, opts: *const Options, em: *batch.Emitter) !void {
+    if (!opts.spill) return;
+    const dir: []const u8 = opts.spill_dir orelse blk: {
+        if (init.environ_map.get("XDG_CACHE_HOME")) |x| if (x.len > 0) break :blk try std.fmt.allocPrint(arena, "{s}/zgrep/spill", .{x});
+        const home = init.environ_map.get("HOME") orelse ".";
+        break :blk try std.fmt.allocPrint(arena, "{s}/.cache/zgrep/spill", .{home});
+    };
+    const ns = std.Io.Clock.now(.real, init.io).nanoseconds;
+    const pid: i64 = if (builtin.os.tag == .linux) std.os.linux.getpid() else 0;
+    em.spill_dir = dir;
+    em.spill_name = try std.fmt.allocPrint(arena, "spill-{d}-{d}.jsonl", .{ ns, pid });
+}
+
 /// Dispatch: a batch (`--queries-file`), a budgeted single search
 /// (`--max-results` / `--max-output-tokens` with `--json`), or the plain search.
 fn runCli(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) !u8 {
@@ -1758,6 +1796,7 @@ fn runCli(init: std.process.Init, arena: Allocator, args: []const [:0]const u8) 
             .compact = opts.json_compact,
         };
         defer em.deinit();
+        try configureSpill(init, arena, &opts, &em);
         em.install();
         defer em.uninstall();
         const rc = try runSearch(init, arena, args);
@@ -1801,6 +1840,7 @@ fn batchQueryProblem(vo: *const Options, gopts: *const Options) ?[]const u8 {
     if (vo.exec_cmd != null) return "--exec is not allowed in a batch (its output would break the JSONL stream)";
     if (vo.pattern_files_count > 0 or vo.patterns_count != 1) return "a query has exactly one pattern: use \"pattern\", not -e / -f in \"flags\"";
     if (vo.queries_file != null) return "--queries-file cannot nest";
+    if (vo.spill) return "--spill is per call: put it on the command line, not in \"flags\"";
     if (vo.max_results != null or vo.max_output_tokens != null) return "the budget is per call: put --max-results / --max-output-tokens on the command line, not in \"flags\"";
     return null;
 }
@@ -1847,6 +1887,7 @@ fn runBatch(
             // Batch-level options belong to the call, not to each query.
             var skip_value = false;
             var skip_self = false;
+            if (std.mem.eql(u8, a, "--spill") or std.mem.startsWith(u8, a, "--spill=")) continue;
             inline for (.{ "--queries-file", "--max-results", "--max-output-tokens" }) |opt| {
                 if (std.mem.eql(u8, a, opt)) skip_value = true;
                 if (std.mem.startsWith(u8, a, opt ++ "=")) skip_self = true;
@@ -1870,6 +1911,7 @@ fn runBatch(
         .compact = gopts.json_compact,
     };
     defer em.deinit();
+    try configureSpill(init, arena, gopts, &em);
     if (gopts.json_compact) _ = platform.writeStdoutRaw(io, out_json.compact_stream_header);
     em.install();
     defer em.uninstall();

@@ -66,6 +66,11 @@ jobs:
       - name: Compact JSON conformance (M5)
         run: python3 evidence/agent-native/compact_conformance.py
 
+      # M8: lo emitido + el spill reconstruye exactamente la salida sin
+      # presupuesto; hash/bytes/0600 verificados; nunca silencioso.
+      - name: Spill conformance (M8)
+        run: python3 evidence/agent-native/spill_conformance.py
+
   windows-native:
     name: Native Windows Build, Tests & Oracle
     runs-on: windows-latest

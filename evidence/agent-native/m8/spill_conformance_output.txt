@@ -1,0 +1,67 @@
+PASS lote --json --max-results 0: sha256/bytes/0600 del spill
+PASS lote --json --max-results 0: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json --max-results 0: omitted == resultados del spill (55)
+PASS lote --json --max-results 3: sha256/bytes/0600 del spill
+PASS lote --json --max-results 3: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json --max-results 3: omitted == resultados del spill (52)
+PASS lote --json --max-results 60: sin truncado no crea fichero
+PASS lote --json --max-output-tokens 40: sha256/bytes/0600 del spill
+PASS lote --json --max-output-tokens 40: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json --max-output-tokens 40: omitted == resultados del spill (55)
+PASS lote --json --max-output-tokens 2000: sha256/bytes/0600 del spill
+PASS lote --json --max-output-tokens 2000: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json --max-output-tokens 2000: omitted == resultados del spill (26)
+PASS suelta --json  -C2 --max-results 2: sha256/bytes/0600 del spill
+PASS suelta --json  -C2 --max-results 2: emitido ++ spill == sin presupuesto (9 registros)
+PASS suelta --json  -C2 --max-results 2: omitted == resultados del spill (1)
+PASS lote --json --provenance --max-results 0: sha256/bytes/0600 del spill
+PASS lote --json --provenance --max-results 0: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json --provenance --max-results 0: omitted == resultados del spill (55)
+PASS lote --json --provenance --max-results 3: sha256/bytes/0600 del spill
+PASS lote --json --provenance --max-results 3: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json --provenance --max-results 3: omitted == resultados del spill (52)
+PASS lote --json --provenance --max-results 60: sin truncado no crea fichero
+PASS lote --json --provenance --max-output-tokens 40: sha256/bytes/0600 del spill
+PASS lote --json --provenance --max-output-tokens 40: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json --provenance --max-output-tokens 40: omitted == resultados del spill (55)
+PASS lote --json --provenance --max-output-tokens 2000: sha256/bytes/0600 del spill
+PASS lote --json --provenance --max-output-tokens 2000: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json --provenance --max-output-tokens 2000: omitted == resultados del spill (48)
+PASS suelta --json --provenance -C2 --max-results 2: sha256/bytes/0600 del spill
+PASS suelta --json --provenance -C2 --max-results 2: emitido ++ spill == sin presupuesto (12 registros)
+PASS suelta --json --provenance -C2 --max-results 2: omitted == resultados del spill (1)
+PASS lote --json=compact --max-results 0: sha256/bytes/0600 del spill
+PASS lote --json=compact --max-results 0: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json=compact --max-results 0: omitted == resultados del spill (55)
+PASS lote --json=compact --max-results 3: sha256/bytes/0600 del spill
+PASS lote --json=compact --max-results 3: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json=compact --max-results 3: omitted == resultados del spill (52)
+PASS lote --json=compact --max-results 60: sin truncado no crea fichero
+PASS lote --json=compact --max-output-tokens 40: sha256/bytes/0600 del spill
+PASS lote --json=compact --max-output-tokens 40: emitido ++ spill == sin presupuesto (58 registros)
+PASS lote --json=compact --max-output-tokens 40: omitted == resultados del spill (55)
+PASS lote --json=compact --max-output-tokens 2000: sin truncado no crea fichero
+PASS suelta --json=compact  -C2 --max-results 2: sha256/bytes/0600 del spill
+PASS suelta --json=compact  -C2 --max-results 2: emitido ++ spill == sin presupuesto (9 registros)
+PASS suelta --json=compact  -C2 --max-results 2: omitted == resultados del spill (1)
+PASS lote --json=compact --provenance --max-results 0: sha256/bytes/0600 del spill
+PASS lote --json=compact --provenance --max-results 0: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json=compact --provenance --max-results 0: omitted == resultados del spill (55)
+PASS lote --json=compact --provenance --max-results 3: sha256/bytes/0600 del spill
+PASS lote --json=compact --provenance --max-results 3: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json=compact --provenance --max-results 3: omitted == resultados del spill (52)
+PASS lote --json=compact --provenance --max-results 60: sin truncado no crea fichero
+PASS lote --json=compact --provenance --max-output-tokens 40: sha256/bytes/0600 del spill
+PASS lote --json=compact --provenance --max-output-tokens 40: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json=compact --provenance --max-output-tokens 40: omitted == resultados del spill (55)
+PASS lote --json=compact --provenance --max-output-tokens 2000: sha256/bytes/0600 del spill
+PASS lote --json=compact --provenance --max-output-tokens 2000: emitido ++ spill == sin presupuesto (113 registros)
+PASS lote --json=compact --provenance --max-output-tokens 2000: omitted == resultados del spill (40)
+PASS suelta --json=compact --provenance -C2 --max-results 2: sha256/bytes/0600 del spill
+PASS suelta --json=compact --provenance -C2 --max-results 2: emitido ++ spill == sin presupuesto (12 registros)
+PASS suelta --json=compact --provenance -C2 --max-results 2: omitted == resultados del spill (1)
+PASS directorio no escribible: summary.spill.error, rc y stdout intactos
+PASS truncado sin --spill: spill null (el agente sabe que debe re-ejecutar)
+PASS cerrado: --spill sin presupuesto
+PASS cerrado: --spill dentro de una consulta
+TOTAL 66 pass / 0 fail

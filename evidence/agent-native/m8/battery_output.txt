@@ -1,0 +1,15 @@
+2026-11-11T00:57:49-06:00
+base: 9df410fab2e2ad5ed5cbddf65a3c5a48ad298320 + arbol de trabajo M8
++- run test 125 pass, 1 skip (126 total) 262ms MaxRSS:16M
+Results: 32 PASSED, 0 FAILED (total 32)
+zgrep 0.4.0-dev
+TOTAL pass=40 fail=0
+TOTAL pass=25 fail=0
+TOTAL 15 pass / 0 fail
+TOTAL 12 pass / 0 fail
+TOTAL 45 pass / 0 fail
+TOTAL pass=17 fail=0
+TOTAL 41 pass / 0 fail
+TOTAL 71 pass / 0 fail
+TOTAL 37 pass / 0 fail
+TOTAL 66 pass / 0 fail

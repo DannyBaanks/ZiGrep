@@ -119,6 +119,18 @@ pub const Emitter = struct {
     output_tokens_est: f64 = 0,
     /// Linea de salida armada antes de decidir si cabe en el presupuesto.
     line_buf: std.ArrayList(u8) = .empty,
+
+    // --- M8: spill (el "tee" de RTK, pero verificable) --------------------
+    /// Directorio y nombre del fichero de spill; `null` = sin `--spill`. El
+    /// fichero se crea al omitir el PRIMER evento (sin truncado, coste cero).
+    spill_dir: ?[]const u8 = null,
+    spill_name: []const u8 = "",
+    spill_file: ?std.Io.File = null,
+    spill_hash: std.crypto.hash.sha2.Sha256 = .init(.{}),
+    spill_bytes: usize = 0,
+    spill_events: usize = 0,
+    /// Fallo al crear o escribir el spill: va al summary, nunca se calla.
+    spill_err: ?[]const u8 = null,
     reason: ?Reason = null,
     /// Líneas que no eran eventos zgrep/1 (no deberían existir; se cuentan,
     /// no se cuelan en el stream).
@@ -134,6 +146,62 @@ pub const Emitter = struct {
         self.staged.deinit(self.gpa);
         self.pending_header.deinit(self.gpa);
         self.line_buf.deinit(self.gpa);
+        if (self.spill_file) |f| f.close(self.io);
+        self.spill_file = null;
+    }
+
+    fn spillWrite(self: *Emitter, bytes: []const u8) void {
+        if (self.spill_err != null) return;
+        const f = self.spill_file orelse return;
+        f.writeStreamingAll(self.io, bytes) catch |e| {
+            self.spill_err = @errorName(e);
+            return;
+        };
+        self.spill_hash.update(bytes);
+        self.spill_bytes += bytes.len;
+    }
+
+    /// Abre el spill la primera vez que hace falta. En compacto el fichero es
+    /// un stream zgrep/1c valido por si solo: su cabecera y el marcador de la
+    /// consulta en curso van delante.
+    fn spillOpen(self: *Emitter) bool {
+        if (self.spill_file != null) return self.spill_err == null;
+        const dir = self.spill_dir orelse return false;
+        if (self.spill_err != null) return false;
+        std.Io.Dir.cwd().createDirPath(self.io, dir) catch |e| {
+            self.spill_err = @errorName(e);
+            return false;
+        };
+        var path_buf: [4096]u8 = undefined;
+        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ dir, self.spill_name }) catch {
+            self.spill_err = "NameTooLong";
+            return false;
+        };
+        self.spill_file = std.Io.Dir.cwd().createFile(self.io, path, .{
+            .exclusive = true,
+            .permissions = std.Io.File.Permissions.fromMode(0o600),
+        }) catch |e| {
+            self.spill_err = @errorName(e);
+            return false;
+        };
+        if (self.compact) {
+            self.spillWrite(out_json.compact_stream_header);
+            if (self.query_id) |id| self.spillQueryMarker(id);
+        }
+        return self.spill_err == null;
+    }
+
+    fn spillQueryMarker(self: *Emitter, id: []const u8) void {
+        self.spillWrite("{\"query_id\":");
+        self.spillWrite(id);
+        self.spillWrite("}\n");
+    }
+
+    /// Lo que el presupuesto no deja salir va al spill, tal cual habria salido.
+    fn spillEvent(self: *Emitter, line: []const u8) void {
+        if (!self.spillOpen()) return;
+        self.spillWrite(line);
+        self.spill_events += 1;
     }
 
     pub fn install(self: *Emitter) void {
@@ -212,6 +280,7 @@ pub const Emitter = struct {
             if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
         }
         if (self.reason != null) {
+            self.spillEvent(self.line_buf.items); // incluye la cabecera pendiente
             self.pending_header.clearRetainingCapacity();
             if (result) {
                 self.omitted += 1;
@@ -259,6 +328,7 @@ pub const Emitter = struct {
             if (self.reason == null and self.overTokenBudget(est)) self.reason = .max_output_tokens;
         }
         if (self.reason != null) {
+            self.spillEvent(self.line_buf.items);
             if (result) {
                 self.omitted += 1;
                 self.q_omitted += 1;
@@ -304,6 +374,7 @@ pub const Emitter = struct {
             try self.staged.appendSlice(self.gpa, id_json);
             try self.staged.appendSlice(self.gpa, "}\n");
             _ = self.flushStaged();
+            if (self.spill_file != null) self.spillQueryMarker(id_json);
         }
     }
 
@@ -359,6 +430,29 @@ pub const Emitter = struct {
         if (self.max_results) |m| try appendInt(&self.staged, g, m) else try self.staged.appendSlice(g, "null");
         try self.staged.appendSlice(g, ",\"max_output_tokens\":");
         if (self.max_output_tokens) |m| try appendInt(&self.staged, g, m) else try self.staged.appendSlice(g, "null");
+        try self.staged.appendSlice(g, ",\"spill\":");
+        if (self.spill_err) |e| {
+            try self.staged.appendSlice(g, "{\"error\":");
+            try out_json.appendJsonString(&self.staged, g, e);
+            try self.staged.append(g, '}');
+        } else if (self.spill_file) |f| {
+            f.close(self.io);
+            self.spill_file = null;
+            var digest: [32]u8 = undefined;
+            self.spill_hash.final(&digest);
+            const hex = std.fmt.bytesToHex(digest, .lower);
+            try self.staged.appendSlice(g, "{\"path\":");
+            var path_buf: [4096]u8 = undefined;
+            const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ self.spill_dir.?, self.spill_name }) catch self.spill_name;
+            try out_json.appendJsonString(&self.staged, g, path);
+            try self.staged.appendSlice(g, ",\"sha256\":\"");
+            try self.staged.appendSlice(g, &hex);
+            try self.staged.appendSlice(g, "\",\"bytes\":");
+            try appendInt(&self.staged, g, self.spill_bytes);
+            try self.staged.appendSlice(g, ",\"events\":");
+            try appendInt(&self.staged, g, self.spill_events);
+            try self.staged.append(g, '}');
+        } else try self.staged.appendSlice(g, "null");
         try self.staged.appendSlice(g, ",\"output_tokens_est\":");
         try appendInt(&self.staged, g, @intFromFloat(@ceil(self.output_tokens_est)));
         try self.staged.appendSlice(g, ",\"token_estimate\":\"" ++ token_estimator_name ++ "\",\"dropped_non_event\":");

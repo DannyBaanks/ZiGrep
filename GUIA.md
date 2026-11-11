@@ -933,6 +933,48 @@ El `summary` dice cuánto estimó (`output_tokens_est`).
 Límite honesto: está calibrado con UN tokenizador (BPE de Qwen). Otro modelo
 tokeniza distinto; el margen cubre la diferencia que se midió, no cualquiera.
 
+## 4r. `--spill`: recuperar lo que el presupuesto cortó, sin re-ejecutar (0.4.0-dev, M8)
+
+La idea es de RTK (cuando recorta, dice dónde está la salida completa), con una
+diferencia: aquí lo recuperado es **verificable**. Con un presupuesto y
+`--spill`, lo que no cabe se escribe —exactamente como habría salido— en un
+fichero JSONL 0600, y el `summary` dice dónde está y su sha256:
+
+```sh
+zgrep --json=compact --max-results 1 --spill HIT a.txt b.txt
+```
+
+```json
+{"schema":"zgrep/1c"}
+{"path":"a.txt"}
+["m",3,1,8,3,"HIT"]
+{"schema":"zgrep/1","type":"summary","queries":null,"returned":1,"omitted":1,"truncated":true,"reason":"max-results","output_bytes":37,"max_results":1,"max_output_tokens":null,"spill":{"path":"/home/tu/.cache/zgrep/spill/spill-1794380243796547359-924241.jsonl","sha256":"9e75e6c469b5e798b0253abd43ab5312abcf1efbc79d2626d311b9d6440faec0","bytes":65,"events":1},"output_tokens_est":18,"token_estimate":"zgrep-classes-v1","dropped_non_event":0}
+```
+
+*(Ejecutado con `--spill=<dir temporal>`; en el ejemplo se muestra la ruta del directorio por defecto en lugar de la temporal. Hash, bytes y contenido son los reales.)*
+
+El fichero es un stream válido del mismo dialecto (en compacto, con su cabecera):
+
+```json
+{"schema":"zgrep/1c"}
+{"path":"b.txt"}
+["m",2,1,10,3,"HIT here"]
+```
+
+* Lo emitido + el spill = la salida sin presupuesto (verificado en CI con
+  `spill_conformance.py`, en lote y en búsqueda suelta, en los dos dialectos).
+* Directorio: `--spill=DIR`, o `$XDG_CACHE_HOME/zgrep/spill` (si no,
+  `~/.cache/zgrep/spill`). Nombre único por llamada, creado exclusivo.
+* Perezoso: si no hay truncado no se crea nada (`"spill":null`).
+* Nunca silencioso: si no se puede escribir, `"spill":{"error":...}` y la búsqueda
+  sigue igual; truncado sin `--spill` da `"spill":null` (hay que re-ejecutar).
+* `--spill` sin presupuesto es error de uso; en lote es de la llamada.
+
+**No va por defecto, por los datos** (`evidence/agent-native/m8/`): sin truncado
+no cuesta nada, pero con un truncado fuerte escribe todo lo omitido (megabytes)
+y encarece la llamada en proporción. **zgrep no borra los spills**: quien los
+pide los limpia, p. ej. `find ~/.cache/zgrep/spill -mtime +1 -delete`.
+
 ## 4h. Los siete bugs que salieron al re-auditar la 0.3.0 en Windows
 
 Ninguno se veía leyendo el diff: todos aparecieron **comparando contra `rg` y
