@@ -1,0 +1,14 @@
+W = 400 (techo de --max-columns W, en bytes)
+
+[Claude Code] (sin herramienta Grep en este harness: se busca por Bash)
+  llamadas Bash                       4300
+  con un segmento grep/rg             1435  (33.4 %)
+  bytes de salida de esas llamadas    2295663  (34.2 % de toda la salida Bash)
+  bytes mas alla de la col 400        62430  (2.7 % de su salida; 0.9 % de toda la salida Bash)
+
+[opencode]
+  llamadas bash                       1160
+  con un segmento grep/rg             57  (4.9 %)
+  bytes de salida de esas llamadas    88372
+  bytes mas alla de la col 400        22244  (25.2 % de su salida; 0.3 % de toda la salida de herramientas)
+  herramienta grep propia (fuera del alcance de un hook de Bash): 102 llamadas, 610675 bytes, 56589 mas alla de la col 400 (0.8 % de toda la salida de herramientas)
