@@ -601,6 +601,12 @@ fn scanBufferLines(
             break :blk searcher.find(line_slice, 0) != null;
         };
         const selected = if (config.invert) !has_match else has_match;
+        // `--stop-on-nonmatch` (rg): the first non-selected line AFTER a
+        // selected one ends the file. That line is still handled below (it can
+        // be after-context or a --passthru line, as in rg); the loop stops
+        // right after it. Lines before the first selected line never stop it.
+        // This flag used to be parsed and documented but never read (M11 R28).
+        const stop_after_this = config.stop_on_nonmatch and !selected and res.lines > 0;
 
         if (selected and !maxed) {
             res.matched = true;
@@ -703,6 +709,7 @@ fn scanBufferLines(
         } else if (maxed and after_left == 0) {
             break;
         }
+        if (stop_after_this) break;
 
         if (ring.len > 0) {
             ring[ring_pos] = .{ .start = line_start, .end = raw_end, .no = line_no };
@@ -745,7 +752,7 @@ pub fn scanBuffer(
     // the jump-to-next-match fast path below cannot provide context.
     // The fast path splits on '\n' internally (the DFA's own line handling),
     // so with `--null-data` a record that contains \n could never match.
-    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json) {
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json or config.stop_on_nonmatch) {
         return scanBufferLines(gpa, data, searcher, path, show_path, mode, config, out);
     }
 
@@ -1613,6 +1620,25 @@ test "scanBuffer: invert-match (-v)" {
     const got = try runWithConfig(data, "ap", .lines, .{ .invert = true, .show_line_no = true }, "f", false);
     defer std.testing.allocator.free(got);
     try std.testing.expectEqualStrings("2:banana\n3:cherry\n", got);
+}
+
+test "--stop-on-nonmatch: stops at the first non-matching line after a match (rg semantics)" {
+    const data = "x0\na1\na2\nb\na3\nb2\n";
+    const cases = [_]struct { cfg: ScanConfig, want: []const u8 }{
+        // x0 comes before any match, so it does not stop the scan; b does.
+        .{ .cfg = .{ .stop_on_nonmatch = true, .show_line_no = true }, .want = "2:a1\n3:a2\n" },
+        // The stopping line is still after-context, as in rg -A1.
+        .{ .cfg = .{ .stop_on_nonmatch = true, .show_line_no = true, .after_context = 1 }, .want = "2:a1\n3:a2\n4-b\n" },
+        // -v: x0 is selected, a1 is not, so only x0.
+        .{ .cfg = .{ .stop_on_nonmatch = true, .show_line_no = true, .invert = true }, .want = "1:x0\n" },
+        // Without the flag nothing changes (a3 is found).
+        .{ .cfg = .{ .show_line_no = true }, .want = "2:a1\n3:a2\n5:a3\n" },
+    };
+    for (cases) |c| {
+        const got = try runWithConfig(data, "a", .lines, c.cfg, "f", false);
+        defer std.testing.allocator.free(got);
+        try std.testing.expectEqualStrings(c.want, got);
+    }
 }
 
 test "scanBuffer: max-count (-m)" {
