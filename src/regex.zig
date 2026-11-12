@@ -905,15 +905,33 @@ pub const Dfa = struct {
     /// `crlf` makes `$` also accept just before the `\r` of a CRLF pair: with
     /// the flag, the CR is part of the terminator, not an ordinary byte.
     pub fn firstMatchingLine(self: *Dfa, data: []const u8, from: usize, to: usize, crlf: bool) ?usize {
-        return self.firstMatchingLineImpl(data, from, to, crlf) catch null;
+        var unused: ?usize = null;
+        return self.firstMatchingLineImpl(false, data, from, to, crlf, &unused) catch null;
     }
+
+    /// `firstMatchingLine` that also stops at the first NUL byte: `.nul`
+    /// with its offset, or `.pos` with the start of the first matching line
+    /// (every byte before the accepting one is NUL-free; the rest of that
+    /// line is the caller's). The DFA consumes every byte anyway, so the
+    /// test is one compare per byte: this is what lets a regex with no
+    /// required literal skip the binary rule's second pass.
+    pub fn firstMatchingLineOrNul(self: *Dfa, data: []const u8, from: usize, to: usize, crlf: bool) ?LineOrNul {
+        var nul_at: ?usize = null;
+        const r = self.firstMatchingLineImpl(true, data, from, to, crlf, &nul_at) catch return null;
+        if (nul_at) |z| return .{ .pos = z, .nul = true };
+        return if (r) |ls| .{ .pos = ls, .nul = false } else null;
+    }
+
+    pub const LineOrNul = struct { pos: usize, nul: bool };
 
     fn firstMatchingLineImpl(
         self: *Dfa,
+        comptime stop_nul: bool,
         data: []const u8,
         from: usize,
         to: usize,
         crlf: bool,
+        nul_at: *?usize,
     ) Allocator.Error!?usize {
         var s = self.init_bol;
         // A pattern that accepts the empty string (`x*`, `^`, `(a|)`) matches
@@ -927,6 +945,10 @@ pub const Dfa = struct {
         var i = from;
         while (i < to) {
             const b = data[i];
+            if (stop_nul and b == 0) {
+                nul_at.* = i;
+                return null;
+            }
             if (b == '\n') {
                 if (try self.acceptEnd(s, prev_word)) return ls;
                 s = self.init_bol;

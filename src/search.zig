@@ -558,15 +558,17 @@ pub const Searcher = struct {
     pub const Hit = struct { pos: usize, nul: bool };
 
     /// Can `findOrNul` serve this searcher? Literals on a packed-pair kernel
-    /// (with or without -i and -w), and regexes whose lines are found through
-    /// such a literal (`multi` or `prefilter`). A regex with no required
-    /// literal runs the DFA over every byte and keeps the second pass.
+    /// (with or without -i and -w); regexes whose lines are found through
+    /// such a literal (`multi` or `prefilter`), and regexes with no literal
+    /// at all (the DFA tests each byte it consumes). Not: -U, -z, a
+    /// prefilter on another kernel (`--algo=bmh`, a 1-byte needle).
     pub fn supportsFindOrNul(self: *const Searcher) bool {
         return switch (self.kind) {
             .literal => self.needle.len > 0 and self.has_pair and
                 (self.icase or self.effectiveAlgo() == .memchr),
+            // No literal at all: the DFA walks every byte (`firstMatchingLineOrNul`).
             .regex => !self.multiline and !self.null_data and
-                (self.multi != null or (self.prefilter != null and self.prefilter.?.supportsFindOrNul())),
+                (self.multi != null or (if (self.prefilter) |pf| pf.supportsFindOrNul() else true)),
             else => false,
         };
     }
@@ -606,6 +608,10 @@ pub const Searcher = struct {
     /// rest of the candidate line is walked once for its end or a NUL.
     fn regexOrNul(self: *const Searcher, hay: []const u8, start: usize) ?Hit {
         const dfa = regex.threadDfa(self.prog.?) catch return null;
+        if (self.multi == null and self.prefilter == null) {
+            const r = dfa.firstMatchingLineOrNul(hay, start, hay.len, self.crlf) orelse return null;
+            return .{ .pos = r.pos, .nul = r.nul };
+        }
         var pos = start;
         while (pos < hay.len) {
             const h = (if (self.multi) |ml| ml.findOrNul(hay, pos) else self.prefilter.?.findOrNul(hay, pos)) orelse return null;
@@ -1529,6 +1535,63 @@ test "findOrNul: -i and -w literals, against find on the NUL-free prefix" {
             if (!std.meta.eql(want, got)) {
                 std.debug.print("\nfindOrNul -i/-w nd={s} icase={} word={} start={d} want={any} got={any}\n", .{ nd, o.icase, o.word, start, want, got });
                 return error.TestExpectedEqual;
+            }
+        }
+    };
+}
+
+test "findOrNul: regex without required literal, against find on NUL-free lines" {
+    const pa = std.heap.page_allocator;
+    var prng = std.Random.DefaultPrng.init(0x0b17_2026_1114);
+    const rnd = prng.random();
+    var buf: [700]u8 = undefined;
+    const pats = [_][]const u8{
+        "a+b",
+        "foo|b.r",
+        "^x*y",
+        "a.*b$",
+        "\\b[a-z]+\\b",
+        "a*",
+    };
+    const opts = [_]BuildOptions{
+        .{ .fixed = false },
+        .{ .fixed = false, .icase = true },
+        .{ .fixed = false, .crlf = true },
+    };
+    for (opts) |o| for (pats) |pat| {
+        const s = try build(pa, &.{pat}, o);
+        try std.testing.expect(s.supportsFindOrNul());
+        try std.testing.expect(s.multi == null and s.prefilter == null);
+        var iter: usize = 0;
+        while (iter < 400) : (iter += 1) {
+            const len = rnd.uintLessThan(usize, buf.len);
+            for (buf[0..len]) |*c| c.* = "abfoxyr \r\n"[rnd.uintLessThan(usize, 10)];
+            for (0..rnd.uintLessThan(usize, 3)) |_| {
+                if (len > 0) buf[rnd.uintLessThan(usize, len)] = 0;
+            }
+            const hay = buf[0..len];
+            const start = if (len == 0) 0 else rnd.uintLessThan(usize, len + 1);
+            const z = std.mem.findScalarPos(u8, hay, start, 0);
+            const nul_ls = if (z) |zz|
+                (if (std.mem.findScalarLast(u8, hay[start..zz], '\n')) |k| start + k + 1 else start)
+            else
+                len;
+            const want_before_nul_line = if (z != null and start >= nul_ls) null else s.find(hay[0..nul_ls], start);
+            const got = s.findOrNul(hay, start);
+            if (want_before_nul_line) |m| {
+                // Any match on a NUL-free line before the NUL line must match identically.
+                try std.testing.expectEqual(@as(?Searcher.Hit, .{ .pos = m, .nul = false }), got);
+            } else if (z) |zz| {
+                // Either NUL was reported at zz, or a match started on the NUL line itself
+                // (at nul_ls) before hitting zz — scan.zig's lineEndOrNul drops that line.
+                const g = got orelse return error.TestExpectedEqual;
+                if (g.nul) {
+                    try std.testing.expectEqual(zz, g.pos);
+                } else {
+                    try std.testing.expectEqual(nul_ls, g.pos);
+                }
+            } else {
+                try std.testing.expectEqual(@as(?Searcher.Hit, null), got);
             }
         }
     };
