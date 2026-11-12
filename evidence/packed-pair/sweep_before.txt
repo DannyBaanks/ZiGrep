@@ -1,0 +1,20 @@
+# Matcher crossover sweep — bmh vs memchr
+
+- haystack dir: `<assembly>`
+- collected: 64515332 text bytes in 3240 files (budget 67108864, maxfile 1048576)
+- 12 needle samples per length, median of 5 runs each, single-threaded
+- host loadavg: 3.81 4.50 4.12 3/2573 245004
+- matchers under test: imported from `src/search.zig`, not a copy
+
+| needle len | bmh MB/s | memchr MB/s | bmh / memchr | winner |
+|---:|---:|---:|---:|:--|
+| 2 | 816.7 | 6321.1 | 0.13× | memchr |
+| 3 | 1217.1 | 13405.5 | 0.09× | memchr |
+| 4 | 1603.5 | 12048.6 | 0.13× | memchr |
+| 6 | 2065.8 | 10070.0 | 0.21× | memchr |
+| 8 | 2760.0 | 11272.6 | 0.24× | memchr |
+| 12 | 4121.5 | 11425.6 | 0.36× | memchr |
+| 16 | 4994.2 | 18582.6 | 0.27× | memchr |
+| 32 | 8489.5 | 14839.3 | 0.57× | memchr |
+
+Alignment control: 96 samples recounted with both kernels, 0 disagreements (must be 0).

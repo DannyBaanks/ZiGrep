@@ -136,6 +136,11 @@ pub const Searcher = struct {
     skip: [256]u32 = undefined,
     rarest_offset: u32 = 0,
     rarest_byte: u8 = 0,
+    /// Second rarest byte, at a different offset (packed-pair filter). Only
+    /// meaningful when `has_pair` (needles of 2+ bytes).
+    rare2_offset: u32 = 0,
+    rare2_byte: u8 = 0,
+    has_pair: bool = false,
 
     /// Builds the BMH skip table and identifies the rarest byte for SIMD scanning.
     /// Must be called exactly once per pattern.
@@ -162,6 +167,25 @@ pub const Searcher = struct {
         }
         self.rarest_offset = rarest_idx;
         self.rarest_byte = if (needle.len > 0) needle[rarest_idx] else 0;
+
+        // Packed pair: the rarest byte at any OTHER offset. Two bytes that must
+        // both match at fixed distance discard most of the candidates a single
+        // anchor lets through when the needle is made of common letters.
+        if (needle.len >= 2) {
+            var second_idx: u32 = if (rarest_idx == 0) 1 else 0;
+            var second_rank: u8 = 255;
+            for (needle, 0..) |b, idx| {
+                if (idx == rarest_idx) continue;
+                const r = byte_rank[b];
+                if (r < second_rank) {
+                    second_rank = r;
+                    second_idx = @intCast(idx);
+                }
+            }
+            self.rare2_offset = second_idx;
+            self.rare2_byte = needle[second_idx];
+            self.has_pair = true;
+        }
 
         return self;
     }
@@ -329,6 +353,34 @@ pub const Searcher = struct {
     }
 
     fn findMemchr(self: *const Searcher, hay: []const u8, start: usize) ?usize {
+        if (!self.has_pair) return self.findAnchor(hay, start);
+        const nd = self.needle;
+        const n = nd.len;
+        const V = @Vector(32, u8);
+        const o1 = self.rarest_offset;
+        const o2 = self.rare2_offset;
+        const w1: V = @splat(self.rarest_byte);
+        const w2: V = @splat(self.rare2_byte);
+        var i = start;
+        // Both loads read hay[i + o .. i + o + 32) with o <= n - 1, and every
+        // candidate i + bit (bit < 32) is verified over n bytes: one bound,
+        // i + n + 31 <= hay.len, covers both. Bits are visited low to high and
+        // blocks left to right, so the first verified candidate is leftmost.
+        while (i + n + 31 <= hay.len) : (i += 32) {
+            const v1: V = hay[i + o1 ..][0..32].*;
+            const v2: V = hay[i + o2 ..][0..32].*;
+            var mask: u32 = @bitCast((v1 == w1) & (v2 == w2));
+            while (mask != 0) : (mask &= mask - 1) {
+                const cand = i + @ctz(mask);
+                if (std.mem.eql(u8, hay[cand .. cand + n], nd)) return cand;
+            }
+        }
+        // Tail (fewer than 32 + n - 1 bytes left): the single-anchor scan.
+        return self.findAnchor(hay, i);
+    }
+
+    /// Single rarest-byte anchor (`findScalarPos`) plus a full compare.
+    fn findAnchor(self: *const Searcher, hay: []const u8, start: usize) ?usize {
         const nd = self.needle;
         const n = nd.len;
         const roff = self.rarest_offset;
@@ -546,6 +598,41 @@ test "find: differential against naive for random haystacks" {
                     "\nMISMATCH hay={s} needle={s} start={d} want={?d} bmh={?d} memchr={?d} auto={?d}\n",
                     .{ hay, needle, start, want, got_bm, got_mc, got_auto },
                 );
+                return error.TestExpectedEqual;
+            }
+        }
+    }
+}
+
+test "find: packed pair against naive, long haystacks and block edges" {
+    var prng = std.Random.DefaultPrng.init(0x9a1c_ed00_2026_1112);
+    const rnd = prng.random();
+    const alphabets = [_][]const u8{ "ab", "etaoin", "const return self", "abcdefghijklmnopqrstuvwxyz_ \n" };
+    var iter: usize = 0;
+    while (iter < 3000) : (iter += 1) {
+        const alphabet = alphabets[rnd.uintLessThan(usize, alphabets.len)];
+        var hay_buf: [320]u8 = undefined;
+        const hay_len = rnd.uintLessThan(usize, hay_buf.len + 1);
+        for (hay_buf[0..hay_len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
+        var nd_buf: [40]u8 = undefined;
+        const nd_len = 1 + rnd.uintLessThan(usize, nd_buf.len);
+        for (nd_buf[0..nd_len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
+        const needle = nd_buf[0..nd_len];
+        // Plant the needle where block edges fall (31, 32, 63, 64...) half
+        // of the time, so candidates straddle the 32-byte blocks.
+        if (rnd.boolean() and hay_len >= nd_len) {
+            const edges = [_]usize{ 0, 1, 31, 32, 33, 63, 64, 95, 96, 127, 128 };
+            const at = edges[rnd.uintLessThan(usize, edges.len)];
+            if (at + nd_len <= hay_len) @memcpy(hay_buf[at .. at + nd_len], needle);
+        }
+        const hay = hay_buf[0..hay_len];
+        const mc = Searcher.init(needle, .memchr);
+        var start: usize = 0;
+        while (start <= hay_len) : (start += 1 + rnd.uintLessThan(usize, 7)) {
+            const want = naiveFind(hay, needle, start);
+            const got = mc.find(hay, start);
+            if (want != got) {
+                std.debug.print("\nMISMATCH len={d} needle={s} start={d} want={?d} got={?d}\n", .{ hay_len, needle, start, want, got });
                 return error.TestExpectedEqual;
             }
         }
