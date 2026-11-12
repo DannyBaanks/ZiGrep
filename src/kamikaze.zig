@@ -344,7 +344,7 @@ fn scoutDirConcurrent(
             try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, entry.name));
         } else if (kind == .file) {
             if (!scan_files) continue;
-            if (ctx.filter.isFileExcluded(entry.name)) continue;
+            if (ctx.filter.isFileExcludedIn(dir, entry.name)) continue;
             if (ctx.max_filesize > 0) {
                 const full = try joinPathSentinel(ctx.gpa, dir, entry.name);
                 defer ctx.gpa.free(full);
@@ -677,7 +677,7 @@ fn tryQuickTreeScan(
                     dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1 }) catch return null;
                 },
                 .file => {
-                    if (filter_engine.isFileExcluded(entry.name)) continue;
+                    if (filter_engine.isFileExcludedIn(task.path, entry.name)) continue;
                     if (max_filesize > 0 and size > max_filesize) continue;
                     if (files.items.len >= max_files) return null;
                     total_bytes += size;
@@ -771,7 +771,7 @@ fn tryQuickQuietProbe(
             kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
         }
         if (kind != .file) continue;
-        if (filter_engine.isFileExcluded(entry.name)) continue;
+        if (filter_engine.isFileExcludedIn(root, entry.name)) continue;
 
         const stack_path = formatPathBuf(&path_buf, root, entry.name);
         var heap_path: ?[:0]const u8 = null;

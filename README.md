@@ -109,7 +109,10 @@ The option surface covers:
   `--vimgrep`, `-U`, `--pre`, `--encoding`, `--crlf`.
 - **Filtering:** `--include`, `--exclude`, `--exclude-from`, `--exclude-dir`,
   `--include-ext`, `--exclude-ext`, `--no-ignore`, `--no-hidden`. Ignore rules
-  come from `.gitignore` and `.dataignore`.
+  come from `.gitignore` and `.dataignore`. Globs follow ripgrep's `-g`
+  (`*`, `?`, `**`, `[abc]`, `{a,b}`). A glob that contains `/` is matched
+  against the path relative to the search root. The CI checks parity with
+  `rg -g` (`evidence/rg-glob-parity/`).
 - **ZiGrep-specific:** `--sort`, `--io-engine=sync|uring|auto`, `--algo`,
   `--stats`, `--force-swarm`, `--nav` (directory navigation plans), `--exec`,
   `--cache` (inspect and clean Zig build caches).

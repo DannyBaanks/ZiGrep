@@ -96,7 +96,7 @@ fn walkOne(
         } else if (kind == .file) {
             if (!scan_files) continue;
             if (filter_engine) |fe| {
-                if (fe.isFileExcluded(entry.name)) continue;
+                if (fe.isFileExcludedIn(dir, entry.name)) continue;
             }
             if (max_filesize > 0) {
                 const child = try vfs.joinPathSentinel(gpa, dir, entry.name);

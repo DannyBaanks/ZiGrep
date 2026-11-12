@@ -201,7 +201,10 @@ const usage =
     \\      --exclude-from=FILE
     \\                    read more --exclude globs from FILE, one per line
     \\      --include=GLOB
-    \\                    only search files matching GLOB
+    \\                    only search files matching GLOB. Globs follow
+    \\                    rg -g: * ? ** [abc] [!a-z] {a,b}; a glob with
+    \\                    '/' matches the path relative to the search root
+    \\                    (leading '/' anchors it), e.g. 'src/**/*.{ts,tsx}'
     \\      --no-ignore   do not read .dataignore / .gitignore or apply defaults
     \\      --no-default-ignore
     \\                    do not apply built-in default ignore lists
@@ -795,7 +798,7 @@ fn runPre(gpa: Allocator, io: std.Io, allocator: Allocator, template: []const u8
 fn preApplies(glob: ?[]const u8, path: []const u8) bool {
     const g = glob orelse return true;
     const name = std.fs.path.basename(path);
-    return filter.matchPattern(name, g) or filter.matchPattern(path, g);
+    return filter.globMatch(name, g) or filter.globMatch(path, g);
 }
 
 /// The encodings zgrep can actually honour. Anything else is a usage error
@@ -2420,6 +2423,8 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         filter_engine.no_ignore = opts.no_ignore;
         filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
         filter_engine.skip_hidden = opts.skip_hidden;
+        // Path globs (`--include='src/**/*.ts'`) are relative to the operand.
+        filter_engine.roots = valid_operands.items;
 
         for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
             try filter_engine.addExcludedDirs(d);
@@ -2540,6 +2545,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     filter_engine.no_ignore = opts.no_ignore;
     filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;
     filter_engine.skip_hidden = opts.skip_hidden;
+    filter_engine.roots = valid_operands.items;
 
     for (opts.exclude_dirs[0..opts.exclude_dirs_count]) |d| {
         try filter_engine.addExcludedDirs(d);

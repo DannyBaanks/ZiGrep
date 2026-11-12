@@ -95,6 +95,12 @@ jobs:
       - name: Long-line windows conformance (M9)
         run: python3 evidence/agent-native/m9_conformance.py
 
+      # --include/--exclude con la sintaxis de globs de rg (llaves, **, clases,
+      # rutas relativas a la raiz): mismo conjunto de (fichero, linea) que
+      # rg -g sobre un arbol generado, con la llamada de un adaptador rg.
+      - name: Glob parity with ripgrep -g
+        run: python3 evidence/rg-glob-parity/glob_parity.py
+
       # Los mismos diferenciales contra un binario Debug (comprobacion de
       # limites encendida). ReleaseFast escondia una lectura fuera del slice en
       # la alineacion UTF-8 de la ventana de M9 (text[len]): la salida salia
@@ -107,6 +113,8 @@ jobs:
             echo "== $t (Debug)"
             python3 evidence/agent-native/${t}_conformance.py --zgrep zig-debug/bin/zgrep
           done
+          echo "== glob parity (Debug)"
+          python3 evidence/rg-glob-parity/glob_parity.py --zgrep zig-debug/bin/zgrep
 
   windows-native:
     name: Native Windows Build, Tests & Oracle
