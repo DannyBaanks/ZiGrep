@@ -81,6 +81,10 @@ def main() -> int:
     ap.add_argument("--zgrep", default=str(ROOT / "zig-out" / "bin" / "zgrep"))
     ap.add_argument("--work")
     a = ap.parse_args()
+    # The searches run with cwd = the generated tree: a relative binary path
+    # (CI passes zig-debug/bin/zgrep) must be resolved first.
+    if os.sep in a.zgrep or "/" in a.zgrep:
+        a.zgrep = str(Path(a.zgrep).resolve())
     work = Path(a.work) if a.work else Path(tempfile.mkdtemp(prefix="globparity-"))
     if work.exists():
         shutil.rmtree(work)
