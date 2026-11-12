@@ -154,6 +154,11 @@ pub const Searcher = struct {
     /// required literal; a line is only handed to the DFA when one of them
     /// occurs in it. Without it an alternation ran the DFA over every byte.
     multi: ?*const MultiLit = null,
+    /// `multi` and every branch IS its literal (`foo|bar`, `-F -e a -e b`, no
+    /// -w/-x): a hit of `multi` is already a match, so the line skips the
+    /// DFA. Without it every matching line was verified a second time (0.55 s
+    /// vs rg 0.27 s on 4 M lines, 2.8 M of them matching; 2026-11-12).
+    multi_exact: bool = false,
     /// `skip[c]` = distance to advance the window when the byte at the last
     /// position of the window is `c`. Default is the pattern length.
     skip: [256]u32 = undefined,
@@ -354,6 +359,7 @@ pub const Searcher = struct {
             while (pos < hay.len) {
                 const m = ml.find(hay, pos) orelse return null;
                 const ls = if (std.mem.findScalarLast(u8, hay[pos..m], '\n')) |k| pos + k + 1 else pos;
+                if (self.multi_exact) return ls;
                 const le = std.mem.findScalarPos(u8, hay, m, '\n') orelse hay.len;
                 if (dfa.firstMatchingLine(hay, ls, le, self.crlf) != null) return ls;
                 if (le >= hay.len) return null;
@@ -530,6 +536,21 @@ pub const MultiLit = struct {
     }
 };
 
+/// Is the branch `n` exactly its required literal `lit` (every node a
+/// literal byte, or an ASCII case pair under `-i`)? Then matching the
+/// literal IS matching the branch, with the same folding `MultiLit` uses:
+/// ASCII only, like the regex `-i`.
+fn isWholeLiteral(n: *const regex.Node, lit: []const u8, icase: bool) bool {
+    return switch (n.*) {
+        .cat => |kids| kids.len == lit.len and std.mem.indexOfScalar(u8, lit, '\n') == null and
+            for (kids) |k| {
+                if (k.* != .set) break false;
+            } else true,
+        .set => lit.len == 1 and !icase,
+        else => false,
+    };
+}
+
 /// Every branch of `n` (flattening nested alternations) into `out`.
 fn collectBranches(arena: Allocator, n: *regex.Node, out: *std.ArrayList(*regex.Node)) Allocator.Error!void {
     switch (n.*) {
@@ -632,14 +653,17 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
         for (raw_nodes) |rn| try collectBranches(arena, rn, &branches);
         if (branches.items.len < 2 or branches.items.len > MultiLit.max_lits) break :multi;
         var lits: [MultiLit.max_lits][]const u8 = undefined;
+        var exact = !o.word and !o.line;
         for (branches.items, 0..) |b, k| {
             const lit = (try regex.requiredLiteral(arena, b, o.icase)) orelse break :multi;
             lits[k] = try gpa.dupe(u8, lit);
+            if (exact and !isWholeLiteral(b, lit, o.icase)) exact = false;
         }
         const ml = MultiLit.init(lits[0..branches.items.len], o.icase) orelse break :multi;
         const mp = try gpa.create(MultiLit);
         mp.* = ml;
         s.multi = mp;
+        s.multi_exact = exact;
     }
     if (patterns.len == 1 and s.multi == null) {
         if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
@@ -972,7 +996,7 @@ test "build: alternation prefilter gives the same lines as the plain DFA" {
         &.{"webgpu|wgpu|dawn"}, &.{ "foo", "bar" }, &.{"fo+|ba[rz]"}, &.{ "ab", "abc", "qux" },
         &.{"(foo|bar)baz"},     &.{"^foo|bar$"},    &.{ "wgpu", "da.n" }, &.{"foo\\b|\\bbar"},
     };
-    const flag_sets = [_]BuildOptions{ .{}, .{ .word = true }, .{ .line = true }, .{ .icase = true }, .{ .icase = true, .word = true } };
+    const flag_sets = [_]BuildOptions{ .{}, .{ .word = true }, .{ .line = true }, .{ .icase = true }, .{ .icase = true, .word = true }, .{ .fixed = true }, .{ .fixed = true, .icase = true } };
     for (pats) |pat| for (flag_sets) |fl| {
         const with = try build(pa, pat, fl);
         var without = with;
@@ -1012,6 +1036,14 @@ test "build: alternation prefilter gives the same lines as the plain DFA" {
     try std.testing.expect((try build(pa, &.{ "foo", "bar" }, .{})).multi != null);
     try std.testing.expect((try build(pa, &.{"webgpu|wgpu"}, .{ .icase = true })).multi != null);
     try std.testing.expect((try build(pa, &.{"a|bc"}, .{})).multi == null); // 1-byte literal
+    // Exact branches skip the DFA; anything else (a class, -w, -x) keeps it.
+    try std.testing.expect((try build(pa, &.{"webgpu|wgpu|dawn"}, .{})).multi_exact);
+    try std.testing.expect((try build(pa, &.{ "foo", "bar" }, .{ .fixed = true })).multi_exact);
+    try std.testing.expect((try build(pa, &.{"webgpu|wgpu"}, .{ .icase = true })).multi_exact);
+    try std.testing.expect(!(try build(pa, &.{"fo+|bar"}, .{})).multi_exact);
+    try std.testing.expect(!(try build(pa, &.{"(foo|bar)baz"}, .{})).multi_exact);
+    try std.testing.expect(!(try build(pa, &.{ "foo", "bar" }, .{ .word = true })).multi_exact);
+    try std.testing.expect(!(try build(pa, &.{ "foo", "bar" }, .{ .line = true })).multi_exact);
 }
 
 test "build: no patterns selects nothing (-f with an empty file)" {
