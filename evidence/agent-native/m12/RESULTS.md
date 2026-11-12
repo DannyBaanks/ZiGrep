@@ -109,3 +109,20 @@ Completed afterwards, the same day, at Danny's request ("haz todo"):
 - OpenISy `main` pushed to GitHub as a fast-forward (`99a94c9..a794ba4`).
 
 Still NOT_DEMONSTRATED: agy actually following the rule (quota exhausted).
+
+## `ziggrep --setup` (2026-11-12)
+
+The manual rollout above became a command: `ziggrep --setup`, in commits
+`b656149` and `1cfcba0`, documented in GUIA §4t. It is verified against a fake
+HOME by `evidence/setup/setup_check.py`, which the CI also runs.
+
+Danny's machine was migrated to it:
+1. The manual blocks were removed. Codex came back byte for byte to its
+   original backup; the three files that held only the manual rule were
+   deleted.
+2. `ziggrep --setup=claude,codex,openisy,agy --force` was run. opencode was
+   left out on purpose.
+3. A second run reports "Nada que cambiar".
+
+Claude Code and Codex, asked afterwards, both answer "use `ziggrep` and always
+pass a path".
