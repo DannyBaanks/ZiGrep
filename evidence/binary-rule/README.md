@@ -5,7 +5,9 @@
 Unless `-a`, `--null-data` (NUL is the record separator) or a UTF-16
 decoding is in force:
 
-- a NUL in the first 8 KiB: the file is binary and is not searched (as
+- a binary signature at the start (`binaryMagic`: `%PDF-`, ELF, PNG, JPEG,
+  zip, gzip, xz, zstd, 7z, wasm, Mach-O, Matroska, npy, HDF5) or a NUL in the
+  first 8 KiB: the file is binary and is not searched (the NUL part as
   before; `grep -I` and rg skip it too);
 - a NUL further in: the file is text up to the start of the line that holds
   the first NUL; nothing from that line on is printed or counted.
@@ -31,6 +33,22 @@ falls in the first block is skipped whole, and the same file can be listed or
 not depending on how it is read (seen on a PDF: listed when its directory is
 the root, not from the repository root).
 
+## Signatures complement the NUL probe (`magic_survey.py`)
+
+Over 114 723 files of a local tree (aggregates only):
+
+| | files |
+|---|---|
+| signature and NUL in the first 8 KiB | 5 338 |
+| signature, no NUL in 8 KiB (only the signature catches them) | 7 (6 PDF, 1 ELF) |
+| NUL, no signature (a signature-only rule would print them) | 3 602 |
+
+So a signature-only rule would bring back binary output for 3 602 raw-data
+files (.f32, .pcm, .bin, .raw, captured output); both checks stay. A real
+PDF that printed 976 lines (71 KB) of its internals now prints nothing.
+Signatures that plain text can start with (`MZ`, `RIFF`, `ID3`, `OggS`…)
+are not used.
+
 ## Test (`binary_consistency.py`, also in CI, ReleaseFast and Debug)
 
 A generated tree with NUL positions (none, in the window, after it,
@@ -39,7 +57,8 @@ before/after the matches, mid-line) and sizes that take each read path
 swarm. For `--io-engine=sync`, `--io-engine=uring`, `--force-swarm` and `-j1`
 the output of lines, `-c`, `-l`, `-L`, `--count-matches` and `--json` must
 equal a Python model of the rule, with no NUL in the output; `-a` must read
-past the NUL. 96c6fbb: 4 pass / 33 fail. This version: 37 / 37.
+past the NUL. The tree includes a PDF with no NUL at all. 96c6fbb: 4 pass /
+33 fail; d14f549 (NUL rule only): 13 / 24; this version: 37 / 37.
 
 ## Cost
 

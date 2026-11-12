@@ -4,7 +4,8 @@
 usage: binary_consistency.py [--zgrep PATH]
 
 The rule (src/scan.zig, searchBytes), without -a / --null-data / UTF-16:
-  - a NUL in the first 8192 bytes: the file is binary, nothing is reported;
+  - a binary signature at the start (PDF, ELF, PNG, zip, ...) or a NUL in the
+    first 8192 bytes: the file is binary, nothing is reported;
   - a NUL further in: the file is text up to the start of the line holding
     the first NUL; nothing from that line on is printed or counted.
 
@@ -32,13 +33,21 @@ def make_files():
         files[f"{size_name}_nul_late.bin"] = body + b"bin\x00 needle after\nneedle tail\n"
         files[f"{size_name}_nul_late_only_after.bin"] = filler * (pad // len(filler) + PROBE // len(filler) + 2) + b"\x00needle\n"
         files[f"{size_name}_nul_mid_line.bin"] = body + b"text then needle\x00 rest\n"
+    # A binary signature with no NUL at all (a PDF header is ASCII).
+    files["doc_no_nul.pdf"] = b"%PDF-1.5\nneedle in a pdf\n" + filler * 20
+    # Text that only mentions a format is still text.
+    files["mentions_pdf.txt"] = b"PDF-1.5 needle\n"
     # Many small text files so the swarm and the io_uring batches engage.
     for i in range(80):
         files[f"bulk/f{i:03d}.txt"] = (b"needle bulk %d\n" % i) + filler * (i % 7)
     return files
 
+MAGICS = (b"%PDF-", b"\x7fELF", b"\x89PNG\r\n\x1a\n", b"PK\x03\x04", b"\x1f\x8b")
+
 def model(data):
     """Lines (as bytes) the rule allows to match, or None for 'binary'."""
+    if data.startswith(MAGICS):
+        return None
     nul = data.find(b"\x00")
     if 0 <= nul < PROBE:
         return None

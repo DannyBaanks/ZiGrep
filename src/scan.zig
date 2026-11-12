@@ -743,6 +743,43 @@ pub fn bomFor(data: []const u8, config: ScanConfig) ?BomKind {
     return isUtf16Bom(data);
 }
 
+/// File signatures ("magic numbers") that mark a binary format from its first
+/// bytes. They complement the NUL rule, they cannot replace it: on a real tree
+/// of 114 723 files (2026-11-12, evidence/binary-rule/magic_survey.py) 3 602
+/// binaries had a NUL in the first 8 KiB but no signature (raw .f32/.pcm/.bin
+/// data, captured output), while 7 had a signature but no NUL (PDFs, whose
+/// header is ASCII text, and one ELF). Only signatures that ordinary text
+/// cannot start with are listed: either they hold non-text bytes, or (`%PDF-`)
+/// they are the format. `MZ`, `RIFF`, `ID3`, `OggS`… are left out on purpose:
+/// a text file can begin with those letters, and those formats contain NUL
+/// bytes early anyway.
+const binary_magics = [_]struct { sig: []const u8, name: []const u8 }{
+    .{ .sig = "%PDF-", .name = "pdf" },
+    .{ .sig = "\x7fELF", .name = "elf" },
+    .{ .sig = "\x89PNG\r\n\x1a\n", .name = "png" },
+    .{ .sig = "\xff\xd8\xff", .name = "jpeg" },
+    .{ .sig = "PK\x03\x04", .name = "zip" },
+    .{ .sig = "\x1f\x8b", .name = "gzip" },
+    .{ .sig = "\xfd7zXZ\x00", .name = "xz" },
+    .{ .sig = "\x28\xb5\x2f\xfd", .name = "zstd" },
+    .{ .sig = "7z\xbc\xaf\x27\x1c", .name = "7z" },
+    .{ .sig = "\x00asm", .name = "wasm" },
+    .{ .sig = "\xca\xfe\xba\xbe", .name = "mach-o/class" },
+    .{ .sig = "\xcf\xfa\xed\xfe", .name = "mach-o" },
+    .{ .sig = "\xfe\xed\xfa\xcf", .name = "mach-o" },
+    .{ .sig = "\x1a\x45\xdf\xa3", .name = "matroska" },
+    .{ .sig = "\x93NUMPY", .name = "npy" },
+    .{ .sig = "\x89HDF\r\n\x1a\n", .name = "hdf5" },
+};
+
+/// The binary format named by the first bytes of `data`, or null.
+pub fn binaryMagic(data: []const u8) ?[]const u8 {
+    for (binary_magics) |m| {
+        if (std.mem.startsWith(u8, data, m.sig)) return m.name;
+    }
+    return null;
+}
+
 pub const TextScan = struct {
     br: BufferResult = .{},
     /// The haystack was this UTF-16 file decoded to UTF-8.
@@ -762,7 +799,8 @@ pub const TextScan = struct {
 ///
 /// The rule, unless `-a` (`allow_binary`), `--null-data` (NUL is the record
 /// separator) or a UTF-16 decoding is in force:
-///   - a NUL in the first `binary_probe_bytes`: the file is binary and is not
+///   - a binary signature at the start (`binaryMagic`: PDF, ELF, PNG, zip…)
+///     or a NUL in the first `binary_probe_bytes`: the file is binary and is not
 ///     searched at all (as before; grep -I / rg skip it too);
 ///   - a NUL further in: the file is text up to the line that holds the first
 ///     NUL, and nothing from that line on is ever printed or counted.
@@ -787,7 +825,7 @@ pub fn searchBytes(
     }
     const nul_is_binary = !allow_binary and !config.null_data;
     const probe = @min(data.len, binary_probe_bytes);
-    if (nul_is_binary and std.mem.findScalar(u8, data[0..probe], 0) != null) return .{ .binary = true };
+    if (nul_is_binary and (binaryMagic(data) != null or std.mem.findScalar(u8, data[0..probe], 0) != null)) return .{ .binary = true };
 
     const start = out.items.len;
     const br = try scanBuffer(gpa, data, searcher, path, show_path, mode, config, out);
@@ -2132,6 +2170,17 @@ test "searchBytes: the binary rule (NUL in the probe window, NUL later, -a, -z)"
         const ts = try runBytes("needle\x00other\x00needle\x00", "needle", .count, false, .{ .null_data = true }, &out);
         try std.testing.expect(!ts.binary);
         try std.testing.expectEqual(@as(usize, 2), ts.br.lines);
+    }
+    // A signature is enough even without a NUL (a PDF header is ASCII).
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes("%PDF-1.5\nneedle in a pdf\n", "needle", .lines, false, .{}, &out);
+        try std.testing.expect(ts.binary and out.items.len == 0);
+        // -a still searches it; text that merely mentions a format does not trip it.
+        try std.testing.expect((try runBytes("%PDF-1.5\nneedle\n", "needle", .count, true, .{}, &out)).br.matched);
+        try std.testing.expect(!(try runBytes("PDF-1.5 needle\n", "needle", .count, false, .{}, &out)).binary);
+        try std.testing.expect(!(try runBytes("MZ needle\n", "needle", .count, false, .{}, &out)).binary);
     }
     // --count-matches survives (two paths used to drop it).
     {

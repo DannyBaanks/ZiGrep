@@ -140,7 +140,8 @@ Four differences from grep are worth knowing before they surprise you:
    Back-references and lookaround are rejected with an error, never
    approximated.
 4. **Noise is skipped.** Binary files count as "no match" and binary bytes
-   are never printed: a NUL in the first 8 KiB makes the file binary; a NUL
+   are never printed: a binary signature at the start (PDF, ELF, PNG, zip,
+   gzip, …) or a NUL in the first 8 KiB makes the file binary; a NUL
    further in ends the text at the start of its line (`-l`, `-c` and the
    printed lines always agree; `evidence/binary-rule/`). `-a` searches
    everything as text. `.gitignore`,

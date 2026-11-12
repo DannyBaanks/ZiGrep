@@ -550,7 +550,12 @@ Verificado contra `rg` y `grep` en 25 casos (`evidence/feature-corpus/`):
 * `--binary-files=binary` se **rechaza** con un mensaje claro: zgrep nunca
   imprime contenido binario, asi que aceptarlo seria mentir.
 * La regla de binarios (`scan.searchBytes`, la misma en todos los caminos de
-  lectura): un NUL en los primeros 8 KiB ⇒ binario, no se busca; un NUL mas
+  lectura): una firma de formato binario al principio (`%PDF-`, ELF, PNG,
+  zip, gzip, xz, zstd, wasm, Mach-O…, `scan.binaryMagic`) o un NUL en los
+  primeros 8 KiB ⇒ binario, no se busca. La firma complementa al NUL, no lo
+  sustituye: en 114 723 ficheros reales 3 602 binarios tenian NUL pero
+  ninguna firma (datos crudos .f32/.pcm/.bin) y 7 tenian firma pero no NUL
+  en 8 KiB (PDFs, cuya cabecera es texto); `magic_survey.py`. Un NUL mas
   adelante ⇒ el fichero es texto hasta el principio de la linea del primer
   NUL y nada desde ahi se imprime ni se cuenta. Hasta 2026-11-12 ese segundo
   caso se trataba como texto entero y salian bytes binarios (y `-l`, `-c` y
