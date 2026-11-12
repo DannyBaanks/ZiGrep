@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-Q = HERE.parent / "m11" / "bench" / "questions_r2.json"
+Q = HERE / "questions_r2_from_m11.json"  # copy of m11-context-pack:evidence/agent-native/m11/bench/questions_r2.json
 PREFIX = "Answer this question about the repository in the current directory. Use your tools to look at the code. Cite file:line for every claim. Keep the answer under 150 words.\n\nQUESTION: "
 
 
@@ -65,8 +65,9 @@ def main() -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--qids", required=True)
     ap.add_argument("--ziggrep", default="ziggrep")
+    ap.add_argument("--questions", default=str(Q))
     a = ap.parse_args()
-    qs = {q["id"]: q for q in json.loads(Q.read_text())["questions"]}
+    qs = {q["id"]: q for q in json.loads(Path(a.questions).read_text())["questions"]}
     out = Path(a.out)
     (out / "answers" / "agent").mkdir(parents=True, exist_ok=True)
     (out / "zlog").mkdir(exist_ok=True)

@@ -1,0 +1,822 @@
+{
+ "schema": "m11-questions/1",
+ "repository": "ZiGrep",
+ "round": 2,
+ "frozen_revision_note": "written 2026-11-11 against src/ at 8a8bf80 (branch m11-context-pack fa51ae4) by reading the code with grep/sed and running the binary; the pack was NOT run on these symbols before this file was committed. Several references describe REAL BUGS or doc/code contradictions found while writing (marked kind=bug|contradiction); they must stay unfixed until the round-2 run is done.",
+ "scope": [
+  "src",
+  "README.md",
+  "GUIA.md"
+ ],
+ "scoring": {
+  "required": "each entry is a list of regex alternatives (case-insensitive); the fact counts if ANY alternative matches the answer. fact_score = matched / total",
+  "forbidden": "regexes for wrong conclusions; each match is a candidate induced error",
+  "judge": "blinded judge (condition hidden, answers shuffled) grades 0/1/2 against the reference"
+ },
+ "questions": [
+  {
+   "id": "R01",
+   "set": "heldout2",
+   "symbol": "matchPattern",
+   "kind": "behaviour",
+   "question": "Which wildcard syntax do `--exclude`/`--include` globs support in zgrep? Is `[abc]` a character class?",
+   "reference": "matchPattern (src/filter.zig) supports only `*` and `?`, and strips a trailing `/`. There are no character classes: `[` is compared literally, so `[abc]` only matches the literal text `[abc]`. Matching is case-sensitive.",
+   "required": [
+    [
+     "\\*"
+    ],
+    [
+     "\\?"
+    ],
+    [
+     "trailing .{0,3}(/|slash)"
+    ],
+    [
+     "no (character )?class",
+     "not (a )?(character )?class",
+     "literal",
+     "not supported"
+    ]
+   ],
+   "forbidden": [
+    "\\[abc\\] (matches|is) (a|any) (single )?(character|one of)"
+   ]
+  },
+  {
+   "id": "R02",
+   "set": "heldout2",
+   "symbol": "matchesExt",
+   "kind": "behaviour",
+   "question": "With `--exclude-ext=log`, are the files `a.log`, `catalog`, `.log` and `A.LOG` excluded?",
+   "reference": "matchesExt (src/filter.zig): for an extension without a leading dot, the name must be longer than ext+1 and have a '.' right before the extension. So `a.log` is excluded; `catalog` is not (no dot before `log`); `.log` is not (length 4 is not > 4); `A.LOG` is not (case-sensitive comparison).",
+   "required": [
+    [
+     "a\\.log.{0,40}(excluded|yes|matches)",
+     "only a\\.log"
+    ],
+    [
+     "catalog.{0,60}(not|no\\b|isn't)",
+     "(not|no\\b).{0,40}catalog"
+    ],
+    [
+     "\\.log.{0,60}(not|no\\b|isn't)"
+    ],
+    [
+     "case.sensitive",
+     "A\\.LOG.{0,60}(not|no\\b|isn't)"
+    ]
+   ],
+   "forbidden": [
+    "catalog.{0,30}(is|are|also) excluded"
+   ]
+  },
+  {
+   "id": "R03",
+   "set": "heldout2",
+   "symbol": "default_excluded_dirs",
+   "kind": "behaviour",
+   "question": "Which directories does zgrep skip by default? Are `dist` or `build` among them?",
+   "reference": "default_excluded_dirs (src/filter.zig): .git, .zig-cache, __pycache__, node_modules, .venv, venv, target, .cache, .idea, .vscode. Neither dist nor build is in the list. --no-ignore or --no-default-ignore disable the list.",
+   "required": [
+    [
+     "node_modules"
+    ],
+    [
+     "__pycache__"
+    ],
+    [
+     "\\.vscode",
+     "\\.idea"
+    ],
+    [
+     "(dist|build).{0,60}(not|neither|no\\b|aren't|isn't)",
+     "(not|neither|no\\b).{0,40}(dist|build)"
+    ]
+   ],
+   "forbidden": [
+    "(dist|build) (is|are) (also )?(skipped|excluded) by default"
+   ]
+  },
+  {
+   "id": "R04",
+   "set": "heldout2",
+   "symbol": "breToEre",
+   "kind": "behaviour",
+   "question": "With `-G` (basic regex), what do `a\\+b`, `a+b` and a pattern starting with `*` mean?",
+   "reference": "breToEre (src/bre.zig) inverts the escapes: `\\+` becomes the ERE operator `+` (one or more), so `a\\+b` matches `ab`, `aab`...; a bare `+` becomes a literal plus, so `a+b` matches the text `a+b`; a `*` at the start of a pattern, branch or group is a literal.",
+   "required": [
+    [
+     "one or more"
+    ],
+    [
+     "literal (plus|\\+|'\\+'|`\\+`)",
+     "\\+.{0,30}literal"
+    ],
+    [
+     "(start|leading|beginning).{0,60}\\*.{0,60}literal",
+     "\\*.{0,60}(start|leading|beginning).{0,60}literal",
+     "literal.{0,40}\\*.{0,40}(start|leading|beginning)"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R05",
+   "set": "heldout2",
+   "symbol": "parseQueries",
+   "kind": "behaviour",
+   "question": "In a `--queries-file`, what values may \"id\" take, what happens with unknown fields, duplicate ids and blank lines, and can a bad line leave the batch half-run?",
+   "reference": "parseQueries (src/batch.zig): id is a string or a non-negative integer; unknown fields are rejected; a duplicate id is an error; blank lines are ignored. The whole file is parsed before anything runs (fails closed), so a bad line never leaves a batch half-run.",
+   "required": [
+    [
+     "non-negative integer",
+     "string or (a |an )?(non-negative )?integer"
+    ],
+    [
+     "unknown fields?.{0,40}reject",
+     "rejects? unknown"
+    ],
+    [
+     "duplicate"
+    ],
+    [
+     "(blank|empty) lines?.{0,30}ignored",
+     "ignores? (blank|empty)"
+    ],
+    [
+     "before (anything|executing|running|any query)",
+     "fails? closed",
+     "nothing (runs|is executed)",
+     "never .{0,20}half"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R06",
+   "set": "heldout2",
+   "symbol": "estimateTokens",
+   "kind": "behaviour",
+   "question": "How does `--max-output-tokens` estimate tokens? Is it bytes/4?",
+   "reference": "estimateTokens (src/batch.zig), estimator zgrep-classes-v1: a weighted sum of bytes, digits, punctuation, whitespace runs and non-ASCII bytes, times a scale (1.112*1.01), calibrated against a real BPE so it does not underestimate. It replaced bytes/4, which underestimated.",
+   "required": [
+    [
+     "class",
+     "weighted"
+    ],
+    [
+     "digit"
+    ],
+    [
+     "non-?ascii"
+    ],
+    [
+     "not (just )?bytes/4",
+     "bytes/4.{0,60}(underestimat|replace|instead|old|previous)",
+     "instead of bytes/4",
+     "rather than bytes/4"
+    ]
+   ],
+   "forbidden": [
+    "(it is|uses|is simply|just) bytes ?/ ?4\\b(?!.{0,40}(not|underestimat|replace|instead|old))"
+   ]
+  },
+  {
+   "id": "R07",
+   "set": "heldout2",
+   "symbol": "isResult",
+   "kind": "behaviour",
+   "question": "Which event types count as results for `--max-results`? Do context lines count?",
+   "reference": "isResult (src/batch.zig): match, occurrence, file and count events. Context, passthru, provenance, query_end and summary do not count.",
+   "required": [
+    [
+     "match"
+    ],
+    [
+     "occurrence"
+    ],
+    [
+     "\\bfile\\b"
+    ],
+    [
+     "\\bcount\\b"
+    ],
+    [
+     "context.{0,60}(not|don't|do not|no\\b)",
+     "(not|don't|do not).{0,40}context"
+    ]
+   ],
+   "forbidden": [
+    "context (lines|events) (do |also )?count"
+   ]
+  },
+  {
+   "id": "R08",
+   "set": "heldout2",
+   "symbol": "procsHomeActive",
+   "kind": "behaviour",
+   "question": "When does `zgrep --cache` consider a Zig cache in use (ACTIVA), and how does it recognise a Zig compiler process?",
+   "reference": "procsHomeActive (src/clean.zig), Linux only, through /proc: the global cache is active if any live zig process exists anywhere; a local cache is active if some zig process has its cwd inside the repository that contains it. A process counts only if the basename of /proc/<pid>/exe is exactly zig (a ' (deleted)' suffix is stripped). Lock files (any name containing 'lock') are also checked.",
+   "required": [
+    [
+     "/proc"
+    ],
+    [
+     "cwd"
+    ],
+    [
+     "basename",
+     "exact(ly)? (name|zig)",
+     "/exe"
+    ],
+    [
+     "(global|shared).{0,100}(any|anywhere)",
+     "any .{0,40}zig.{0,60}global"
+    ],
+    [
+     "lock"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R09",
+   "set": "heldout2",
+   "symbol": "hasInstallLink",
+   "kind": "behaviour",
+   "question": "Does `zgrep --cache` delete `zig-out` directories?",
+   "reference": "Not by default. Only with --include-out, and even then a zig-out is protected (PROTEGIDA) if a symlink in a well-known bin directory points inside it (hasInstallLink, src/clean.zig). Symlinks themselves are never deleted, and the default answer to the prompt is N.",
+   "required": [
+    [
+     "not by default",
+     "only with --include-out",
+     "--include-out"
+    ],
+    [
+     "symlink.{0,80}(bin|install)",
+     "PROTEGIDA",
+     "protected"
+    ],
+    [
+     "default.{0,30}\\bN\\b",
+     "\\bN\\b.{0,20}default"
+    ]
+   ],
+   "forbidden": [
+    "(always|by default) (deletes|removes) zig-out"
+   ]
+  },
+  {
+   "id": "R10",
+   "set": "heldout2",
+   "symbol": "parseEncoding",
+   "kind": "behaviour",
+   "question": "What values does `--encoding` accept, and what does `--encoding=utf-16` do with a file that has no BOM?",
+   "reference": "parseEncoding (src/scan.zig): auto, none, utf-8, utf-16, utf-16le, utf-16be, latin1. auto = BOM sniff only (default); utf-16le/be decode ignoring any BOM; utf-16 lets the BOM decide and falls back to little-endian (like rg); utf-8/latin1 use the bytes as they are.",
+   "required": [
+    [
+     "latin1"
+    ],
+    [
+     "utf-16le"
+    ],
+    [
+     "(else|otherwise|without (a )?BOM|no BOM|fall(s)? back).{0,60}(LE\\b|little)"
+    ],
+    [
+     "auto.{0,60}BOM"
+    ]
+   ],
+   "forbidden": [
+    "(no BOM|without a BOM).{0,40}(big.endian|BE\\b)"
+   ]
+  },
+  {
+   "id": "R11",
+   "set": "heldout2",
+   "symbol": "provSourceOf",
+   "kind": "behaviour",
+   "question": "In a `--provenance` event, what values can \"source\" take, and when is it \"file-utf16\"?",
+   "reference": "ProvSource (src/scan.zig): file, file-utf16, pre, stdin. provSourceOf returns file-utf16 when the file is decoded as UTF-16: a forced utf-16le/utf-16be, --encoding=utf-16, or a UTF-16 BOM detected; with --encoding=none it is always file.",
+   "required": [
+    [
+     "file-utf16"
+    ],
+    [
+     "\\bpre\\b"
+    ],
+    [
+     "stdin"
+    ],
+    [
+     "BOM"
+    ],
+    [
+     "none.{0,60}(always )?file\\b",
+     "encoding (is )?none"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R12",
+   "set": "heldout2",
+   "symbol": "visibleLineEnd",
+   "kind": "behaviour",
+   "question": "With `--crlf`, is the trailing `\\r` printed, and does a CRLF count as one line terminator or two?",
+   "reference": "visibleLineEnd (src/scan.zig) returns the position of the \\n minus the \\r when --crlf is on, so the \\r is not part of the printed line; lines are split on \\n, so a CRLF is one terminator (a past bug counted it twice and numbered matches 1, 3, 5...).",
+   "required": [
+    [
+     "(not|isn't|without|strip|remov|exclud|minus|drop).{0,40}\\\\r",
+     "\\\\r.{0,40}(stripped|removed|excluded|not (printed|shown|included|part))"
+    ],
+    [
+     "one (line )?terminator",
+     "\\bone\\b.{0,30}(terminator|line)",
+     "split on \\\\n",
+     "counted once",
+     "not (counted )?twice"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R13",
+   "set": "heldout2",
+   "symbol": "icase",
+   "kind": "contradiction",
+   "question": "Does `zgrep -i 'ñand.'` match the line `ÑANDÚ`? Does the README's statement that `-i` folds the Latin-1 supplement hold for regular expressions?",
+   "reference": "No. Latin-1 folding only exists in the literal search path (isCaseFoldable/toLowerByte in src/search.zig). The regex engine folds ASCII only (byteSet and the class folding in src/regex.zig touch only a-z/A-Z; its header says '-i folds ASCII only'). `ñand.` contains a metacharacter, so it goes through the regex engine and does not match ÑANDÚ, while the plain literal `ñandú` does. The README's claim holds only for literal patterns.",
+   "required": [
+    [
+     "\\bno\\b",
+     "does not",
+     "doesn't",
+     "won't"
+    ],
+    [
+     "ascii only",
+     "only ascii",
+     "ascii-only",
+     "only (folds )?a-z"
+    ],
+    [
+     "literal"
+    ],
+    [
+     "regex"
+    ]
+   ],
+   "forbidden": [
+    "yes, .{0,40}(matches|folds)",
+    "-i 'ñand\\.' (matches|will match)"
+   ]
+  },
+  {
+   "id": "R14",
+   "set": "heldout2",
+   "symbol": "lookaround",
+   "kind": "contradiction",
+   "question": "Are `\\b` word boundaries supported in zgrep regular expressions? The header comment of src/regex.zig lists `\\b` as not supported.",
+   "reference": "Yes, \\b and \\B are supported: the parser's error message says 'back-references and lookaround are not supported; \\b and \\B ARE', and README/--help document them. The header comment in src/regex.zig (around line 17) is stale. Back-references and lookaround are rejected with an error.",
+   "required": [
+    [
+     "\\byes\\b",
+     "are supported",
+     "is supported",
+     "supports \\\\b"
+    ],
+    [
+     "stale",
+     "outdated",
+     "out of date",
+     "contradict",
+     "wrong",
+     "inconsistent",
+     "older"
+    ],
+    [
+     "back.?references?"
+    ]
+   ],
+   "forbidden": [
+    "\\\\b (is|are) not supported\\.?$",
+    "no, .{0,30}\\\\b"
+   ]
+  },
+  {
+   "id": "R15",
+   "set": "heldout2",
+   "symbol": "max_states",
+   "kind": "behaviour",
+   "question": "What happens when the lazy DFA's state cache fills up during a search?",
+   "reference": "At max_states = 3000 (src/regex.zig) the DFA cache is flushed (reset) and interning starts over; the comment warns callers not to reuse old state ids. The search continues: there is no error and no fallback to a separate NFA mode.",
+   "required": [
+    [
+     "3000",
+     "3,000"
+    ],
+    [
+     "flush",
+     "reset",
+     "start(s|ed)? over",
+     "clear"
+    ]
+   ],
+   "forbidden": [
+    "falls? back to (the )?(nfa|backtrack)",
+    "(returns|raises|reports) an error",
+    "aborts?"
+   ]
+  },
+  {
+   "id": "R16",
+   "set": "heldout2",
+   "symbol": "micro_tree_max_bytes",
+   "kind": "behaviour",
+   "question": "What makes a directory tree a \"micro-tree\" in zgrep, and what changes when it is one?",
+   "reference": "Its regular files add up to less than 2 MB (micro_tree_max_bytes = 2*1024*1024 in src/main.zig) and the discovery stays within 2048 files, 512 directories and depth 32 (tryQuickTreeScan, src/kamikaze.zig). It is scanned on the calling thread: no worker pool, no io_uring, and no .gitignore/.dataignore inspection. --force-swarm disables the micro path.",
+   "required": [
+    [
+     "2 ?MB",
+     "2 \\* 1024 \\* 1024",
+     "2097152",
+     "2 MiB"
+    ],
+    [
+     "2048"
+    ],
+    [
+     "512"
+    ],
+    [
+     "ignore"
+    ],
+    [
+     "force-swarm"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R17",
+   "set": "heldout2",
+   "symbol": "tryQuickQuietProbe",
+   "kind": "contradiction",
+   "question": "Before starting worker threads in `-q` mode, how many files does zgrep probe, and where?",
+   "reference": "Up to 4 regular files in the root directory, on the main thread, before the thread pool is created (tryQuickQuietProbe, src/kamikaze.zig: `while (probed < 4)`). The README's Design section says three files, which contradicts the code.",
+   "required": [
+    [
+     "\\b4\\b",
+     "four"
+    ],
+    [
+     "root"
+    ],
+    [
+     "main thread",
+     "calling thread",
+     "before (the )?(thread|worker) pool",
+     "before .{0,20}(threads|workers)"
+    ]
+   ],
+   "forbidden": [
+    "(probes|scans|checks) (up to )?(3|three) files"
+   ]
+  },
+  {
+   "id": "R18",
+   "set": "heldout2",
+   "symbol": "has_trampoline",
+   "kind": "bug",
+   "question": "What does `zgrep --nav 'v^v' needle dir/` search?",
+   "reference": "Nothing. NavPlan.parse (src/nav.zig) sets has_ceiling for the `v^` pair and has_trampoline for the `^v` pair. shouldScanFiles returns false at depth 0 (trampoline) and shouldRecurseSubdirs always returns false (ceiling), so no file is searched and the run exits 1 with no message.",
+   "required": [
+    [
+     "nothing",
+     "no files?",
+     "zero files",
+     "empty",
+     "neither"
+    ],
+    [
+     "ceiling"
+    ],
+    [
+     "trampoline"
+    ]
+   ],
+   "forbidden": [
+    "(searches|scans) (the )?root files"
+   ]
+  },
+  {
+   "id": "R19",
+   "set": "heldout2",
+   "symbol": "BinaryFiles",
+   "kind": "behaviour",
+   "question": "Does zgrep accept `--binary-files=binary`? What do `text` and `without-match` do?",
+   "reference": "No: `binary` is rejected at parse time with a usage error, because zgrep cannot print matches while suppressing binary content (BinaryFiles in src/main.zig). `text` is exactly -a; `without-match` is the default (a binary file is treated as not matching).",
+   "required": [
+    [
+     "reject",
+     "not accepted",
+     "usage error",
+     "\\berror\\b",
+     "\\bno\\b"
+    ],
+    [
+     "text.{0,40}(-a\\b|as text)"
+    ],
+    [
+     "without-match.{0,40}default",
+     "default.{0,40}without-match"
+    ]
+   ],
+   "forbidden": [
+    "yes, .{0,30}binary"
+   ]
+  },
+  {
+   "id": "R20",
+   "set": "heldout2",
+   "symbol": "smart_case",
+   "kind": "bug",
+   "question": "With `-S` (smart case) and the all-lowercase pattern `ñandú`, does zgrep search case-insensitively?",
+   "reference": "No. The uppercase check (src/main.zig, after parsing) treats raw bytes 0xC0..0xDE (except 0xD7) as Latin-1 uppercase. In UTF-8 the lead byte of ñ and ú is 0xC3, which is in that range, so the lowercase pattern counts as having an uppercase letter and the search stays case-sensitive (ÑANDÚ is not found; rg -S finds it).",
+   "required": [
+    [
+     "\\bno\\b",
+     "does not",
+     "doesn't",
+     "case.sensitive"
+    ],
+    [
+     "0xC3",
+     "lead byte",
+     "UTF-8"
+    ],
+    [
+     "0xC0",
+     "0xDE",
+     "Latin-1"
+    ]
+   ],
+   "forbidden": [
+    "yes, .{0,40}(insensitive|ignores case)"
+   ]
+  },
+  {
+   "id": "R21",
+   "set": "heldout2",
+   "symbol": "ColorMode",
+   "kind": "behaviour",
+   "question": "What does `--color=auto` do in zgrep?",
+   "reference": "It degrades to never: zgrep does not check isatty(stdout) (ColorMode, src/main.zig: 'auto degrades to never off a TTY'; help: 'auto = never'), so auto never colours.",
+   "required": [
+    [
+     "never",
+     "no colou?r",
+     "disabled",
+     "off"
+    ],
+    [
+     "isatty",
+     "\\btty\\b",
+     "terminal"
+    ]
+   ],
+   "forbidden": [
+    "colou?rs? (when|if) (stdout|output) is a (tty|terminal)"
+   ]
+  },
+  {
+   "id": "R22",
+   "set": "heldout2",
+   "symbol": "exec_cmd",
+   "kind": "behaviour",
+   "question": "How does `--exec` interact with ordering, `-q`-style early exit, `--json` and `--queries-file` batches?",
+   "reference": "--exec forces the sorted (ordered) path and runs the commands after the scan; it sets quiet mode but keeps the quiet early-exits off so every matching file is reached; --json with --exec is a usage error; --exec is not allowed in a batch. {} in the command is the path, otherwise the path is appended.",
+   "required": [
+    [
+     "sort",
+     "ordered"
+    ],
+    [
+     "(early.exit|first match).{0,80}(off|disabled|not|never)",
+     "(every|all|other) (matching )?files"
+    ],
+    [
+     "--json.{0,60}(error|not allowed|incompatible|rejected)",
+     "(error|not allowed|incompatible|rejected).{0,40}--json"
+    ],
+    [
+     "batch"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R23",
+   "set": "heldout2",
+   "symbol": "sort",
+   "kind": "behaviour",
+   "question": "Which options make zgrep use the sorted (ordered) path even when `--sort` is not given?",
+   "reference": "--exec, --heading and --pre each set opts.sort = true in runSearch (src/main.zig): exec needs to know which files matched, heading groups would interleave in completion order, and --pre runs per file.",
+   "required": [
+    [
+     "exec"
+    ],
+    [
+     "heading"
+    ],
+    [
+     "\\bpre\\b",
+     "--pre"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R24",
+   "set": "heldout2",
+   "symbol": "binary_probe_bytes",
+   "kind": "bug",
+   "question": "If binary data that does NOT contain the pattern is piped into zgrep on standard input, what does zgrep print and with what exit code?",
+   "reference": "It prints 'Binary file (standard input) matches' and exits 0 anyway: in the stdin path of runSearch (src/main.zig ~2295) a NUL in the first binary_probe_bytes (8192) makes is_bin true and the code prints the message and returns 0 without searching. GNU grep exits 1. A binary FILE is handled correctly.",
+   "required": [
+    [
+     "Binary file \\(standard input\\) matches"
+    ],
+    [
+     "\\b0\\b",
+     "success"
+    ],
+    [
+     "without (search|check|match)",
+     "regardless",
+     "even (if|when|though)",
+     "always",
+     "does(n't| not) (search|check)",
+     "never (search|check)"
+    ]
+   ],
+   "forbidden": [
+    "(zgrep|it) (then )?exits? (with )?(1|code 1|status 1)\\b"
+   ]
+  },
+  {
+   "id": "R25",
+   "set": "heldout2",
+   "symbol": "parseSize",
+   "kind": "behaviour",
+   "question": "What units does `--max-filesize` accept, are they powers of 1000 or 1024, and what is the default?",
+   "reference": "parseSize (src/main.zig): an optional leading '+', a number, and an optional suffix k/K, m/M, g/G, t/T in powers of 1024 (no suffix = bytes); the multiplication saturates. The default is 0, which means unlimited.",
+   "required": [
+    [
+     "1024"
+    ],
+    [
+     "\\b[KMGT]\\b.{0,20}\\b[KMGT]\\b",
+     "k/K",
+     "K, M, G",
+     "KMGT"
+    ],
+    [
+     "0.{0,30}unlimited",
+     "unlimited",
+     "no limit"
+    ],
+    [
+     "\\+"
+    ]
+   ],
+   "forbidden": [
+    "powers of 1000",
+    "1000-based"
+   ]
+  },
+  {
+   "id": "R26",
+   "set": "heldout2",
+   "symbol": "walk_max_depth",
+   "kind": "behaviour",
+   "question": "Is there a hard limit on directory depth in zgrep even without `--max-depth`?",
+   "reference": "Yes in the sorted walk: walk_max_depth = 512 (src/walk.zig); going deeper returns error.TooDeep. (The micro path additionally gives up at depth 32 and hands the tree to the swarm.) --max-depth=0 means no user limit.",
+   "required": [
+    [
+     "512"
+    ],
+    [
+     "TooDeep",
+     "\\berror\\b"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R27",
+   "set": "heldout2",
+   "symbol": "mtime_ns",
+   "kind": "behaviour",
+   "question": "For a UTF-16 file with `--json --provenance`, does sha256 hash the raw file or the decoded text, what do the offsets refer to, and what is mtime_ns for standard input?",
+   "reference": "The hash is of the bytes zgrep read and searched (not a re-read); for file-utf16 the hash is of the raw file while the offsets refer to the decoded text; mtime_ns comes from statx and is null when there is no file (stdin); for --pre the hash is of the preprocessor output (out_json.zig emitProvenanceEvent doc).",
+   "required": [
+    [
+     "raw",
+     "original bytes",
+     "file bytes",
+     "crudo"
+    ],
+    [
+     "decoded"
+    ],
+    [
+     "null"
+    ]
+   ],
+   "forbidden": [
+    "hash(es)? (of )?the decoded"
+   ]
+  },
+  {
+   "id": "R28",
+   "set": "heldout2",
+   "symbol": "stop_on_nonmatch",
+   "kind": "bug",
+   "question": "What does `--stop-on-nonmatch` do in zgrep, and where is it implemented?",
+   "reference": "Nothing: it is parsed (src/main.zig ~1267), stored in Options and copied into ScanConfig.stop_on_nonmatch, but no code in src/scan.zig (or anywhere else) ever reads it, so it has no effect: `a1 a2 b a3` still prints a3 (rg stops after a2). The --help text describes a behaviour that is not implemented.",
+   "required": [
+    [
+     "no effect",
+     "never (read|used|checked)",
+     "not implemented",
+     "unused",
+     "ignored",
+     "no-op",
+     "not (actually )?(read|used|checked)",
+     "nothing (reads|uses|checks)"
+    ],
+    [
+     "ScanConfig",
+     "scan\\.zig"
+    ]
+   ],
+   "forbidden": [
+    "(it )?stops (scanning|reading|the file) (once|after|when)(?!.{0,80}(not|never|no effect|unused|isn't))"
+   ]
+  },
+  {
+   "id": "R29",
+   "set": "heldout2",
+   "symbol": "registry",
+   "kind": "bug",
+   "question": "Does `zgrep -t docker` search a file named exactly `Dockerfile`?",
+   "reference": "No. The type registry (src/types.zig) lists \"Dockerfile\" among the docker extensions; applyTypes passes it to addIncludedExts, and matchesExt (src/filter.zig) for an extension without a leading dot requires a longer name with a '.' right before it. A file named exactly Dockerfile does not match (app.Dockerfile would); rg -t docker does find it.",
+   "required": [
+    [
+     "\\bno\\b",
+     "does not",
+     "doesn't",
+     "won't",
+     "miss"
+    ],
+    [
+     "matchesExt",
+     "extension"
+    ],
+    [
+     "dot",
+     "'\\.'",
+     "period",
+     "\\. (right )?before"
+    ]
+   ],
+   "forbidden": [
+    "yes, .{0,40}Dockerfile"
+   ]
+  },
+  {
+   "id": "R30",
+   "set": "heldout2",
+   "symbol": "mmap_threshold",
+   "kind": "unanswerable",
+   "question": "What peak resident memory (RSS) does zgrep reach when searching a single 4 GB file, and how long does that take on an NVMe drive?",
+   "reference": "Not answerable from the repository: there is no RSS or timing measurement for a 4 GB file. The code only shows that files of at least mmap_threshold (256 KB, src/scan.zig) are memory-mapped, so RSS depends on the page cache. A correct answer says the information is not available.",
+   "required": [
+    [
+     "not (available|measured|in the context|provided|documented|known|answerable|shown|stated)",
+     "no (measurement|data|information|benchmark|timing|figures?)",
+     "insufficient",
+     "cannot (be )?(determine|answer|tell)",
+     "does(n't| not) (say|contain|include|provide|show|mention|state)"
+    ]
+   ],
+   "forbidden": [
+    "\\b\\d+(\\.\\d+)?\\s*(MB|MiB|GB|GiB)\\b.{0,20}(peak|RSS|resident)",
+    "(peak|RSS|resident).{0,30}\\b\\d+(\\.\\d+)?\\s*(MB|MiB|GB|GiB)\\b(?! file)",
+    "takes (about |around |roughly |~)?\\d+(\\.\\d+)?\\s*(ms|s|seconds)\\b"
+   ]
+  }
+ ]
+}
