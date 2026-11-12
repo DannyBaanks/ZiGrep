@@ -100,8 +100,12 @@ The canonical rule is `~/.config/ziggrep/agents.md`.
 | Codex | the rule is written **inline** in `~/.codex/AGENTS.md`: Codex does not resolve `@` imports, which also means the RTK line there was never loaded as instructions | on a search task it ran `ziggrep -n -F 'batchQueryProblem' .`; backup in `~/.codex/AGENTS.md.bak-2026-11-11-pre-ziggrep` |
 | agy | `~/.gemini/GEMINI.md`, a copy of the rule | NOT_DEMONSTRATED: agy's quota was exhausted ("Individual quota reached") |
 
-Not done:
-- `~/.openisy/config/AGENTS.md`, which would cover bash searches inside OpenISy:
-  its creation was refused by the session's safety classifier.
-- Restarting OpenISy's background service. The running one keeps ripgrep
-  until it is restarted.
+Completed afterwards, the same day, at Danny's request ("haz todo"):
+- `~/.openisy/config/AGENTS.md` created (a copy of the rule, covering bash
+  searches inside OpenISy).
+- OpenISy's background service restarted with `openisy service restart`. The
+  new service process has `OPENISY_GREP_ENGINE=ziggrep` in its environment;
+  the old one, which did not, is gone.
+- OpenISy `main` pushed to GitHub as a fast-forward (`99a94c9..a794ba4`).
+
+Still NOT_DEMONSTRATED: agy actually following the rule (quota exhausted).
