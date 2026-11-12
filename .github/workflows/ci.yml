@@ -101,6 +101,11 @@ jobs:
       - name: Glob parity with ripgrep -g
         run: python3 evidence/rg-glob-parity/glob_parity.py
 
+      # --setup contra un HOME falso: plan, pregunta, idempotencia, respaldo,
+      # --undo exacto y errores de uso. Nunca toca el HOME real del runner.
+      - name: Agent setup (--setup) end-to-end
+        run: python3 evidence/setup/setup_check.py
+
       # Los mismos diferenciales contra un binario Debug (comprobacion de
       # limites encendida). ReleaseFast escondia una lectura fuera del slice en
       # la alineacion UTF-8 de la ventana de M9 (text[len]): la salida salia

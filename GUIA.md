@@ -1154,6 +1154,61 @@ instalador anterior a la 0.3.1. Reinstala con la línea de arriba.
 
 ---
 
+## 4t. `--setup`: que tus agentes de IA busquen con ziggrep (0.4.0-dev, M12)
+
+```bash
+ziggrep --setup
+```
+
+Busca los agentes de programación instalados en esta máquina (Claude Code,
+Codex, agy/Gemini, OpenISy y opencode), enseña qué cambiaría en el archivo de
+instrucciones global de cada uno, pregunta `[s/N]` y, solo si respondes `s`,
+escribe la regla que les dice que busquen con `ziggrep`. Salida real de
+`--dry-run` en un HOME de prueba con Claude Code y Codex instalados:
+
+```text
+Configurar ZiGrep en los agentes de IA de esta máquina (comando: zigrep)
+
+  Claude Code    ~/.claude/CLAUDE.md             se crea
+  Codex          ~/.codex/AGENTS.md              se añade la regla (respaldo .bak-ziggrep)
+  agy / Gemini   ~/.gemini/GEMINI.md             no instalado
+  OpenISy        ~/.openisy/config/AGENTS.md     no instalado
+  opencode       ~/.config/opencode/AGENTS.md    no instalado
+  regla          ~/.config/ziggrep/agents.md     se crea
+
+--dry-run: no se cambió nada.
+rc=0
+```
+
+| Opción | Qué hace |
+|---|---|
+| `--setup --dry-run` | solo enseña, no toca nada |
+| `--setup --force` | aplica sin preguntar (scripts, o un modelo que lo ejecuta) |
+| `--setup --undo` | quita exactamente lo que puso |
+
+Cómo lo hace:
+- **La regla** se guarda una vez en `~/.config/ziggrep/agents.md`. Su texto va
+  dentro del binario, así que funciona en cualquier máquina.
+- **En cada agente** escribe un bloque entre `<!-- ziggrep:setup begin -->` y
+  `<!-- ziggrep:setup end -->`. Claude Code recibe una importación de la regla;
+  Codex, agy, OpenISy y opencode, el texto completo, porque **Codex no
+  resuelve importaciones `@ruta`** (medido el 2026-11-11).
+- **Solo toca** los agentes cuya carpeta existe. Correrlo dos veces no cambia
+  nada.
+- **Respaldo.** Antes de cambiar por primera vez un archivo que ya existía,
+  guarda una copia `<archivo>.bak-ziggrep`, y nunca la sobrescribe. `--undo`
+  quita el bloque y borra un archivo solo si el bloque era todo su contenido.
+- **El nombre del comando** que escribe la regla es el que usaste para
+  invocarlo. Si lo invocas como `zgrep` (nombre que en Linux usa gzip), elige
+  `ziggrep` o `zigrep` si alguno está en el PATH.
+
+`--dry-run` y `--force` siguen significando `--cache` cuando van solos: con
+`--setup` son de `--setup`. `--setup --cache` es error de uso.
+
+Verificado por `evidence/setup/setup_check.py`, siempre con un HOME falso: el
+plan, la pregunta, la idempotencia, el respaldo, el `--undo` exacto y los
+errores de uso.
+
 ## 5. Cuándo usarlo — y cuándo no
 
 **Úsalo cuando:**

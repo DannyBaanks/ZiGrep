@@ -69,6 +69,24 @@ irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
 | `zigrep-windows-x86_64.zip` | Windows x86_64 (`zigrep.exe`, `zgrep.exe`, `install.ps1`) |
 | `SHA256SUMS.txt` | Checksums for the three archives |
 
+### Set up your AI coding agents
+
+```sh
+ziggrep --setup
+```
+
+The command finds the AI coding agents installed on this machine: Claude
+Code, Codex, agy/Gemini, OpenISy and opencode. It shows what it would add to
+each agent's global instruction file, asks `[s/N]`, and only then writes the
+rule that tells them to search with this tool. A copy `.bak-ziggrep` of every
+file it edits is kept.
+
+| Command | What it does |
+|---|---|
+| `ziggrep --setup --dry-run` | only shows the changes |
+| `ziggrep --setup --force` | applies them without asking |
+| `ziggrep --setup --undo` | removes exactly what it added |
+
 ## Building from source
 
 Building requires [Zig](https://ziglang.org/download/) 0.16.0.

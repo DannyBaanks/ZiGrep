@@ -26,6 +26,7 @@ const types = @import("types.zig");
 const vfs = @import("vfs.zig");
 const io_engine = @import("io_engine.zig");
 const clean = @import("clean.zig");
+const setup = @import("setup.zig");
 const batch = @import("batch.zig");
 const out_json = @import("out_json.zig");
 
@@ -170,8 +171,13 @@ const usage =
     \\      --vimgrep     one line per match, with line and column (rg)
     \\      --cache       analyse the Zig caches on disk, show what is safe to
     \\                    delete and ASK before deleting anything
-    \\      --dry-run     with --cache: only the analysis, delete nothing
-    \\      --force       with --cache: no prompt (for scripts)
+    \\      --dry-run     with --cache or --setup: only show, change nothing
+    \\      --force       with --cache or --setup: no prompt (for scripts)
+    \\      --setup       configure the AI coding agents on this machine
+    \\                    (Claude Code, Codex, agy/Gemini, OpenISy, opencode)
+    \\                    to search with this tool: shows the changes, asks
+    \\                    [s/N], keeps a .bak-ziggrep of every file it edits
+    \\      --undo        with --setup: remove exactly what --setup added
     \\      --cache-root=PATH
     \\                    root to scan for caches (repeatable; default $HOME/Development)
     \\      --cache-depth=N
@@ -367,6 +373,12 @@ pub const Options = struct {
     json: bool = false,
     /// `--cache`: analyse and clean the Zig build caches.
     cache: bool = false,
+    /// `--cache` itself was typed (not implied by --dry-run / --force).
+    cache_explicit: bool = false,
+    /// `--setup`: configure the AI agents on this machine to use ziggrep.
+    setup: bool = false,
+    /// `--undo` (with --setup): remove what --setup added.
+    setup_undo: bool = false,
     cache_dry_run: bool = false,
     cache_force: bool = false,
     cache_include_out: bool = false,
@@ -855,6 +867,19 @@ fn parseNav(opts: *Options, spec: []const u8, invalid_what: []const u8) usage_er
     };
 }
 
+/// Is an executable `name` in one of the PATH directories?
+fn onPath(io: std.Io, arena: Allocator, path_env: []const u8, name: []const u8) bool {
+    const sep: u8 = if (builtin.os.tag == .windows) ';' else ':';
+    var it = std.mem.splitScalar(u8, path_env, sep);
+    while (it.next()) |dir| {
+        if (dir.len == 0) continue;
+        const full = std.fs.path.join(arena, &.{ dir, name }) catch continue;
+        std.Io.Dir.cwd().access(io, full, .{}) catch continue;
+        return true;
+    }
+    return false;
+}
+
 fn parseCount(value: []const u8) ?usize {
     return std.fmt.parseInt(usize, value, 10) catch null;
 }
@@ -1328,6 +1353,11 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.crlf = false;
             } else if (std.mem.eql(u8, body, "cache")) {
                 opts.cache = true;
+                opts.cache_explicit = true;
+            } else if (std.mem.eql(u8, body, "setup")) {
+                opts.setup = true;
+            } else if (std.mem.eql(u8, body, "undo")) {
+                opts.setup_undo = true;
             } else if (std.mem.eql(u8, body, "dry-run")) {
                 opts.cache = true;
                 opts.cache_dry_run = true;
@@ -1804,6 +1834,20 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
         const ops = positionals.toOwnedSlice(allocator) catch return error.Usage;
         return .{ .pattern = "", .operands = ops };
     }
+    // `--setup` owns --dry-run / --force when present (they imply --cache on
+    // their own, for compatibility); `--undo` only means something with it.
+    if (opts.setup) {
+        if (opts.cache_explicit) {
+            opts.fail = .{ .what = "--setup and --cache are separate actions: use one", .arg = "" };
+            return error.Usage;
+        }
+        opts.cache = false;
+        return .{ .pattern = "", .operands = &[_][:0]const u8{} };
+    }
+    if (opts.setup_undo) {
+        opts.fail = .{ .what = "--undo goes with --setup (ziggrep --setup --undo)", .arg = "" };
+        return error.Usage;
+    }
     // `--cache` is an action, not a search: it must not demand a PATTERN.
     if (opts.cache) return .{ .pattern = "", .operands = &[_][:0]const u8{} };
     if (positionals.items.len == 0) {
@@ -2102,6 +2146,36 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             _ = platform.writeStdout(init.io, usage);
         }
         return 0;
+    }
+
+    // `--setup` is an action too: plan, ask, apply (setup.zig).
+    if (opts.setup) {
+        const home = init.environ_map.get("HOME") orelse init.environ_map.get("USERPROFILE") orelse {
+            std.debug.print("zgrep: --setup: neither HOME nor USERPROFILE is set\n", .{});
+            return 2;
+        };
+        const invoked = std.fs.path.stem(std.fs.path.basename(args[0]));
+        var cmd: []const u8 = invoked;
+        var note: ?[]const u8 = null;
+        // `zgrep` is also gzip's tool on Linux: the rule names a command that
+        // cannot be confused with it when one is on PATH.
+        if (std.mem.eql(u8, invoked, "zgrep")) {
+            const path_env = init.environ_map.get("PATH") orelse "";
+            if (onPath(init.io, arena, path_env, "ziggrep")) {
+                cmd = "ziggrep";
+            } else if (onPath(init.io, arena, path_env, "zigrep")) {
+                cmd = "zigrep";
+            } else {
+                note = "invoked as `zgrep`, a name gzip also uses on Linux; the rule will say `zgrep`. Install the `zigrep` name to avoid the clash.";
+            }
+        }
+        return setup.run(init.io, gpa, home, .{
+            .dry_run = opts.cache_dry_run,
+            .force = opts.cache_force,
+            .undo = opts.setup_undo,
+            .cmd = cmd,
+            .cmd_note = note,
+        });
     }
 
     // `--cache` is an action, not a search: it answers with the analysis and
