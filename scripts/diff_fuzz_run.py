@@ -31,40 +31,70 @@ def arg(name, default):
 def grep_args(rec, extra):
     # -a on both sides: the fuzzer tests the matcher, not the binary rule
     # (a NUL in the haystack would make the CLI skip or flag the file).
-    a = ["-a", "-F" if rec["fixed"] else "-E"]
+    a = ["-a", "-F" if rec["fixed"] else ("-G" if rec.get("bre") else "-E")]
     for k, f in (("icase", "-i"), ("word", "-w"), ("line", "-x"), ("invert", "-v")):
         if rec[k]:
             a.append(f)
+    if rec.get("max_count"):
+        a.append(f"-m{rec['max_count']}")
+    if rec.get("after"):
+        a.append(f"-A{rec['after']}")
+    if rec.get("before"):
+        a.append(f"-B{rec['before']}")
     a += extra
     for p in rec["patterns"]:
         a += ["-e", p.encode("latin-1")]
     return a
 
+def for_grep(rec):
+    """GNU grep -E/-G has no \\d / \\D (zgrep and rg do): give grep the
+    equivalent class. The generator never puts a literal backslash before d."""
+    r = dict(rec)
+    r["patterns"] = [p.replace("\\D", "[^0-9]").replace("\\d", "[0-9]") for p in rec["patterns"]]
+    return r
+
 def replay(tool, rec, path, extra):
     env = dict(os.environ, LC_ALL="C")
-    p = subprocess.run([*tool, *grep_args(rec, extra), path], capture_output=True, env=env, timeout=30)
+    p = subprocess.run([*tool, *grep_args(rec, extra), path], capture_output=True, env=env, timeout=5)
     return p.stdout
 
 def judge(recs, zg):
-    verdicts = {"zgrep_bug": [], "oracle_bug": []}
+    # judge_timeout: GNU grep backtracks exponentially on some nested repeats
+    # of assertions (`((((\\B){2,4})+)+)+`) and gives no verdict in 5 s.
+    verdicts = {"zgrep_bug": [], "oracle_bug": [], "judge_timeout": []}
     with tempfile.TemporaryDirectory(prefix="zg-dfz-") as tmp:
         for r in recs:
+            try:
+                verdicts[judge_one(r, zg, tmp)].append(r)
+            except subprocess.TimeoutExpired:
+                verdicts["judge_timeout"].append(r)
+    return verdicts
+
+def judge_one(r, zg, tmp):
+    if r["what"] == "pattern rejected by zgrep":
+        # A real bug only if GNU grep accepts it (rc 0/1); grep rc 2 means the
+        # generator emitted an invalid pattern.
+        env = dict(os.environ, LC_ALL="C")
+        g = subprocess.run(["/usr/bin/grep", *grep_args(for_grep(r), ["-c"])], input=b"", capture_output=True, env=env, timeout=5)
+        return "oracle_bug" if g.returncode == 2 else "zgrep_bug"
+    if True:
+        if True:
             path = os.path.join(tmp, "hay")
             with open(path, "wb") as f:
                 f.write(r["haystack"].encode("latin-1"))
             same = True
-            for extra in (["-n"], ["-c"], ["-ob"] if not (r["word"] or r["line"] or r["invert"]) else None):
+            plain = not (r.get("after") or r.get("before") or r.get("max_count"))
+            for extra in (["-n"], ["-c"], ["-ob"] if plain and not (r["word"] or r["line"] or r["invert"]) else None):
                 if extra is None:
                     continue
-                if replay([zg], r, path, extra) != replay(["/usr/bin/grep"], r, path, extra):
+                if replay([zg], r, path, extra) != replay(["/usr/bin/grep"], for_grep(r), path, extra):
                     same = False
             # The line-by-line path (forced by --json) must give grep's count too.
             jc = [json.loads(l) for l in replay([zg], r, path, ["--json", "-c"]).splitlines() if l]
-            want_c = int(replay(["/usr/bin/grep"], r, path, ["-c"]) or b"0")
+            want_c = int(replay(["/usr/bin/grep"], for_grep(r), path, ["-c"]) or b"0")
             if sum(e.get("lines") or 0 for e in jc if e.get("type") == "count") != want_c:
                 same = False
-            verdicts["oracle_bug" if same else "zgrep_bug"].append(r)
-    return verdicts
+            return "oracle_bug" if same else "zgrep_bug"
 
 def main():
     zg = os.path.abspath(arg("zgrep", os.path.join(REPO, "zig-out", "bin", "zgrep")))
@@ -120,10 +150,11 @@ def main():
     with open(os.path.join(out, "triage.json"), "w") as f:
         json.dump({"cases": total, "seed": seed, "procs": procs, "knob": knob, "elapsed_s": round(secs, 1),
                    "divergences": div, "unique": len(recs), "rejected_patterns": rej,
-                   "zgrep_bug": verdicts["zgrep_bug"], "oracle_bug": verdicts["oracle_bug"]}, f, indent=1)
+                   "zgrep_bug": verdicts["zgrep_bug"], "oracle_bug": verdicts["oracle_bug"],
+                   "judge_timeout": verdicts["judge_timeout"]}, f, indent=1)
     print(f"cases={total} procs={procs} seed={seed} knob={knob} elapsed_s={secs:.1f} cases_per_s={total / secs:.0f}")
     print(f"divergences={div} unique={len(recs)} zgrep_bug={len(verdicts['zgrep_bug'])} "
-          f"oracle_bug={len(verdicts['oracle_bug'])} rejected_patterns={rej}")
+          f"oracle_bug={len(verdicts['oracle_bug'])} judge_timeout={len(verdicts['judge_timeout'])} rejected_patterns={rej}")
     for r in verdicts["zgrep_bug"][:10]:
         print("  ZGREP:", r["what"], r["patterns"], {k: r[k] for k in ("fixed", "icase", "word", "line", "invert")}, repr(r["haystack"]))
     for r in verdicts["oracle_bug"][:5]:

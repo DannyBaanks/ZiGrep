@@ -46,6 +46,9 @@ pub const Node = union(enum) {
     eol,
     wb,
     nwb,
+    /// `\<` / `\>` (GNU grep, rg): start / end of a word.
+    ws,
+    we,
     cat: []*Node,
     alt: []*Node,
     rep: struct { child: *Node, min: u32, max: u32 },
@@ -324,6 +327,11 @@ const Parser = struct {
                 self.i += 1;
                 if (e == 'b') return self.newNode(.wb); // word boundary
                 if (e == 'B') return self.newNode(.nwb); // NOT a word boundary
+                // GNU word start/end. They used to fall through to
+                // escapeByte and match a literal '<' / '>' in silence (found
+                // by the differential fuzzer's feature probe, 2026-11-12).
+                if (e == '<') return self.newNode(.ws);
+                if (e == '>') return self.newNode(.we);
                 if (shorthand(e)) |sh| return self.newNode(.{ .set = sh });
                 const b = try self.escapeByte(e);
                 return self.newNode(.{ .set = self.byteSet(b) });
@@ -518,7 +526,23 @@ fn litByte(s: Set, icase: bool) ?u8 {
 // NFA program
 // ---------------------------------------------------------------------------
 
-const Kind = enum(u8) { set, split, bol, eol, wb, nwb, match };
+const Kind = enum(u8) { set, split, bol, eol, wb, nwb, ws, we, match };
+
+/// Does a word assertion hold between a byte of class `prev_word` and the
+/// next one, `next_word`? (Line edges count as non-word.)
+fn wordAssert(kind: Kind, prev_word: bool, next_word: bool) bool {
+    return switch (kind) {
+        .wb => prev_word != next_word,
+        .nwb => prev_word == next_word,
+        .ws => !prev_word and next_word,
+        .we => prev_word and !next_word,
+        else => unreachable,
+    };
+}
+
+fn isWordAssert(kind: Kind) bool {
+    return kind == .wb or kind == .nwb or kind == .ws or kind == .we;
+}
 
 const NNode = struct {
     kind: Kind,
@@ -566,6 +590,8 @@ const Builder = struct {
             .eol => return self.add(.{ .kind = .eol, .out = next }),
             .wb => return self.add(.{ .kind = .wb, .out = next }),
             .nwb => return self.add(.{ .kind = .nwb, .out = next }),
+            .ws => return self.add(.{ .kind = .ws, .out = next }),
+            .we => return self.add(.{ .kind = .we, .out = next }),
             .cat => |kids| {
                 var cur = next;
                 var k = kids.len;
@@ -620,7 +646,7 @@ pub fn compile(gpa: Allocator, root: *const Node) CompileError!*Program {
 
     var has_wb = false;
     for (b.nodes.items) |n| {
-        if (n.kind == .wb or n.kind == .nwb) has_wb = true;
+        if (isWordAssert(n.kind)) has_wb = true;
     }
     const prog = try gpa.create(Program);
     prog.* = .{
@@ -775,8 +801,7 @@ pub const Dfa = struct {
                 // cannot be resolved while building the state (the byte that
                 // settles it has not been consumed yet), so `step` resolves it
                 // on the next byte.
-                .wb => try self.work.append(self.gpa, id),
-                .nwb => try self.work.append(self.gpa, id),
+                .wb, .nwb, .ws, .we => try self.work.append(self.gpa, id),
                 .match => try self.work.append(self.gpa, id),
             }
         }
@@ -841,17 +866,18 @@ pub const Dfa = struct {
         // -1 unknown, 1 yes (no  involved), 0 no. With  the answer depends
         // on prev_word, so the cache is only used when the pattern has none.
         if (!self.prog.has_wb and st.accept_end >= 0) return st.accept_end == 1;
-        self.seeds.clearRetainingCapacity();
         const prog = self.prog;
+        var ok = false;
         for (st.nodes) |id| {
             const n = prog.nodes[id];
-            if (n.kind == .eol) try self.seeds.append(self.gpa, n.out);
-            if (n.kind == .wb and prev_word) try self.seeds.append(self.gpa, n.out);
-            if (n.kind == .nwb and !prev_word) try self.seeds.append(self.gpa, n.out);
-        }
-        var ok = false;
-        if (self.seeds.items.len > 0) {
-            ok = has_match(try self.closure(false, true), prog.match_node);
+            // At the end of the line the next "byte" is non-word, and `$`
+            // holds. What follows is walked at this same position, so a run
+            // of zero-width items (`(\>){2,3}`, `$\b`) resolves fully.
+            const holds = n.kind == .eol or (isWordAssert(n.kind) and wordAssert(n.kind, prev_word, false));
+            if (holds and self.zeroWidthMatch(n.out, prev_word, false, true)) {
+                ok = true;
+                break;
+            }
         }
         // `st` may dangle only if states grew; closure() never interns.
         if (!prog.has_wb) self.states.items[s].accept_end = if (ok) 1 else 0;
@@ -865,24 +891,13 @@ pub const Dfa = struct {
         if (!self.prog.has_wb) return false;
         const st = &self.states.items[s];
         const prog = self.prog;
-        var seeded = false;
-        self.seeds.clearRetainingCapacity();
         for (st.nodes) |id| {
             const n = prog.nodes[id];
-            if (n.kind == .wb) {
-                if (prev_word != next_word) {
-                    self.seeds.append(self.gpa, n.out) catch return false;
-                    seeded = true;
-                }
-            } else if (n.kind == .nwb) {
-                if (prev_word == next_word) {
-                    self.seeds.append(self.gpa, n.out) catch return false;
-                    seeded = true;
-                }
+            if (isWordAssert(n.kind) and wordAssert(n.kind, prev_word, next_word)) {
+                if (self.zeroWidthMatch(n.out, prev_word, next_word, false)) return true;
             }
         }
-        if (!seeded) return false;
-        return has_match(self.closure(false, false) catch return false, prog.match_node);
+        return false;
     }
 
     /// Scans data[from..to) as whole lines. Returns the start offset of the
@@ -973,23 +988,17 @@ pub const Dfa = struct {
         const next_word = isWordByte(b);
         for (self.states.items[s].nodes) |id| {
             const n = prog.nodes[id];
-            if (n.kind == .wb or n.kind == .nwb) {
-                const ok = if (n.kind == .wb) prev_word != next_word else prev_word == next_word;
+            if (isWordAssert(n.kind)) {
+                const ok = wordAssert(n.kind, prev_word, next_word);
                 if (!ok) continue;
-                // `n.out` may be a `set`, and that set has to consume THIS byte:
-                // seeding it unchecked would push the match one position later.
-                const out = prog.nodes[n.out];
-                if (out.kind == .set) {
-                    // The set consumes THIS byte, so what moves forward is ITS
-                    // out, not the set itself.
-                    if (prog.sets[out.set][b]) try self.seeds.append(self.gpa, out.out);
-                } else if (out.kind == .match) {
-                    // The boundary just held, so the match ends at THIS
-                    // position. acceptWord already reported it; seeding match
-                    // here would move the end one byte too far.
-                } else {
-                    try self.seeds.append(self.gpa, n.out);
-                }
+                // What follows the assertion is evaluated HERE, before `b` is
+                // consumed: sets consume `b`, splits and further assertions
+                // are followed at this same position. Seeding a split (or a
+                // second assertion) unresolved used to push it one byte
+                // later: `\b(a|b)` lost the "a" at a line start,
+                // `\b(ab|c)` matched "bc", `\b(foo|bar)\b` missed "foo"
+                // (found while extending scripts/diff_fuzz.zig, 2026-11-12).
+                try self.seedAfterAssert(n.out, b, prev_word, next_word);
             } else if (n.kind == .set and prog.sets[n.set][b]) {
                 try self.seeds.append(self.gpa, n.out);
             }
@@ -1004,6 +1013,94 @@ pub const Dfa = struct {
             table.items[@as(usize, s) * 256 + b] = target;
         }
         return target;
+    }
+
+    /// Can `match` be reached from `first` without consuming a byte, at a
+    /// position between a byte of class `prev_word` and one of `next_word`
+    /// (`at_end`: the end of the line, where `$` holds)? Splits and holding
+    /// assertions are followed; a set would consume, so it stops the walk.
+    /// Chains of zero-width items used to stop after the first one:
+    /// `(\>){2,3}` never matched (found by scripts/diff_fuzz.zig).
+    fn zeroWidthMatch(self: *Dfa, first: u32, prev_word: bool, next_word: bool, at_end: bool) bool {
+        const prog = self.prog;
+        var stack_buf: [64]u32 = undefined;
+        var seen_buf: [64]u32 = undefined;
+        var sp: usize = 1;
+        var seen: usize = 0;
+        stack_buf[0] = first;
+        while (sp > 0) {
+            sp -= 1;
+            const id = stack_buf[sp];
+            if (std.mem.indexOfScalar(u32, seen_buf[0..seen], id) != null) continue;
+            if (seen < seen_buf.len) {
+                seen_buf[seen] = id;
+                seen += 1;
+            }
+            const n = prog.nodes[id];
+            switch (n.kind) {
+                .match => return true,
+                .split => if (sp + 2 <= stack_buf.len) {
+                    stack_buf[sp] = n.out1;
+                    stack_buf[sp + 1] = n.out;
+                    sp += 2;
+                },
+                .wb, .nwb, .ws, .we => if (wordAssert(n.kind, prev_word, next_word) and sp < stack_buf.len) {
+                    stack_buf[sp] = n.out;
+                    sp += 1;
+                },
+                .eol => if (at_end and sp < stack_buf.len) {
+                    stack_buf[sp] = n.out;
+                    sp += 1;
+                },
+                .set, .bol => {},
+            }
+        }
+        return false;
+    }
+
+    /// Seeds what follows a word assertion that holds at the current
+    /// position, `b` being the byte about to be consumed. A `match` reached
+    /// here ends the match at this position, which `acceptWord` already
+    /// reports; `bol`/`eol` cannot hold between two bytes of a line.
+    fn seedAfterAssert(self: *Dfa, first: u32, b: u8, prev_word: bool, next_word: bool) Allocator.Error!void {
+        const prog = self.prog;
+        var stack_buf: [64]u32 = undefined;
+        var seen_buf: [64]u32 = undefined;
+        var sp: usize = 0;
+        var seen: usize = 0;
+        stack_buf[0] = first;
+        sp = 1;
+        while (sp > 0) {
+            sp -= 1;
+            const id = stack_buf[sp];
+            if (std.mem.indexOfScalar(u32, seen_buf[0..seen], id) != null) continue;
+            if (seen == seen_buf.len) {
+                // Pathologically long chain: fall back to the old seeding
+                // for the rest (only reachable with > 64 nested nodes).
+                try self.seeds.append(self.gpa, id);
+                continue;
+            }
+            seen_buf[seen] = id;
+            seen += 1;
+            const n = prog.nodes[id];
+            switch (n.kind) {
+                .set => if (prog.sets[n.set][b]) try self.seeds.append(self.gpa, n.out),
+                .split => {
+                    if (sp + 2 > stack_buf.len) {
+                        try self.seeds.append(self.gpa, id);
+                        continue;
+                    }
+                    stack_buf[sp] = n.out1;
+                    stack_buf[sp + 1] = n.out;
+                    sp += 2;
+                },
+                .wb, .nwb, .ws, .we => if (wordAssert(n.kind, prev_word, next_word)) {
+                    stack_buf[sp] = n.out;
+                    sp += 1;
+                },
+                .match, .bol, .eol => {},
+            }
+        }
     }
 
     /// Leftmost-longest match inside `data[from..to)`, with both ends.

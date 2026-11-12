@@ -71,10 +71,48 @@ const Rng = struct {
 const max_line = 120; // positions 0..120 fit a u128 bitset
 const Set = u128;
 
+const Assert = enum { wb, nwb, ws, we };
+
+/// POSIX classes ZiGrep supports, C locale (byte semantics).
+const posix_names = [_][]const u8{ "alpha", "digit", "alnum", "upper", "lower", "space", "punct", "xdigit", "blank" };
+
+fn posixHas(i: usize, c: u8) bool {
+    return switch (i) {
+        0 => std.ascii.isAlphabetic(c),
+        1 => c >= '0' and c <= '9',
+        2 => std.ascii.isAlphanumeric(c),
+        3 => c >= 'A' and c <= 'Z',
+        4 => c >= 'a' and c <= 'z',
+        5 => c == ' ' or (c >= 0x09 and c <= 0x0d),
+        6 => c >= 0x21 and c <= 0x7e and !std.ascii.isAlphanumeric(c),
+        7 => std.ascii.isHex(c),
+        8 => c == ' ' or c == '\t',
+        else => false,
+    };
+}
+
+/// `\w \W \d \D \s \S` as a byte set (C locale).
+fn shortSet(c: u8) [256]bool {
+    var set = [_]bool{false} ** 256;
+    for (0..256) |i| {
+        const b: u8 = @intCast(i);
+        const in = switch (std.ascii.toLower(c)) {
+            'w' => std.ascii.isAlphanumeric(b) or b == '_',
+            'd' => b >= '0' and b <= '9',
+            else => b == ' ' or (b >= 0x09 and b <= 0x0d),
+        };
+        set[i] = if (std.ascii.isUpper(c)) !in else in;
+    }
+    return set;
+}
+
 const Node = union(enum) {
     lit: u8,
     dot,
-    class: struct { set: [256]bool, negated: bool },
+    /// `posix`: bit i = `[:posix_names[i]:]` is part of the class.
+    class: struct { set: [256]bool, negated: bool, posix: u16 = 0 },
+    assert: Assert,
+    short: u8,
     concat: []const *const Node,
     alt: []const *const Node,
     star: *const Node,
@@ -115,6 +153,14 @@ const Gen = struct {
         };
         const leaf = depth >= max_depth or self.rng.chance(45);
         if (leaf) {
+            if (self.knob >= 2 and self.rng.chance(6)) {
+                n.* = .{ .assert = @enumFromInt(self.rng.below(4)) };
+                return n;
+            }
+            if (self.knob >= 2 and self.rng.chance(8)) {
+                n.* = .{ .short = "wWdDsS"[self.rng.below(6)] };
+                return n;
+            }
             const r = self.rng.below(10);
             if (r < 6) {
                 n.* = .{ .lit = self.byte() };
@@ -133,7 +179,15 @@ const Gen = struct {
                         for ("0123456789") |c| set[c] = true;
                     }
                 }
-                n.* = .{ .class = .{ .set = set, .negated = self.knob >= 2 and self.rng.chance(30) } };
+                var posix: u16 = 0;
+                if (self.knob >= 2 and self.rng.chance(30)) {
+                    const pi = self.rng.below(posix_names.len);
+                    posix |= @as(u16, 1) << @intCast(pi);
+                    for (0..256) |ci| {
+                        if (posixHas(pi, @intCast(ci))) set[ci] = true;
+                    }
+                }
+                n.* = .{ .class = .{ .set = set, .negated = self.knob >= 2 and self.rng.chance(30), .posix = posix } };
             }
             return n;
         }
@@ -212,17 +266,41 @@ const Gen = struct {
 
 // --- printing the AST as ERE ----------------------------------------------
 
+/// The printer writes ERE (`-E`) or, with `bre`, POSIX BRE plus GNU's
+/// `\+ \? \|` (`-G`). Set once per case before printing.
+threadlocal var bre: bool = false;
+
 fn isMeta(c: u8) bool {
+    if (bre) return switch (c) {
+        '.', '[', ']', '*', '^', '$', '\\' => true,
+        else => false, // ( ) { } | + ? are literal in BRE
+    };
     return switch (c) {
         '.', '[', ']', '(', ')', '*', '+', '?', '{', '}', '|', '^', '$', '\\' => true,
         else => false,
     };
 }
 
+fn op(out: *std.ArrayList(u8), a: Allocator, ere: []const u8) Allocator.Error!void {
+    // In BRE every operator except `*` needs a backslash.
+    if (bre and !std.mem.eql(u8, ere, "*")) try out.append(a, '\\');
+    try out.appendSlice(a, ere);
+}
+
 fn printNode(out: *std.ArrayList(u8), a: Allocator, n: *const Node, parent_binds: bool) Allocator.Error!void {
     switch (n.*) {
         .lit => |c| {
             if (isMeta(c)) try out.append(a, '\\');
+            try out.append(a, c);
+        },
+        .assert => |k| try out.appendSlice(a, switch (k) {
+            .wb => "\\b",
+            .nwb => "\\B",
+            .ws => "\\<",
+            .we => "\\>",
+        }),
+        .short => |c| {
+            try out.append(a, '\\');
             try out.append(a, c);
         },
         .dot => try out.append(a, '.'),
@@ -233,9 +311,18 @@ fn printNode(out: *std.ArrayList(u8), a: Allocator, n: *const Node, parent_binds
             if (cl.negated) try out.append(a, '^');
             // ']' first is literal; '-' last is literal; '^' not first.
             if (cl.set[']']) try out.append(a, ']');
+            for (posix_names, 0..) |name, pi| {
+                if (cl.posix & (@as(u16, 1) << @intCast(pi)) == 0) continue;
+                try out.appendSlice(a, "[:");
+                try out.appendSlice(a, name);
+                try out.appendSlice(a, ":]");
+            }
             for (0..256) |i| {
                 const c: u8 = @intCast(i);
                 if (!cl.set[i] or c == ']' or c == '-' or c == '^' or c == '\n') continue;
+                // Bytes a POSIX class already covers need not be listed
+                // (and '[' next to ':' could read as a class).
+                if (cl.posix != 0 and coveredByPosix(cl.posix, c)) continue;
                 if (c == '\\') {
                     try out.appendSlice(a, "\\\\");
                     continue;
@@ -249,34 +336,36 @@ fn printNode(out: *std.ArrayList(u8), a: Allocator, n: *const Node, parent_binds
         .concat => |kids| {
             if (kids.len == 0) return; // empty branch of an alternation
             const wrap = parent_binds and kids.len > 1;
-            if (wrap) try out.append(a, '(');
+            if (wrap) try op(out, a, "(");
             for (kids) |k| try printNode(out, a, k, true);
-            if (wrap) try out.append(a, ')');
+            if (wrap) try op(out, a, ")");
         },
         .alt => |kids| {
-            try out.append(a, '(');
+            try op(out, a, "(");
             for (kids, 0..) |k, i| {
-                if (i > 0) try out.append(a, '|');
+                if (i > 0) try op(out, a, "|");
                 try printNode(out, a, k, false);
             }
-            try out.append(a, ')');
+            try op(out, a, ")");
         },
         .star, .plus, .quest => |child| {
             try printAtom(out, a, child);
-            try out.append(a, switch (n.*) {
-                .star => '*',
-                .plus => '+',
-                else => '?',
+            try op(out, a, switch (n.*) {
+                .star => "*",
+                .plus => "+",
+                else => "?",
             });
         },
         .repeat => |r| {
             try printAtom(out, a, r.child);
             var buf: [16]u8 = undefined;
             const s = if (r.max) |mx|
-                (if (mx == r.min) std.fmt.bufPrint(&buf, "{{{d}}}", .{r.min}) else std.fmt.bufPrint(&buf, "{{{d},{d}}}", .{ r.min, mx }))
+                (if (mx == r.min) std.fmt.bufPrint(&buf, "{d}", .{r.min}) else std.fmt.bufPrint(&buf, "{d},{d}", .{ r.min, mx }))
             else
-                std.fmt.bufPrint(&buf, "{{{d},}}", .{r.min});
+                std.fmt.bufPrint(&buf, "{d},", .{r.min});
+            try op(out, a, "{");
             try out.appendSlice(a, s catch unreachable);
+            try op(out, a, "}");
         },
     }
 }
@@ -285,14 +374,21 @@ fn printNode(out: *std.ArrayList(u8), a: Allocator, n: *const Node, parent_binds
 /// literal, dot or class (so `(ab)*`, `(a*)*`, `(^)` never become ambiguous).
 fn printAtom(out: *std.ArrayList(u8), a: Allocator, n: *const Node) Allocator.Error!void {
     switch (n.*) {
-        .lit, .dot, .class => try printNode(out, a, n, true),
+        .lit, .dot, .class, .short => try printNode(out, a, n, true),
         .alt => try printNode(out, a, n, true),
         else => {
-            try out.append(a, '(');
+            try op(out, a, "(");
             try printNode(out, a, n, false);
-            try out.append(a, ')');
+            try op(out, a, ")");
         },
     }
+}
+
+fn coveredByPosix(mask: u16, c: u8) bool {
+    for (0..posix_names.len) |pi| {
+        if (mask & (@as(u16, 1) << @intCast(pi)) != 0 and posixHas(pi, c)) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +446,30 @@ const Ref = struct {
                 }
                 return out;
             },
+            .assert => |k| {
+                var out: Set = 0;
+                for (0..len + 1) |p| {
+                    if (s & bit(p) == 0) continue;
+                    const prev = p > 0 and isWordByte(self.line[p - 1]);
+                    const next = p < len and isWordByte(self.line[p]);
+                    const ok = switch (k) {
+                        .wb => prev != next,
+                        .nwb => prev == next,
+                        .ws => !prev and next,
+                        .we => prev and !next,
+                    };
+                    if (ok) out |= bit(p);
+                }
+                return out;
+            },
+            .short => |c| {
+                const set = shortSet(c);
+                var out: Set = 0;
+                for (0..len) |p| {
+                    if (s & bit(p) != 0 and self.inClass(&set, self.line[p])) out |= bit(p + 1);
+                }
+                return out;
+            },
             .bol => return s & bit(0),
             .eol => return s & bit(len),
             .concat => |kids| {
@@ -401,6 +521,13 @@ const Opts = struct {
     line: bool = false,
     invert: bool = false,
     fixed: bool = false,
+    /// `-G`: the patterns were printed as BRE.
+    bre: bool = false,
+    /// `-m N` (null = off).
+    max_count: ?usize = null,
+    /// `-A` / `-B` (0 = off).
+    after: usize = 0,
+    before: usize = 0,
 };
 
 /// The patterns, as ASTs (regex) or literal bytes (-F).
@@ -494,6 +621,7 @@ fn buildSearcher(a: Allocator, c: *const Case, algo: search.Algo) ?Searcher {
         .icase = c.opts.icase,
         .word = c.opts.word,
         .line = c.opts.line,
+        .basic = c.opts.bre,
     }) catch null;
 }
 
@@ -524,7 +652,9 @@ fn printedLines(a: Allocator, out: []const u8) Allocator.Error![]usize {
 fn check(a: Allocator, c: *const Case, stats: *Stats) Allocator.Error!Verdict {
     const s = buildSearcher(a, c, .auto) orelse {
         _ = stats.rejected.fetchAdd(1, .monotonic);
-        return .{ .ok = true };
+        // The generator only emits valid ERE/BRE: a rejection is reported
+        // too, and the judge checks whether GNU grep accepts the pattern.
+        return .{ .ok = false, .what = "pattern rejected by zgrep" };
     };
     const lines = try lineStarts(a, c.hay);
 
@@ -542,6 +672,54 @@ fn check(a: Allocator, c: *const Case, stats: *Stats) Allocator.Error!Verdict {
     const got = try printedLines(a, out.items);
     if (!std.mem.eql(usize, want.items, got)) return .{ .ok = false, .what = "selected lines differ from the reference" };
     if (br.lines != got.len) return .{ .ok = false, .what = "lines-mode count != printed lines" };
+
+    // -m N: the first N selected lines, and -c counts at most N.
+    if (c.opts.max_count) |m| {
+        out.clearRetainingCapacity();
+        const bm = try scan.scanBuffer(a, c.hay, &s, "f", false, .lines, .{ .show_line_no = true, .invert = c.opts.invert, .max_count = m }, &out);
+        const gm = try printedLines(a, out.items);
+        const wm = want.items[0..@min(m, want.items.len)];
+        if (!std.mem.eql(usize, wm, gm)) return .{ .ok = false, .what = "-m selected lines differ from the reference" };
+        var sk: std.ArrayList(u8) = .empty;
+        const cm = try scan.scanBuffer(a, c.hay, &s, "f", false, .count, .{ .invert = c.opts.invert, .max_count = m }, &sk);
+        if (cm.lines != wm.len or bm.lines != wm.len) return .{ .ok = false, .what = "-m -c differs from the reference" };
+    }
+
+    // -A/-B: the exact text, with `N:` / `N-` prefixes and `--` between groups.
+    if (c.opts.after > 0 or c.opts.before > 0) {
+        var exp: std.ArrayList(u8) = .empty;
+        var sel = try a.alloc(bool, lines.len);
+        @memset(sel, false);
+        for (want.items) |ln| sel[ln - 1] = true;
+        var last: ?usize = null;
+        for (lines, 0..) |ln, i| {
+            var show = sel[i];
+            var ctx = false;
+            if (!show) {
+                for (want.items) |w| {
+                    const wi = w - 1;
+                    if ((wi < i and i - wi <= c.opts.after) or (wi > i and wi - i <= c.opts.before)) {
+                        show = true;
+                        ctx = true;
+                        break;
+                    }
+                }
+            }
+            if (!show) continue;
+            if (last) |l| {
+                if (i > l + 1) try exp.appendSlice(a, "--\n");
+            }
+            var nb: [24]u8 = undefined;
+            try exp.appendSlice(a, std.fmt.bufPrint(&nb, "{d}", .{i + 1}) catch unreachable);
+            try exp.append(a, if (ctx) '-' else ':');
+            try exp.appendSlice(a, c.hay[ln[0]..ln[1]]);
+            try exp.append(a, '\n');
+            last = i;
+        }
+        out.clearRetainingCapacity();
+        _ = try scan.scanBuffer(a, c.hay, &s, "f", false, .lines, .{ .show_line_no = true, .invert = c.opts.invert, .after_context = c.opts.after, .before_context = c.opts.before }, &out);
+        if (!std.mem.eql(u8, exp.items, out.items)) return .{ .ok = false, .what = "-A/-B context output differs from the reference" };
+    }
 
     // -c, -q, -l agree with it.
     var sink: std.ArrayList(u8) = .empty;
@@ -613,6 +791,13 @@ fn genCase(a: Allocator, rng: *Rng, knob: u8) Allocator.Error!Case {
         .fixed = rng.chance(25),
     };
     if (o.word and o.line) o.word = false;
+    if (!o.fixed and knob >= 2 and rng.chance(20)) o.bre = true;
+    if (rng.chance(10)) {
+        o.max_count = 1 + rng.below(3);
+    } else if (rng.chance(15)) {
+        o.after = rng.below(3);
+        o.before = rng.below(3);
+    }
     const k: usize = if (knob >= 3 and rng.chance(30)) 2 + rng.below(2) else 1;
     const srcs = try a.alloc([]const u8, k);
     var pats: Pats = .{};
@@ -628,6 +813,8 @@ fn genCase(a: Allocator, rng: *Rng, knob: u8) Allocator.Error!Case {
         pats.lits = lits;
     } else {
         const asts = try a.alloc(*const Node, k);
+        bre = o.bre;
+        defer bre = false;
         for (asts, srcs) |*n, *src| {
             n.* = try g.pattern();
             var buf: std.ArrayList(u8) = .empty;
@@ -747,8 +934,8 @@ fn record(ctx: *Ctx, a: Allocator, c: Case, what: []const u8, seed: u64) void {
         sig.appendSlice(a, p) catch return;
     }
     var b: [256]u8 = undefined;
-    const flags = std.fmt.bufPrint(&b, "],\"fixed\":{},\"icase\":{},\"word\":{},\"line\":{},\"invert\":{},\"knob\":{d},\"seed\":{d},\"haystack\":", .{
-        small.opts.fixed, small.opts.icase, small.opts.word, small.opts.line, small.opts.invert, small.knob, seed,
+    const flags = std.fmt.bufPrint(&b, "],\"fixed\":{},\"icase\":{},\"word\":{},\"line\":{},\"invert\":{},\"bre\":{},\"max_count\":{d},\"after\":{d},\"before\":{d},\"knob\":{d},\"seed\":{d},\"haystack\":", .{
+        small.opts.fixed, small.opts.icase, small.opts.word, small.opts.line, small.opts.invert, small.opts.bre, small.opts.max_count orelse 0, small.opts.after, small.opts.before, small.knob, seed,
     }) catch return;
     line.appendSlice(a, flags) catch return;
     sig.appendSlice(a, flags[0..std.mem.indexOf(u8, flags, ",\"knob\"").?]) catch return;

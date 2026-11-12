@@ -44,6 +44,32 @@ found while minimising bug 5 (the fuzzer's alphabet has no `C3`/`C4`, so it is
 covered by a unit test instead). Each has a unit test in `src/scan.zig` or
 `src/search.zig`.
 
+## Round 2: a wider oracle (2026-11-12, same day)
+
+The reference and the generator now also cover `\b \B \< \>`, `\w \W
+\d \D \s \S`, POSIX classes (`[[:alpha:]]` ... `[[:blank:]]`), BRE (`-G`,
+the AST printed with `\( \| \{ \+ \?`), `-m N` and `-A/-B` context (the
+exact text, with `N:` / `N-` and `--` between groups). Rejections count too:
+the generator only emits valid patterns, so a rejection is judged ("does GNU
+grep accept it?"). The judge gives grep `[0-9]` for `\d` (grep -E has no
+`\d`; zgrep and rg do), and has a 5 s timeout: GNU grep backtracks
+exponentially on `((((\B){2,4})+)+)+` (ZiGrep's DFA does not).
+
+Found and fixed in this round (all confirmed by GNU grep):
+
+| # | bug | example | fix |
+|---|---|---|---|
+| 7 | `\<` and `\>` silently matched a literal `<` / `>` | `\<f` on "foo" found nothing, no error | new `ws`/`we` assertions in `regex.zig` |
+| 8 | after `\b`/`\B`, a following group was evaluated one byte late | `\b(foo\|bar)\b` missed "foo"; `\b(ab\|c)` matched "bc" | `step`: `seedAfterAssert` resolves splits/assertions at the same position |
+| 9 | a run of zero-width items stopped after the first | `(\>){2,3}`, `(\b\b\b){1}` never matched | `acceptEnd`/`acceptWord`: `zeroWidthMatch` |
+| 10 | BRE: `*` right after a leading `^` repeated the anchor | `-G '^*'` selected every line | `bre.zig`: `^` keeps "start of branch" |
+| 11 | BRE: `]` right after `[` / `[^` closed the class | `-G '[]a]'` "unterminated [ class" | `bre.zig` |
+| 12 | BRE: backslash inside `[...]` read as an escape | `-G '[\]'` rejected (POSIX: literal) | `bre.zig` doubles it |
+
+Bugs 7, 8, 10 came from probing the new features by hand against grep
+before writing the oracle; 9, 11, 12 from the fuzzer (300 000 cases: 138
+divergences and 1 294 rejected patterns before, 0 after).
+
 ## Runs
 
 - `run_20m_before_fix6.json`: 20 000 000 cases, seed 20261112, 12 processes,
@@ -54,8 +80,11 @@ covered by a unit test instead). Each has a unit test in `src/scan.zig` or
 
 ## Not covered (NOT_DEMONSTRATED by this fuzzer)
 
-- `\w \d \s \b`, POSIX classes, back-references, BRE (`-G`), `-U`
-  multiline, `--crlf`, `-z`, `-m`, context lines, `--replace`.
+- Back-references (rejected on purpose), `-U` multiline, `--crlf`, `-z`,
+  `--replace`, `-m` combined with context, `-o` with `-w/-x/-v`.
+- In ERE, ZiGrep reads `\` inside `[...]` as an escape (like rg); POSIX ERE
+  (GNU grep -E) reads it as a literal. Deliberate rg parity; the generator
+  never puts a backslash in a class.
 - Unicode: byte semantics only. The Latin-1 folding of literal `-i` is not
   in the reference (only bug 6's unit test covers it); regex `-i` does not
   fold Latin-1 at all, so `À` and `À.` behave differently under `-i`.

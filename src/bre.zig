@@ -48,14 +48,16 @@ fn breToEreInto(arena: std.mem.Allocator, pattern: []const u8, out: *std.ArrayLi
     var i: usize = 0;
     while (i < pattern.len) : (i += 1) {
         const c = pattern[i];
+        if (c == '\\' and in_class) {
+            // POSIX: inside a bracket expression a backslash is a literal
+            // byte (`[\]` is the class {\}). ZiGrep's ERE reads `\` as an
+            // escape there (like rg), so it goes out doubled. It used to be
+            // copied as an escape pair: `[\]` became "unterminated [ class".
+            try out.appendSlice(arena, "\\\\");
+            continue;
+        }
         if (c == '\\' and i + 1 < pattern.len) {
             const e = pattern[i + 1];
-            if (in_class) {
-                try out.append(arena, c);
-                try out.append(arena, e);
-                i += 1;
-                continue;
-            }
             switch (e) {
                 '(', ')', '{', '}', '|', '+', '?' => {
                     // In BRE these are the OPERATORS, so they lose the escape.
@@ -94,6 +96,16 @@ fn breToEreInto(arena: std.mem.Allocator, pattern: []const u8, out: *std.ArrayLi
         switch (c) {
             '[' => {
                 try out.append(arena, c);
+                // `]` right after `[` or `[^` is a literal member, not the
+                // end: `[]a]`, `[^]a]` (POSIX). It used to close the class.
+                if (i + 1 < pattern.len and pattern[i + 1] == '^') {
+                    try out.append(arena, '^');
+                    i += 1;
+                }
+                if (i + 1 < pattern.len and pattern[i + 1] == ']') {
+                    try out.append(arena, ']');
+                    i += 1;
+                }
                 in_class = true;
                 at_branch_start = false;
             },
@@ -143,7 +155,11 @@ fn breToEreInto(arena: std.mem.Allocator, pattern: []const u8, out: *std.ArrayLi
             },
             else => {
                 try out.append(arena, c);
-                at_branch_start = false;
+                // A leading `^` is the anchor; a `*` right after it is still
+                // "at the start" and literal (POSIX; `grep -G '^*'` matches
+                // lines that begin with a star). It used to repeat the anchor
+                // and select every line.
+                if (!(c == '^' and at_branch_start)) at_branch_start = false;
             },
         }
     }
@@ -158,6 +174,12 @@ test "breToEre: the inverted escapes" {
         .{ "a\\+", "a+" },
         .{ "a\\?", "a?" },
         .{ "a(b)c", "a\\(b\\)c" },
+        .{ "^*a", "^\\*a" },
+        .{ "[]a]", "[]a]" },
+        .{ "[^]a]", "[^]a]" },
+        .{ "[\\]", "[\\\\]" },
+        .{ "[][:punct:]b-]", "[][:punct:]b-]" },
+        .{ "\\(^*x\\)", "(^\\*x)" },
         .{ "a{2}", "a\\{2\\}" },
         .{ "a|b", "a\\|b" },
         .{ "a+b", "a\\+b" },
