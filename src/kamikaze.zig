@@ -394,6 +394,10 @@ fn scanBatch(
 
     var start_idx: usize = 0;
     if (uring_scanner) |u_scan| {
+        // Only FULL batches go through the ring; the 1-15 left over use the
+        // synchronous loop below. Measured 2026-11-12 (cold cache): sending
+        // the partial batches through the ring too made synthetic 1.08-1.09x
+        // slower in both run orders (evidence/perf-cheap-fixes, fix 3).
         while (start_idx + uring.BATCH_SIZE <= batch.file_names.len) {
             if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
             const slice = batch.file_names[start_idx .. start_idx + uring.BATCH_SIZE];

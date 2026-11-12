@@ -144,11 +144,24 @@ pub const DirStream = struct {
 pub fn stat(io: std.Io, path: []const u8, follow_symlinks: bool) ?Metadata {
     if (builtin.os.tag == .linux) {
         const linux = std.os.linux;
-        const path_z = std.heap.page_allocator.dupeZ(u8, path) catch return null;
-        defer std.heap.page_allocator.free(path_z);
+        // NUL-terminate on the stack: page_allocator.dupeZ cost an mmap and a
+        // munmap per call. Paths too long for the buffer fall back to it.
+        var buf: [linux.PATH_MAX]u8 = undefined;
+        var heap_z: ?[:0]u8 = null;
+        defer if (heap_z) |h| std.heap.page_allocator.free(h);
+        const path_z: [:0]const u8 = if (path.len < buf.len) blk: {
+            @memcpy(buf[0..path.len], path);
+            buf[path.len] = 0;
+            break :blk buf[0..path.len :0];
+        } else blk: {
+            heap_z = std.heap.page_allocator.dupeZ(u8, path) catch return null;
+            break :blk heap_z.?;
+        };
         var stx: linux.Statx = undefined;
         const flags: u32 = if (follow_symlinks) 0 else @intCast(linux.AT.SYMLINK_NOFOLLOW);
-        if (linux.errno(linux.statx(linux.AT.FDCWD, path_z, flags, .{ .TYPE = true }, &stx)) != .SUCCESS) return null;
+        // SIZE is requested because `.size` below reads it: with TYPE alone
+        // the kernel is not obliged to fill it (it happens to, on Linux).
+        if (linux.errno(linux.statx(linux.AT.FDCWD, path_z, flags, .{ .TYPE = true, .SIZE = true }, &stx)) != .SUCCESS) return null;
         const mode = stx.mode & linux.S.IFMT;
         return .{
             .kind = if (mode == linux.S.IFDIR) .directory else if (mode == linux.S.IFREG) .file else if (mode == linux.S.IFLNK) .symlink else .other,
