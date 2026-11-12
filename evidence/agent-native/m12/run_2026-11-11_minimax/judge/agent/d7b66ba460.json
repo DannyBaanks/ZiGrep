@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all four files: only `a.log` is excluded by the rule, and `catalog`, `.log` (too short) and `A.LOG` (case-sensitive) are not. The extra note that the default ignore list also excludes `.log` does not contradict the reference.",
+ "cost_usd": 0.006817999999999999
+}

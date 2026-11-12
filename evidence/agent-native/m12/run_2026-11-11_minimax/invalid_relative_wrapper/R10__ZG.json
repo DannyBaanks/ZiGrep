@@ -1,0 +1,195 @@
+{
+ "rc": 0,
+ "seconds": 202.7,
+ "answer": "**Accepted values:** `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `latin1` — listed in the help text (`src/main.zig:162`), the validator (`src/main.zig:807`), and the `Encoding` enum/parser (`src/scan.zig:101`, `src/scan.zig:107`). Default is `auto` (`src/main.zig:396`); any other value is a usage error (\"unknown encoding (zgrep supports auto|none|utf-8|utf-16|utf-16le|utf-16be|latin1)\", `src/main.zig:1281`). `--no-encoding` resets to `auto` (`src/main.zig:1294`).\n\n**`--encoding=utf-16` on a BOM-less file:** it is decoded as UTF-16 **little-endian** (`isUtf16Bom(data) orelse .le`, `src/scan.zig:966`, also `:1094`, `:1199`), and the NUL binary probe is skipped (`src/scan.zig:971`). However, the decoder always skips the first two bytes (`var i: usize = 2; // skip 2-byte BOM`, `src/scan.zig:138`), so with no BOM the **first character is lost**. Verified with `zig-out/bin/zgrep`: on a BOM-less UTF-16LE file `Hello` did not match while `ello` matched line 1; the same file *with* a BOM matched `Hello` (ripgrep prints `1:Hello`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "error",
+   "input": {
+    "pattern": "encoding",
+    "limit": 100
+   },
+   "output_head": "",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "error",
+   "input": {
+    "pattern": "--encoding",
+    "limit": 100
+   },
+   "output_head": "",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la; git log --oneline -3 2>/dev/null | head -5"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn -- \"--encoding\" . --include=\"*\" -l 2>/dev/null | grep -v \"\\.git/\" | head -30"
+   },
+   "output_head": "./src/main.zig:162:    \\\\      --encoding=ENC\n./src/main.zig:395:    /// `--encoding`: auto | none | utf-8 | utf-16 | utf-16le | utf-16be | latin1.\n./src/scan.zig:79:    /// `--encoding`: how bytes be",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '140,200p' src/main.zig"
+   },
+   "output_head": "    \\\\                    run CMD for every file with a match; {} is the path.\n    \\\\                    Without {} the path is appended (find -exec style)\n    \\\\  -s, --no-messages suppress error mes",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '380,430p' src/main.zig"
+   },
+   "output_head": "    heading: bool = false,\n    /// `--null-data` / `-z`: NUL is the record separator (grep -z). NOT rg's\n    /// `-z`, which is --search-zip; grep semantics win.\n    null_data: bool = false,\n    /// `",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '60,200p' src/scan.zig"
+   },
+   "output_head": "    /// size, mtime) before the events of every file that produced any.\n    provenance: bool = false,\n    /// `-b`: prefix each line with its byte offset in the file (grep).\n    byte_offset: bool = fa",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n \"decodeUtf16ToUtf8\\|utf16\\|encoding\\|BOM\\|bom\" src/scan.zig | head -60"
+   },
+   "output_head": "79:    /// `--encoding`: how bytes become the haystack.\n80:    encoding: Encoding = .auto,\n93:/// Checks for UTF-16 Byte Order Marks (BOM):\n95:/// `--encoding` decides how a file's bytes become the ha",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"utf16\\|utf-16\" src/*.zig | grep -v \"^src/scan.zig\" | head -40"
+   },
+   "output_head": "src/main.zig:163:    \\\\                    auto | none | utf-8 | utf-16 | utf-16le | utf-16be |\nsrc/main.zig:395:    /// `--encoding`: auto | none | utf-8 | utf-16 | utf-16le | utf-16be | latin1.\nsrc/",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '950,1000p' src/scan.zig"
+   },
+   "output_head": "    searcher: *const Searcher,\n    data: []const u8,\n    path: []const u8,\n    show_path: bool,\n    mode: Mode,\n    binary: bool,\n    config: ScanConfig,\n    out: *std.ArrayList(u8),\n    res: *FileSca",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '1085,1135p' src/scan.zig; echo \"-----\"; sed -n '1190,1245p' src/scan.zig"
+   },
+   "output_head": "                return res;\n            }\n            const data = sbuf[0..got];\n            const probe = @min(data.len, binary_probe_bytes);\n            const utf16_bom = if (config.encoding == .non",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '800,815p' src/main.zig; echo \"-----\"; sed -n '1265,1300p' src/main.zig"
+   },
+   "output_head": "    const name = std.fs.path.basename(path);\n    return filter.globMatch(name, g) or filter.globMatch(path, g);\n}\n\n/// The encodings zgrep can actually honour. Anything else is a usage error\n/// inste",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '1690,1760p' src/scan.zig"
+   },
+   "output_head": "    // La sonda corrió sobre el mismo fd: un hit y ningún miss. Si el offset\n    // del fd no se hubiera colocado tras la sonda, la lectura habría repetido\n    // los primeros bytes y `bytes`/`lines` ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "which zig; ls zig-out/bin 2>/dev/null; ls .zig-cache 2>/dev/null | head"
+   },
+   "output_head": "~/.local/bin/zig\ncell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\nh\no\ntmp\nz\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && <clone>/zig-out/bin/zgrep --encoding=utf-16 -n \"Hello\" nobom16.txt; echo \"exit=$?\"; echo \"=== with BOM ===\"; <clone>/zig-out/bin/zgrep --encoding=utf-16 -n \"Hello\" bom16.txt; echo \"exit=$?\""
+   },
+   "output_head": "zgrep: nobom16.txt: FileNotFound\nexit=2\n=== with BOM ===\nzgrep: bom16.txt: FileNotFound\nexit=2\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && python3 -c \"\nimport sys\nopen('nobom16.txt','wb').write('Hello\\nworld\\n'.encode('utf-16-le'))\nopen('bom16.txt','wb').write('Hello\\nworld\\n'.encode('utf-16'))\n\" && ls -l nobom16.txt bom16.txt && xxd nobom16.txt | head -3"
+   },
+   "output_head": "-rw-rw-r-- 1 user user 26 nov 11 20:55 bom16.txt\n-rw-rw-r-- 1 user user 24 nov 11 20:55 nobom16.txt\n00000000: 4800 6500 6c00 6c00 6f00 0a00 7700 6f00  H.e.l.l.o...w.o.\n00000010: 7200 6c00 6400 0a0",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "Z=<clone>/zig-out/bin/zgrep; $Z --encoding=utf-16 -n \"world\" /tmp/opencode/nobom16.txt; echo \"exit=$?\"; echo \"=== ell (would match if first char skipped) ===\"; $Z --encoding=utf-16 -n \"ello\" /tmp/opencode/nobom16.txt; echo \"exit=$?\"; echo \"=== rg comparison ===\"; which rg && rg --encoding utf-16 -n \"Hello\" /tmp/opencode/nobom16.txt; echo \"rg exit=$?\""
+   },
+   "output_head": "2:world\nexit=0\n=== ell (would match if first char skipped) ===\n1:ello\nexit=0\n=== rg comparison ===\n/usr/bin/rg\n1:Hello\nrg exit=0\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "Z=<clone>/zig-out/bin/zgrep; $Z --encoding=utf-16 -n \"Hello\" /tmp/opencode/nobom16.txt; echo \"exit=$?\"; echo \"=== with BOM ===\"; $Z --encoding=utf-16 -n \"Hello\" /tmp/opencode/bom16.txt; echo \"exit=$?\"; echo \"=== auto on nobom ===\"; $Z -n \"Hello\" /tmp/opencode/nobom16.txt; echo \"exit=$?\""
+   },
+   "output_head": "exit=1\n=== with BOM ===\n1:Hello\nexit=0\n=== auto on nobom ===\nexit=1\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n \"skip 2-byte BOM\\|pub fn decodeUtf16ToUtf8\\|isUtf16Bom(data) orelse .le\\|pub const Encoding\\|pub fn parseEncoding\\|pub fn forcedBom\" src/scan.zig"
+   },
+   "output_head": "101:pub const Encoding = enum { auto, none, utf8, utf16, utf16le, utf16be, latin1 };\n107:pub fn parseEncoding(name: []const u8) ?Encoding {\n119:pub fn forcedBom(enc: Encoding) ?BomKind {\n135:pub fn de",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n \"encoding\" src/main.zig | sed -n '1,40p'; echo ---; grep -rn \"encoding\" src/*.zig | grep -i \"test\\|expect\" | head -20"
+   },
+   "output_head": "162:    \\\\      --encoding=ENC\n395:    /// `--encoding`: auto | none | utf-8 | utf-16 | utf-16le | utf-16be | latin1.\n396:    encoding: []const u8 = \"auto\",\n804:/// The encodings zgrep can actually ho",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R10",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

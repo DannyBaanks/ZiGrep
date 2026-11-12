@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists exactly the reference's ten default-excluded directories, states that neither dist nor build is skipped, and names both --no-ignore and --no-default-ignore as the flags that disable the list.",
+ "cost_usd": 0.0066419999999999995
+}

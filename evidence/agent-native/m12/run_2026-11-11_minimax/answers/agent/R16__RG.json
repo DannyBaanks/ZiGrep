@@ -1,0 +1,247 @@
+{
+ "rc": 0,
+ "seconds": 313.7,
+ "answer": "**Definition.** A tree is a micro-tree when it is the single search root (one root, no nav plan, a directory), its regular files total under the 2 MB budget (`src/main.zig:42`), and it fits the file/dir/depth caps (2048 files, 512 dirs, depth 32). Exceeding any of them makes the attempt return `null` and hands the run to the concurrent swarm (`src/kamikaze.zig:629-631, 650, 672, 682, 684, 864-868`).\n\n**What changes when it is one:**\n\n- No worker pool, mutexes, or io_uring: files are scanned sequentially on the calling thread, with output buffered and flushed once (`src/kamikaze.zig:596-598, 697-738`).\n- The upward `.dataignore`/`.gitignore` walk is skipped, so ignore files are not applied (`src/kamikaze.zig:598-599`; `src/filter.zig:330-334, 491-493`; `.github/workflows/ci.yml:181-182`). Explicit filters still apply via `isDirExcluded`/`isFileExcludedIn` (`src/kamikaze.zig:671, 680`).\n- The quiet probe runs only after the fast path fails (`src/kamikaze.zig:861-881`).\n- `--stats` reports `micro_path=yes` (`src/kamikaze.zig:869`; `src/main.zig:2522`); `--force-swarm` restores the swarm (`src/main.zig:41, 212-214`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "microtree|micro_tree"
+   },
+   "output_head": "Found 2 matches\n<clone>/src/main.zig:\n  Line 42: const micro_tree_max_bytes: usize = 2 * 1024 * 1024;\n\n  ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "micro-tree"
+   },
+   "output_head": "Found 22 matches\n<clone>/VERIFICATION.md:\n  Line 22: * **Native Windows job**: builds ReleaseFast, runs t",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 30,
+    "limit": 20
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 30-49\n30: const out_json = @import(\"out_json.zig\");\n31: \n32: const ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/kamikaze.zig",
+    "offset": 585,
+    "limit": 130
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 585-714\n585:             .directory => .directory,\n586:        ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 100,
+    "offset": 820,
+    "path": "<clone>/src/kamikaze.zig"
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 820-919\n820:     return false;\n821: }\n822: \n823: /// Executes t",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 320,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 320-379\n320:         const anchored = if (pat.len > 0 and pat[0] ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 460,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 460-539\n460:             const line = std.mem.trim(u8, raw_line, ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 2440,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2440-2519\n2440:         }\n2441:         for (opts.include_patterns[",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 205,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 205-284\n205:     \\\\                    rg -g: * ? ** [abc] [!a-z] {",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 140,
+    "path": "<clone>/evidence/feature-corpus/README.md"
+   },
+   "output_head": "Read file <clone>/evidence/feature-corpus/README.md, lines 140-179\n140: proceso. `--exec` es ese filtro, ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 120,
+    "offset": 714,
+    "path": "<clone>/src/kamikaze.zig"
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 714-833\n714:             full_path,\n715:             show_path,",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "loadIgnoreFiles|loadUpwardIgnoreFiles|ignore_files_loaded"
+   },
+   "output_head": "Found 11 matches\n<clone>/src/filter.zig:\n  Line 331:     /// Set once `loadIgnoreFiles` has run. The upwa",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 50,
+    "offset": 3560,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 3560-3609\n3560:     }\n3561:     {\n3562:         var o: Options = .{",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 165,
+    "path": "<clone>/.github/workflows/ci.yml"
+   },
+   "output_head": "Read file <clone>/.github/workflows/ci.yml, lines 165-198\n165:           New-Item -ItemType Directory -Fo",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 1,
+    "path": "<clone>/src/kamikaze.zig"
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 1-30\n1: //! kamikaze.zig — Concurrent Kamikaze Swarm & Streamin",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 2535,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2535-2594\n2535:         if (matched and opts.mode == .quiet and opt",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 538,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 538-597\n538:     /// The same decision for a file found in direct",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 45,
+    "offset": 2395,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2395-2439\n2395:         try valid_operands.append(arena, op);\n2396:",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 58,
+    "path": "<clone>/src/kamikaze.zig"
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 58-77\n58: pub const KamikazeStats = struct {\n59:     dirs_scout",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "micro_path"
+   },
+   "output_head": "Found 16 matches\n<clone>/PRUEBAS.md:\n  Line 173: | **`zigrep` (default → micro path)** | 3.13 ms | 2.46 m",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 165,
+    "path": "<clone>/README.md"
+   },
+   "output_head": "Read file <clone>/README.md, lines 165-189\n165: | Early exit `-q` | `assembly` | 3.11 ms | 2.04 ms | 14.6",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 360,
+    "path": "<clone>/GUIA.md"
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 360-399\n360:    * Si solo quieres desactivar las listas internas por def",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R16",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

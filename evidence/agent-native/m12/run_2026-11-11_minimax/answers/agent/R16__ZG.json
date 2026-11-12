@@ -1,0 +1,131 @@
+{
+ "rc": 0,
+ "seconds": 117.0,
+ "answer": "**Definition.** A tree is a \"micro-tree\" when its regular files add up to less than the byte budget `micro_tree_max_bytes` = 2 MiB (`src/main.zig:42`), and it stays inside the discovery caps: ≤2048 files, ≤512 dirs, depth ≤32 (`src/kamikaze.zig:629-631`, `src/kamikaze.zig:650`, `src/kamikaze.zig:682-684`). The fast path only triggers for a single directory root with no nav plan (`src/kamikaze.zig:864-867`).\n\n**What changes.** zgrep takes the zero-thread fast path: the tree is scanned sequentially on the calling thread — no worker pool, no mutexes, no io_uring, and no upward `.dataignore`/`.gitignore` walk (`src/kamikaze.zig:593-599`, `src/kamikaze.zig:696-697`, `src/filter.zig:491-493`). That upward ignore load and the quiet probe are deferred until the tree proves too big, after which the full concurrent swarm runs (`src/kamikaze.zig:861-886`). The run is flagged `micro_path = true` (`src/kamikaze.zig:869`), and `--force-swarm` disables the fast path (`src/kamikaze.zig:825-829`, `src/main.zig:41`).",
+ "tools": [
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "micro-tree|micro_tree|microtree",
+    "caseSensitive": false
+   },
+   "output_head": "Found 27 matches\n<clone>/.github/workflows/ci.yml:\n  Line 181:           # Default path: the tree is a mi",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/kamikaze.zig",
+    "offset": 585,
+    "limit": 130
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 585-714\n585:             .directory => .directory,\n586:        ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/kamikaze.zig",
+    "offset": 1,
+    "limit": 80
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 1-80\n1: //! kamikaze.zig — Concurrent Kamikaze Swarm & Streamin",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 2440,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2440-2499\n2440:         }\n2441:         for (opts.include_patterns[",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 180,
+    "offset": 715,
+    "path": "<clone>/src/kamikaze.zig"
+   },
+   "output_head": "Read file <clone>/src/kamikaze.zig, lines 715-894\n715:             show_path,\n716:             mode,\n717:",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 480,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 480-509\n480:             if (vfs.stat(io, git_path, false) != nul",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 15,
+    "offset": 34,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 34-48\n34: const Allocator = std.mem.Allocator;\n35: \n36: const versi",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 320,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 320-359\n320:         const anchored = if (pat.len > 0 and pat[0] ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 45,
+    "offset": 155,
+    "path": "<clone>/PRUEBAS.md"
+   },
+   "output_head": "Read file <clone>/PRUEBAS.md, lines 155-199\n155: * `ripgrep`: `[22.37, 16.8, 18.3, 18.93, 32.17, 31.61, 2",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 145,
+    "path": "<clone>/evidence/feature-corpus/README.md"
+   },
+   "output_head": "Read file <clone>/evidence/feature-corpus/README.md, lines 145-169\n145: `--max-filesize` · `--exclude-fro",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R16",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 1
+}

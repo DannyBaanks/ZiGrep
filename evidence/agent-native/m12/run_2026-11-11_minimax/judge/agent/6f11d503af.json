@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists match, occurrence, file and count as counting events and says context, passthru, provenance, query_end and summary do not, which agrees with the reference. The extra details on compact mode and budget scope don't contradict it.",
+ "cost_usd": 0.00633
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all four points (id string or non-negative integer, unknown fields rejected, duplicate id error, blank lines skipped) and says the whole file is parsed before anything runs, so a bad line cannot half-run the batch.",
+ "cost_usd": 0.007006
+}

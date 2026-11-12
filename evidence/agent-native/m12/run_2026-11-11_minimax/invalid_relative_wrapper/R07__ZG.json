@@ -1,0 +1,230 @@
+{
+ "rc": 0,
+ "seconds": 370.9,
+ "answer": "**Counting rule:** `--max-results N` counts only four event types — **`match`, `occurrence`, `file`, `count`** (`src/batch.zig:77-83`, `src/batch.zig:7-8`; CLI help `src/main.zig:93-96`).\n\n**Context lines do not count.** `context` and `passthru` accompany results but never increment the counter (`src/batch.zig:8`). The unit test feeds match+context+match+match with `--max-results 1` and asserts `returned == 1`, `omitted == 2` (`src/batch.zig:568-579`). Verified live: `--json -C1 --max-results 2` emitted 2 matches plus 3 context lines, yet reported `\"returned\":2,\"omitted\":1`.\n\nAlso not counted:\n- control events `query_end`/`summary`, always emitted (`src/batch.zig:15-16`);\n- `provenance`, which still weighs on `--max-output-tokens` (`GUIA.md:838-840`).\n\nCompact mode (`--json=compact`) applies the same rule via row tag: only tags starting `c` (context) or `p` (passthru) are excluded (`src/batch.zig:269`; tags `src/out_json.zig:233-240`).\n\nThe budget covers the whole call, and truncation never stops the scan — `omitted` keeps counting (`src/main.zig:94-95`, `src/batch.zig:13-14`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "error",
+   "input": {
+    "pattern": "max-results|max_results|maxResults",
+    "limit": 80
+   },
+   "output_head": "",
+   "no_matches": false
+  },
+  {
+   "tool": "glob",
+   "status": "completed",
+   "input": {
+    "pattern": "**/*.{ts,js,rs,go,py}",
+    "limit": 50
+   },
+   "output_head": "<clone>/scripts/tri_fuzz.py\n<tmp>",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la && echo \"---\" && git log --oneline -5",
+    "workdir": "<clone>"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"max-results\" --include=\"*.zig\" --include=\"*.md\" --include=\"*.rs\" --include=\"*.ts\" --include=\"*.py\" . 2>/dev/null | head -50",
+    "workdir": "<clone>"
+   },
+   "output_head": "./src/main.zig:93:    \\\\      --max-results N\n./src/main.zig:1196:            } else if (std.mem.startsWith(u8, body, \"max-results=\")) {\n./src/main.zig:1197:                opts.max_results = parseCou",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/GUIA.md",
+    "offset": 770,
+    "limit": 80
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 770-849\n770: \n771: ```json\n772: {\"schema\":\"zgrep/1\",\"query_id\":\"hit\",\"ty",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"max_results\" src/*.zig | head -60",
+    "workdir": "<clone>"
+   },
+   "output_head": "src/batch.zig:26:pub const Reason = enum { max_results, max_output_tokens };\nsrc/batch.zig:30:        .max_results => \"max-results\",\nsrc/batch.zig:98:    max_results: ?usize = null,\nsrc/batch.zig:279:",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 130,
+    "offset": 240,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 240-369\n240:         }\n241:         if (rest.len > 0) try self.car",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 555,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 555-614\n555:     try std.testing.expectEqual(@as(usize, 1), e.retu",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n \"fn isResult\" -A 30 src/batch.zig",
+    "workdir": "<clone>"
+   },
+   "output_head": "77:fn isResult(line: []const u8) bool {\n78-    const rest = line[json_prefix.len..];\n79-    inline for (.{ \"match\", \"occurrence\", \"file\", \"count\" }) |t| {\n80-        if (std.mem.startsWith(u8, rest, \"",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"\\\"type\\\"\" src/json.zig 2>/dev/null | head -40; echo \"=== files ===\"; ls src/",
+    "workdir": "<clone>"
+   },
+   "output_head": "=== files ===\nbatch.zig\nbre.zig\nclean.zig\nfilter.zig\nio_engine.zig\nkamikaze.zig\nmain.zig\nnav.zig\nout_json.zig\nplatform.zig\nregex.zig\nroot.zig\nscan.zig\nsearch.zig\ntypes.zig\nuring_linux.zig\nuring.zig\nvf",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n '\"type\":\"' src/out_json.zig | head -40",
+    "workdir": "<clone>"
+   },
+   "output_head": "403:        \\\\{\"schema\":\"zgrep/1\",\"type\":\"match\",\"path\":\"a.txt\",\"line\":2,\"column\":5,\"byte_start\":14,\"byte_end\":17,\"match\":\"cat\",\"text\":\"the cat sat\",\"inverted\":false}\n421:        \\\\{\"schema\":\"zgrep/1\"",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -n \"compact\" -A 12 src/out_json.zig | grep -n \"context\\|passthru\\|occurrence\\|\\\"file\\\"\\|count\" | head -30",
+    "workdir": "<clone>"
+   },
+   "output_head": "36:61-///     span (context, `-v`, `--passthru`) and a `--replace` row (the\n46:159-        .context => \"context\",\n47:160-        .passthru => \"passthru\",\n48:161-        .occurrence => \"occurrence\",\n92",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 140,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 140-219\n140:     line_start: usize,\n141:     line_bytes: []cons",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 110,
+    "offset": 240,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 240-349\n240:     });\n241:     if (ev.inverted) try out.append(g",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 220,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 220-249\n220:     try out.appendSlice(gpa, \"\\\",\\\"size\\\":\");\n221:",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"occurrence\" src/*.zig | head -20; echo \"=== isResult usages ===\"; grep -rn \"isResult\" src/*.zig",
+    "workdir": "<clone>"
+   },
+   "output_head": "src/batch.zig:7://!   * lo cuenta como resultado si es `match`/`occurrence`/`file`/`count`\nsrc/batch.zig:79:    inline for (.{ \"match\", \"occurrence\", \"file\", \"count\" }) |t| {\nsrc/main.zig:73:    \\\\   ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 1,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 1-40\n1: //! M3 del plan agent-native: lote (`--queries-file`) y pr",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 14,
+    "offset": 90,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 90-103\n90:     \\\\                    \"flags\"?} in this one process ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls zig-out/bin 2>/dev/null; which zig; ls zig-out 2>/dev/null",
+    "workdir": "<clone>"
+   },
+   "output_head": "cell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\n~/.local/bin/zig\nbin\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "mkdir -p /tmp/opencode/zgtest && printf 'a\\nHIT\\nb\\nHIT\\nc\\nHIT\\nd\\n' > /tmp/opencode/zgtest/f.txt && ./zig-out/bin/zgrep --json -C1 --max-results 2 HIT /tmp/opencode/zgtest/f.txt",
+    "workdir": "<clone>"
+   },
+   "output_head": "{\"schema\":\"zgrep/1\",\"type\":\"context\",\"path\":\"/tmp/opencode/zgtest/f.txt\",\"line\":1,\"column\":null,\"byte_start\":null,\"byte_end\":null,\"match\":null,\"text\":\"a\",\"inverted\":false}\n{\"schema\":\"zgrep/1\",\"type\":\"",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode/zgtest && <clone>/zig-out/bin/zgrep --json=compact --max-results 1 HIT f.txt"
+   },
+   "output_head": "{\"schema\":\"zgrep/1c\"}\n{\"path\":\"f.txt\"}\n[\"m\",2,1,2,3,\"HIT\"]\n{\"schema\":\"zgrep/1\",\"type\":\"summary\",\"queries\":null,\"returned\":1,\"omitted\":2,\"truncated\":true,\"reason\":\"max-results\",\"output_bytes\":37,\"max_r",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R07",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

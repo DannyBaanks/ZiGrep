@@ -1,0 +1,6 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e exclude-ext -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e exclude_exts -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e ExcludedExts|excluded_exts|extension|extOf|lastIndexOf -- filter.zig
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e fn matchesExt -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e fileExcluded|skip_hidden -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e isFileExcluded -- filter.zig

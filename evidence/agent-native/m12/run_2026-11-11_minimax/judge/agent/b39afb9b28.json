@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on id types, unknown-field rejection, duplicate-id error, blank lines ignored, and whole-file parsing before any query runs; its extra details (e.g. a semantically bad query failing alone) do not contradict the reference.",
+ "cost_usd": 0.007174000000000001
+}

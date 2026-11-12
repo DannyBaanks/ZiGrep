@@ -1,0 +1,2 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e binary-files -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e binary_files|binary =|opts\.binary|without_match|BinaryFiles -- .

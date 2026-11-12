@@ -1,0 +1,164 @@
+{
+ "rc": 0,
+ "seconds": 152.7,
+ "answer": "**Counted as results** (JSON `zgrep/1`): only `match`, `occurrence`, `file`, `count` — `isResult` matches exactly those four type strings (src/batch.zig:77-83), and the help text says the same (src/main.zig:93-96).\n\n**Context lines do NOT count.** `context` and `passthru` merely accompany results and don't increment the counter (src/batch.zig:7-9; GUIA.md:779-780). The unit test proves it: with `--max-results 1`, a `match` + `context` + two `match` yields `returned=1`, `omitted=2`, and the context line is still emitted (src/batch.zig:568-579).\n\n**Other event types:**\n- Control events (`query_end`, `summary`) are always emitted and never count (src/batch.zig:15-16).\n- `provenance` events don't count as results but do weigh against `--max-output-tokens` (GUIA.md:838-840; absent from the list at src/batch.zig:79).\n\n**Compact mode (`--json=compact`)** uses the same rule via row tags: rows whose tag starts with `c` (context) or `p` (passthru) don't count (src/batch.zig:269), while `m`, `o`, `l`/`L`, `#`/`#m` do (src/out_json.zig:235-240, src/out_json.zig:316, src/out_json.zig:333).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "max-results|maxResults",
+    "limit": 50
+   },
+   "output_head": "Found 50 matches\n<clone>/GUIA.md:\n  Line 723: ## 4n. Lote y presupuesto: `--queries-file`, `--max-results",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "context|is_result|counts_result|dropped_non_event",
+    "path": "<clone>/src/batch.zig",
+    "limit": 60
+   },
+   "output_head": "Found 12 matches\n<clone>/src/batch.zig:\n  Line 8: //!     (`context` y `passthru` acompañan, no cuentan),",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/batch.zig",
+    "offset": 1,
+    "limit": 120
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 1-120\n1: //! M3 del plan agent-native: lote (`--queries-file`) y p",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 140,
+    "offset": 190,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 190-329\n190:         if (self.compact) {\n191:             self.spi",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 540,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 540-619\n540: }\n541: \n542: // -------------------------------------",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "\\\"c\\\"|\\\"p\\\"|compact|context|passthru",
+    "path": "<clone>/src/out_json.zig",
+    "limit": 40
+   },
+   "output_head": "Found 38 matches\n<clone>/src/out_json.zig:\n  Line 13: //!   * cuando un evento no tiene span (contexto, `",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 75,
+    "offset": 775,
+    "path": "<clone>/GUIA.md"
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 775-849\n775: {\"schema\":\"zgrep/1\",\"query_id\":\"nada\",\"type\":\"query_end\",\"r",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 120,
+    "offset": 140,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 140-259\n140:     line_start: usize,\n141:     line_bytes: []cons",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "pattern": "occurrence|\\\"file\\\"|type\\\\\":\\\\\"file",
+    "path": "<clone>/src"
+   },
+   "output_head": "Found 18 matches\n<clone>/src/batch.zig:\n  Line 7: //!   * lo cuenta como resultado si es `match`/`occurre",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 75,
+    "offset": 329,
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 329-403\n329:                 }\n330:             }\n331:            ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 50,
+    "offset": 300,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 300-349\n300:         try appendInt(out, gpa, p.size);\n301:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 85,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 85-114\n85:     \\\\      --provenance  with --json: before the events",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 22,
+    "offset": 279,
+    "path": "<clone>/src/out_json.zig"
+   },
+   "output_head": "Read file <clone>/src/out_json.zig, lines 279-300\n279: }\n280: \n281: /// Cabecera de fichero en `--json=co",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R07",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

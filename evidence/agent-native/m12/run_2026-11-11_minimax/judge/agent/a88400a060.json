@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on all four files: only a.log is excluded, while catalog, .log (length not greater than ext+1), and A.LOG (case-sensitive) are not. Its extra notes on default ignores and explicit-file bypass do not contradict the reference.",
+ "cost_usd": 0.00719
+}

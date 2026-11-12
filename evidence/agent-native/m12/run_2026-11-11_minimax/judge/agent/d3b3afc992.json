@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists the same 10 directories as the reference, says neither dist nor build is included, and notes that --no-ignore and --no-default-ignore disable the list.",
+ "cost_usd": 0.006534000000000001
+}

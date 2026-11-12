@@ -1,0 +1,143 @@
+{
+ "rc": 0,
+ "seconds": 411.6,
+ "answer": "**`id` values:** a JSON string or non‑negative integer; it is kept as raw JSON (string stays quoted, integer bare) — `src/batch.zig:512-525`, `src/batch.zig:479`. Negative ints, floats, bools/null are rejected: `\"id\" must be a string or a non-negative integer` (`src/batch.zig:516`, `src/batch.zig:522`).\n\n**Unknown fields:** rejected — default JSON parsing fails on unknown members, and that failure (also broken JSON or a missing `id`/`pattern`) reports `not a query object {\"id\",\"pattern\",\"paths\"?,\"flags\"?} (unknown fields are rejected)` (`src/batch.zig:507-510`).\n\n**Duplicate ids:** fatal, `duplicate \"id\"` (`src/batch.zig:526-531`). Comparison is on serialized id, so `\"7\"` and `7` are not duplicates.\n\n**Blank lines:** skipped — lines are trimmed and empty ones ignored (`src/batch.zig:505-506`).\n\n**Half-run?** No. The whole file is parsed before any query runs; a bad line prints `zgrep: FILE:LINE: reason`, leaves stdout empty and exits 2 (`src/main.zig:1949-1956`, `evidence/agent-native/contract.md:230`). Only a semantically bad *query* (e.g. `--exec` in `\"flags\"`) fails alone with `query_end` rc 2 while the rest run, batch rc 2 (`src/main.zig:2044-2053`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "queries-file|queries_file|queriesFile",
+    "limit": 50
+   },
+   "output_head": "Found 50 matches\n<clone>/README.md:\n  Line 141: | `--queries-file FILE` | Many queries in one process, ea",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "query",
+    "path": "src",
+    "include": "*.zig",
+    "limit": 100
+   },
+   "output_head": "Found 40 matches\n<clone>/src/main.zig:\n  Line 89:     \\\\                    run every JSONL query {\"id\",\"",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "queries_file|parseQuery|batchQuery|QuerySpec",
+    "path": "src",
+    "limit": 100
+   },
+   "output_head": "Found 13 matches\n<clone>/src/main.zig:\n  Line 344:     queries_file: ?[]const u8 = null,\n\n  Line 1188:   ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "pattern": "fn parse|unknown fields|duplicate|blank|line_no|not a query",
+    "limit": 100
+   },
+   "output_head": "Found 9 matches\n<clone>/src/batch.zig:\n  Line 486:     line_no: usize,\n\n  Line 499: pub fn parseQueries(a",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "offset": 420,
+    "limit": 130
+   },
+   "output_head": "Read file src/batch.zig, lines 420-549\n420:         try self.staged.appendSlice(g, \",\\\"omitted\\\":\");\n421:         try appendInt(&self.staged, g, self.omitted);\n422:         try self.staged.appendSlice",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/main.zig",
+    "offset": 1900,
+    "limit": 240
+   },
+   "output_head": "Read file src/main.zig, lines 1900-2139\n1900:     }\n1901:     return buf.items;\n1902: }\n1903: \n1904: /// Set while runBatch drives its queries: the compact stream header is the\n1905: /// batch's, writ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "offset": 600,
+    "limit": 80
+   },
+   "output_head": "Read file src/batch.zig, lines 600-636\n600:     try std.testing.expect(c > estimateTokens(\"nnn \"));\n601:     // aditivo por lineas (lo que usa el presupuesto: suma de eventos)\n602:     try std.testing",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "ignore_unknown_fields|parseFromSliceLeaky",
+    "path": "src",
+    "limit": 20
+   },
+   "output_head": "Found 1 matches\n<clone>/src/batch.zig:\n  Line 507:         const parsed = std.json.parseFromSliceLeaky(Ra",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 70,
+    "offset": 723,
+    "path": "GUIA.md"
+   },
+   "output_head": "Read file GUIA.md, lines 723-792\n723: ## 4n. Lote y presupuesto: `--queries-file`, `--max-results`, `--max-output-tokens` (0.4.0-dev, M3)\n724: \n725: Para un agente, N preguntas sobre el mismo árbol er",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 210,
+    "path": "evidence/agent-native/contract.md"
+   },
+   "output_head": "Read file evidence/agent-native/contract.md, lines 210-249\n210: | `--json` con `--version` / `--type-list` | texto: son acciones informativas, no búsquedas, y no emiten eventos |\n211: | `-N` | navegac",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 190,
+    "path": "evidence/agent-native/batch_conformance.py"
+   },
+   "output_head": "Read file evidence/agent-native/batch_conformance.py, lines 190-219\n190:     for k in sorted({0, 1, 7, n // 2, n - 1, n, n + 10}):\n191:         if k >= 0:\n192:             budget_case(f\"--max-results ",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R05",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 5
+}

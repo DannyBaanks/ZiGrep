@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer names --exec, --heading and --pre as forcing the sorted path, matching the reference; the extra points (multiple file operands, -k disabling sort, aliases) go beyond the reference but don't contradict it.",
+ "cost_usd": 0.006478
+}

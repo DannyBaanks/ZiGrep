@@ -1,0 +1,9 @@
+{
+ "grade": 1,
+ "wrong_claims": [
+  "Claims four option groups, adding --queries-file as an option that triggers the sorted path; the reference lists only --exec, --heading and --pre",
+  "Claims more than one FILE operand forces the ordered path, which the reference does not list as an option setting opts.sort in runSearch"
+ ],
+ "reason": "The answer correctly names --exec, --heading and --pre with matching rationales, but adds extra triggers (--queries-file, multiple file operands) that the reference does not include.",
+ "cost_usd": 0.007384
+}

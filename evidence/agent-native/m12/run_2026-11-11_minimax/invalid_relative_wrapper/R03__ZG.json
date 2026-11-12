@@ -1,0 +1,144 @@
+{
+ "rc": 0,
+ "seconds": 169.3,
+ "answer": "**Default skipped directories** — `zgrep` (a.k.a. `zigrep`, `README.md:7`) skips these directory names by default:\n\n`.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode` — `src/filter.zig:17-28` (documented in `GUIA.md:335`).\n\n**How it applies:** `FilterEngine.isDirExcluded` compares each directory name against `default_excluded_dirs` when `use_defaults` is set (`src/filter.zig:512-521`); that flag defaults to `true` (`src/filter.zig:328`) and is cleared only by `--no-ignore` / `--no-default-ignore` (`src/main.zig:2424`, `src/main.zig:2546`; flags documented at `src/main.zig:208-210`). The walker prunes such directories during enumeration (`src/kamikaze.zig:340`, `src/kamikaze.zig:671`).\n\n**Are `dist` or `build` among them? No.** Neither name appears in the default list (`src/filter.zig:17-28`), so both are searched by default unless excluded explicitly via `--exclude-dir`, `.gitignore`/`.dataignore`, or `--no-default-ignore`.\n\n(Note: default *file-extension* exclusions are a separate list, `src/filter.zig:30-47`.)",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "error",
+   "input": {
+    "pattern": "zgrep",
+    "path": "."
+   },
+   "output_head": "",
+   "no_matches": false
+  },
+  {
+   "tool": "glob",
+   "status": "completed",
+   "input": {
+    "pattern": "**/*zgrep*"
+   },
+   "output_head": "<clone>/evidence/agent-native/zgrep_estimate.py\n<tmp>",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la",
+    "workdir": "<clone>"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"zgrep\" --include=\"*.py\" --include=\"*.ts\" --include=\"*.js\" --include=\"*.sh\" --include=\"*.md\" --include=\"*.toml\" -l . 2>/dev/null | head -50",
+    "workdir": "<clone>"
+   },
+   "output_head": "./bindings/python/src/ziggrep/__init__.py\n./bindings/python/README.md\n./install.sh\n./evidence/feature-corpus/parity.sh\n./evidence/feature-corpus/build_corpus.py\n./evidence/feature-corpus/json_conforma",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la src/",
+    "workdir": "<clone>"
+   },
+   "output_head": "total 564\ndrwxrwxr-x  2 user user   4096 nov 11 20:09 .\ndrwxrwxr-x 10 user user   4096 nov 11 20:14 ..\n-rw-rw-r--  1 user user  27248 nov 11 20:09 batch.zig\n-rw-rw-r--  1 user user   7156 nov ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rni \"node_modules\\|\\.git\\\"\\|skip.*dir\\|ignore_dir\\|default_ignore\" src/ | head -50",
+    "workdir": "<clone>"
+   },
+   "output_head": "src/kamikaze.zig:965:    try std.testing.expect(f.isDirExcluded(\".git\"));\nsrc/kamikaze.zig:967:    try std.testing.expect(f.isDirExcluded(\"node_modules\"));\nsrc/nav.zig:19://!       Skip (prune) regula",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/filter.zig",
+    "offset": 480,
+    "limit": 60
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 480-539\n480:             if (vfs.stat(io, git_path, false) != nul",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/filter.zig",
+    "offset": 1,
+    "limit": 90
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 1-90\n1: //! filter.zig — Universal Filter & Ignore Engine for zig",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"dist\\b\\|build\\b\" src/filter.zig src/walk.zig src/kamikaze.zig | head -30; echo \"=== walk.zig ===\"; cat -n src/walk.zig | sed -n '20,80p'",
+    "workdir": "<clone>"
+   },
+   "output_head": "src/filter.zig:353:    /// callers' `...In(dir, name)` checks build the relative path.\n=== walk.zig ===\n    20\tpub const Item = struct {\n    21\t    path: [:0]const u8,\n    22\t    kind: vfs.EntryKind,\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"use_defaults\" src/ | head -30; echo \"---\"; grep -rn \"default_excluded_dirs\" src/ | head -20",
+    "workdir": "<clone>"
+   },
+   "output_head": "src/main.zig:2424:        filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;\nsrc/main.zig:2546:    filter_engine.use_defaults = !opts.no_default_ignore and !opts.no_ignore;\nsrc/",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"zgrep\" README.md build.zig install.sh | head -30",
+    "workdir": "<clone>"
+   },
+   "output_head": "README.md:7:ZiGrep (`zigrep`, also installed as `zgrep`) is a grep-compatible search tool\nREADME.md:26:zigrep --json \"pattern\" src/            # JSONL events (schema zgrep/1)\nREADME.md:38:static, stri",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"\\\"dist\\\"\\|\\\"build\\\"\\|'dist'\\|'build'\" src/ | head -20; echo \"=== kamikaze isDirExcluded ===\"; grep -n \"isDirExcluded\" -A 25 src/kamikaze.zig | sed -n '1,60p'",
+    "workdir": "<clone>"
+   },
+   "output_head": "=== kamikaze isDirExcluded ===\n340:            if (ctx.filter.isDirExcluded(entry.name)) continue;\n341-            // rg's --max-depth counts from the root, so depth 0 IS the root:\n342-            // ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "grep -rn \"node_modules\" README.md GUIA.md | head -20; echo \"=== main.zig help ===\"; grep -n \"no-default-ignore\" -B3 -A3 src/main.zig | head -40",
+    "workdir": "<clone>"
+   },
+   "output_head": "README.md:226:  skips `.git`, `node_modules`, `target`, `.zig-cache` and `.venv`.\nGUIA.md:335:   * Carpetas omitidas automáticamente: `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `ven",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R03",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

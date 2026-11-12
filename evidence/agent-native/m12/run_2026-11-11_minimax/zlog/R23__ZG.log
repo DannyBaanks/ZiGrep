@@ -1,0 +1,6 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e zgrep -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e sort -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e opts\.sort|\.sort = -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e exec_cmd|pre_cmd|heading -- main.zig
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e camino ordenado|camino ordenado|ordered path|ruta ordenada -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e \"json\"|json_compact|batch -- main.zig

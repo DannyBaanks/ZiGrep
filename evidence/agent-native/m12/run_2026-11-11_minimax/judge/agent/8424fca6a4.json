@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The seven accepted values, the auto/utf-16le/be/utf-8/latin1 semantics, and the little-endian fallback for a BOM-less utf-16 file all match the reference. The extra claim that the first character is dropped is not in the reference and cannot be checked against it, so I did not count it as wrong.",
+ "cost_usd": 0.010709999999999999
+}

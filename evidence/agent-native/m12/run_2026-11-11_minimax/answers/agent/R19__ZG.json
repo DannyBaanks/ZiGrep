@@ -1,0 +1,152 @@
+{
+ "rc": 0,
+ "seconds": 103.3,
+ "answer": "**No — `--binary-files=binary` is rejected.** The parser accepts only `text` or `without-match`; anything else fails at parse time with `\"bad value for --binary-files (expected text|without-match; zgrep never prints binary content)\"` (`src/main.zig:1132-1141`), and the unit test asserts `error.Usage` for `--binary-files=binary` (`src/main.zig:3227-3233`). The help states the same and explains why: zgrep never prints binary content, so `binary` is \"rejected, not faked\" (`src/main.zig:183-185`; `GUIA.md:541-542`).\n\n- **`text`**: exactly equivalent to `-a`/`--text` — it sets `opts.binary = true` (`src/main.zig:2252-2253`), which disables the binary probe so binary files are searched and their content printed (`src/scan.zig:971`).\n- **`without-match`**: the default (`src/main.zig:334-335`). A binary file is treated as not matching: no lines, `-c` prints 0, exit status 1 (`src/main.zig:2334-2341`, `src/scan.zig:971-972`, `src/main.zig:2376-2377`).",
+ "tools": [
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "binary-files",
+    "path": "<clone>"
+   },
+   "output_head": "Found 29 matches\n<clone>/GUIA.md:\n  Line 534: zgrep --binary-files=text -l 'p' bin.dat\n\n  Line 541: * `--",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 2325,
+    "limit": 30
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2325-2354\n2325:             .json = opts.json,\n2326:             .p",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 1120,
+    "limit": 40
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 1120-1159\n1120:             } else if (std.mem.startsWith(u8, body,",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 2240,
+    "limit": 30
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2240-2269\n2240: \n2241:     // `-S`: insensitive unless some pattern",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 3215,
+    "limit": 30
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 3215-3244\n3215:     {\n3216:         var o: Options = .{};\n3217:    ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "binary_files|binary =|opts\\.binary|without_match|BinaryFiles",
+    "path": "<clone>/src"
+   },
+   "output_head": "Found 32 matches\n<clone>/src/kamikaze.zig:\n  Line 464:         const is_hit = if (ctx.mode == .files_with",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 170,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 170-199\n170:     \\\\      --vimgrep     one line per match, with lin",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 235,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 235-259\n235:     \\\\\n236: ;\n237: \n238: /// `--color` tri-state. `aut",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 55,
+    "offset": 960,
+    "path": "<clone>/src/scan.zig"
+   },
+   "output_head": "Read file <clone>/src/scan.zig, lines 960-1014\n960:     const probe = @min(data.len, binary_probe_bytes);",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 328,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 328-347\n328:     type_include: [8]types.Type = undefined,\n329:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 528,
+    "path": "<clone>/GUIA.md"
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 528-547\n528: zgrep --max-depth 1 -l 'patron' .     # solo la raiz (equiv",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 2355,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2355-2394\n2355:         const br: scan.BufferResult = if (is_bin) .",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R19",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 2
+}

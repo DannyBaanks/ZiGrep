@@ -1,0 +1,68 @@
+{
+ "items": [
+  {
+   "qid": "R02",
+   "cond": "RG"
+  },
+  {
+   "qid": "R02",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R03",
+   "cond": "RG"
+  },
+  {
+   "qid": "R03",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R05",
+   "cond": "RG"
+  },
+  {
+   "qid": "R05",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R07",
+   "cond": "RG"
+  },
+  {
+   "qid": "R07",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R10",
+   "cond": "RG"
+  },
+  {
+   "qid": "R10",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R16",
+   "cond": "RG"
+  },
+  {
+   "qid": "R16",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R19",
+   "cond": "RG"
+  },
+  {
+   "qid": "R19",
+   "cond": "ZG"
+  },
+  {
+   "qid": "R23",
+   "cond": "RG"
+  },
+  {
+   "qid": "R23",
+   "cond": "ZG"
+  }
+ ]
+}

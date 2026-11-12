@@ -1,0 +1,5 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e queries-file|queries_file|queriesFile -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e queries_file|parseQuery|batchQuery|QuerySpec -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s --include=*.zig -e query -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e fn parse|unknown fields|duplicate|blank|line_no|not a query -- batch.zig
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e ignore_unknown_fields|parseFromSliceLeaky -- .

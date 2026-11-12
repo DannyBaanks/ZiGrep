@@ -1,0 +1,4 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e dist|build|skip|ignore|exclude -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e node_modules|zig-cache|\.venv|default_ignore|defaultIgnore -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e isDirExcluded|default_excluded_dirs|use_defaults|excluded_dirs -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e "dist"|"build"|dist\b -- .

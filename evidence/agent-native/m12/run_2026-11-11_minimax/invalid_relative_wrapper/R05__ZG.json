@@ -1,0 +1,115 @@
+{
+ "rc": 0,
+ "seconds": 401.8,
+ "answer": "**`id`**: must be a JSON string or non-negative integer; the serialized form becomes `query_id` (`src/batch.zig:512-525`). Floats, bools, null and negative ints are rejected (`src/batch.zig:516`, `src/batch.zig:522`). Missing `pattern` also fails (`src/batch.zig:492`).\n\n**Unknown fields**: rejected — `RawQuery` holds only id/pattern/paths/flags, and std.json errors on extras: \"not a query object ... (unknown fields are rejected)\" (`src/batch.zig:490-495`, `src/batch.zig:508`).\n\n**Duplicate ids**: fail the file with `duplicate \"id\"`; comparison uses the serialized JSON, so `\"7\"` and `7` are distinct (`src/batch.zig:526-531`).\n\n**Blank lines**: skipped after trimming spaces/tabs/CR (`src/batch.zig:504-506`).\n\n**Half-run? No**: the whole file is parsed before any query executes, so a bad line exits 2 with empty stdout (`src/batch.zig:497-499`, `src/main.zig:1950-1956`). Only an invalid *query* fails alone (`query_end` rc 2) while others continue (`src/main.zig:2044-2049`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "error",
+   "input": {
+    "pattern": "queries-file|queries_file|queriesFile",
+    "limit": 50
+   },
+   "output_head": "",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la src/ && grep -rn \"queries-file\\|queries_file\" --include=*.zig --include=*.md . | head -50"
+   },
+   "output_head": "total 564\ndrwxrwxr-x  2 user user   4096 nov 11 20:09 .\ndrwxrwxr-x 10 user user   4096 nov 11 20:14 ..\n-rw-rw-r--  1 user user  27248 nov 11 20:09 batch.zig\n-rw-rw-r--  1 user user   7156 nov ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/batch.zig"
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 1-636\n1: //! M3 del plan agent-native: lote (`--queries-file`) y p",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 1920,
+    "limit": 160
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 1920-2079\n1920:     if (vo.queries_file != null) return \"--queries-",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '720,800p' GUIA.md"
+   },
+   "output_head": "orden fijo, `--sort`. `-N` es la navegación Befunge, no el `--no-line-number`\nde `rg`.\n\n## 4n. Lote y presupuesto: `--queries-file`, `--max-results`, `--max-output-tokens` (0.4.0-dev, M3)\n\nPara un age",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "sed -n '195,245p' evidence/agent-native/contract.md; echo ---; sed -n '395,415p' evidence/agent-native/contract.md"
+   },
+   "output_head": "| `zgrep pat a b c` (ficheros) | c, b, a | a, b, c | grep: orden de los argumentos |\n| `--json --passthru` | línea no coincidente = `type:\"match\"`, `inverted:true` | `type:\"passthru\"`, `inverted:false",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls zig-out/bin 2>/dev/null; ls .zig-cache 2>/dev/null | head"
+   },
+   "output_head": "cell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\nh\no\ntmp\nz\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && mkdir -p qtest && cd qtest && printf 'hello world\\nfoo bar\\n' > a.txt\nZ=<clone>/zig-out/bin/zgrep\nprintf '{\"id\":\"a\",\"pattern\":\"hello\"}\\n\\n{\"id\":7,\"pattern\":\"foo\"}\\n' > q1.jsonl\n$Z --queries-file q1.jsonl a.txt; echo \"rc=$?\"\nprintf '{\"id\":\"a\",\"pattern\":\"hello\"}\\n{\"id\":\"a\",\"pattern\":\"foo\"}\\n' > q2.jsonl\n$Z --queries-file q2.jsonl a.txt; echo \"rc=$?\"\nprintf '{\"id\":\"a\",\"pattern\":\"hello\",\"path\":[\"typo\"]}\\n' > q3.jsonl\n$Z --queries-file q3.jsonl a.txt; echo \"rc=$?\"\nprintf '{\"id\":-1,\"pattern\":\"hello\"}\\n' > q4.jsonl\n$Z --queries-file q4.jsonl a.txt; echo \"rc=$?\"\nprintf '{\"id\":\"7\",\"pattern\":\"hello\"}\\n{\"id\":7,\"pattern\":\"foo\"}\\n' > q5.jsonl\n$Z --queries-file q5.jsonl a.txt; echo \"rc=$?\""
+   },
+   "output_head": "{\"schema\":\"zgrep/1\",\"query_id\":\"a\",\"type\":\"match\",\"path\":\"a.txt\",\"line\":1,\"column\":1,\"byte_start\":0,\"byte_end\":5,\"match\":\"hello\",\"text\":\"hello world\",\"inverted\":false}\n{\"schema\":\"zgrep/1\",\"query_id\":\"",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode/qtest\nZ=<clone>/zig-out/bin/zgrep\nfor j in '{\"id\":1.5,\"pattern\":\"hello\"}' '{\"id\":true,\"pattern\":\"hello\"}' '{\"id\":null,\"pattern\":\"hello\"}' '{\"pattern\":\"hello\"}' '{\"id\":\"a\"}' '{\"id\":\"a\",\"pattern\":\"hello\",' 'not json'; do\n  printf '%s\\n' \"$j\" > qx.jsonl\n  out=$($Z --queries-file qx.jsonl a.txt 2>&1); echo \"--- $j => rc=$? : $out\"\ndone\nprintf '{\"id\":\"\",\"pattern\":\"hello\"}\\n' > qe.jsonl; $Z --queries-file qe.jsonl a.txt >/dev/null 2>&1; echo \"empty-string id rc=$?\"\nprintf '{\"id\":\"a\",\"pattern\":\"hello\"}\\n\\n   \\n{\"id\":\"b\",\"pattern\":\"foo\"}\\n' > qb.jsonl; $Z --queries-file qb.jsonl a.txt 2>&1 | tail -1"
+   },
+   "output_head": "--- {\"id\":1.5,\"pattern\":\"hello\"} => rc=2 : zgrep: qx.jsonl:1: \"id\" must be a string or a non-negative integer\n--- {\"id\":true,\"pattern\":\"hello\"} => rc=2 : zgrep: qx.jsonl:1: \"id\" must be a string or a ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && grep -n \"id.*repetido\\|campo desconocido\\|JSON roto\" evidence/agent-native/contract.md; grep -n \"fichero de consultas inválido\\|consulta inválida\" GUIA.md"
+   },
+   "output_head": "230:| fichero de consultas inválido (JSON roto, `id` repetido, campo desconocido) | vacío: no se ejecuta nada | 2 |\n760:* Una consulta inválida falla **sola** (`query_end` con `rc` 2 y el motivo); un\n",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R05",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

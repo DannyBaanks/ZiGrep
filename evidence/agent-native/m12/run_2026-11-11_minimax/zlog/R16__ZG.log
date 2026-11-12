@@ -1,0 +1,1 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -i -e micro-tree|micro_tree|microtree -- .

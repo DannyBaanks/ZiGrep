@@ -1,0 +1,5 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e encoding -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e utf-16|utf16 -- README.md
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e utf16|utf-16 -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e encoding=utf-16|encoding = utf-16|utf-16 -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e skip 2-byte BOM|i: usize = 2 -- .

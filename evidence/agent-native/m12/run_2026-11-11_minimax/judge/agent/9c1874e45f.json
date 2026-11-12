@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer matches the reference on the 2 MB budget, the 2048/512/32 caps, calling-thread scanning with no worker pool or io_uring, skipped ignore-file inspection, and --force-swarm disabling the micro path; the extra details do not contradict it.",
+ "cost_usd": 0.007278
+}

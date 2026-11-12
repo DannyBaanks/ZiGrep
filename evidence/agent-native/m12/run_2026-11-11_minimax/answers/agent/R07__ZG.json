@@ -1,0 +1,195 @@
+{
+ "rc": 0,
+ "seconds": 441.8,
+ "answer": "## Answer\n\n`--max-results N` counts only four event types: `match`, `occurrence`, `file` and `count` (src/batch.zig:77-83; GUIA.md:779-780).\n\nContext lines do **not** count. `context` and `passthru` merely accompany matches; the unit test feeds match+context+match+match with `--max-results 1` and expects returned=1, omitted=2 (src/batch.zig:568-579). Control events (`query_end`, `summary`) also never count (src/batch.zig:15-16), nor does `provenance`, though it still weighs on `--max-output-tokens` (GUIA.md:838-840).\n\nIn compact mode (`zgrep/1c`), rows tagged `c` (context) and `p` (passthru) don't count; `m`, `o`, `l`/`L`, `#`/`#m` do (src/batch.zig:269; src/out_json.zig:235-240, 316, 333).\n\nThe budget applies across the whole call, not per query (src/batch.zig:325-331; GUIA.md:780). Truncation doesn't stop the scan: dropped results are counted in `omitted` (src/batch.zig:333-339; GUIA.md:786-788). A budget requires `--json` (src/main.zig:1773-1776).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "max-results|max_results|maxResults",
+    "limit": 50
+   },
+   "output_head": "Found 50 matches\n<clone>/evidence/agent-native/m3/batch_conformance_output.txt:\n  Line 23: PASS --max-res",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la && git log --oneline -5"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la src/"
+   },
+   "output_head": "total 564\ndrwxrwxr-x  2 user user   4096 nov 11 20:09 .\ndrwxrwxr-x 10 user user   4096 nov 11 20:14 ..\n-rw-rw-r--  1 user user  27248 nov 11 20:09 batch.zig\n-rw-rw-r--  1 user user   7156 nov ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "max_results|max-results",
+    "path": "src",
+    "limit": 100
+   },
+   "output_head": "Found 31 matches\n<clone>/src/main.zig:\n  Line 93:     \\\\      --max-results N\n\n  Line 357:     max_result",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "offset": 1,
+    "limit": 140
+   },
+   "output_head": "Read file src/batch.zig, lines 1-140\n1: //! M3 del plan agent-native: lote (`--queries-file`) y presupuesto\n2: //! (`--max-results`, `--max-output-tokens`) con truncado EXPLÍCITO.\n3: //!\n4: //! El emi",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "offset": 240,
+    "limit": 160
+   },
+   "output_head": "Read file src/batch.zig, lines 240-399\n240:         }\n241:         if (rest.len > 0) try self.carry.appendSlice(self.gpa, rest);\n242:     }\n243: \n244:     fn overTokenBudget(self: *const Emitter, est:",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/batch.zig",
+    "offset": 560,
+    "limit": 80
+   },
+   "output_head": "Read file src/batch.zig, lines 560-636\n560:     var e: Emitter = .{ .io = undefined, .gpa = gpa };\n561:     defer e.deinit();\n562:     try e.feed(\"{\\\"schema\\\":\\\"zgrep/1\\\",\\\"type\\\":\\\"ma\");\n563:     try",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "path": "src/out_json.zig",
+    "pattern": "\"type\":\"(match|occurrence|file|count|context|passthru|summary|query_end)\"|compact"
+   },
+   "output_head": "Found 23 matches\n<clone>/src/out_json.zig:\n  Line 26: /// `--json=compact` (schema `zgrep/1c`, M5): la MI",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "path": "src/out_json.zig",
+    "pattern": "emitLineRow|emitCompact|\\\"m\\\"|\\\"c\\\"|\\\"p\\\"|\\\"f\\\"|tag"
+   },
+   "output_head": "Found 9 matches\n<clone>/src/out_json.zig:\n  Line 75: /// `zgrep/1c` gains the `w` suffix on the row tag a",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "pattern": "max-results",
+    "path": "README.md"
+   },
+   "output_head": "Found 1 matches\n<clone>/README.md:\n  Line 142: | `--max-results N`, `--max-output-tokens N` | Output budg",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 140,
+    "path": "src/out_json.zig"
+   },
+   "output_head": "Read file src/out_json.zig, lines 140-219\n140:     line_start: usize,\n141:     line_bytes: []const u8,\n142:     span: ?Match,\n143:     kind: Kind,\n144:     /// Texto efectivamente emitido en modo text",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 120,
+    "offset": 225,
+    "path": "src/out_json.zig"
+   },
+   "output_head": "Read file src/out_json.zig, lines 225-344\n225:         const t = std.fmt.bufPrint(&buf, \"{d}\", .{m}) catch unreachable;\n226:         try out.appendSlice(gpa, t);\n227:     } else try out.appendSlice(gp",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "path": "GUIA.md",
+    "pattern": "max-results"
+   },
+   "output_head": "Found 8 matches\n<clone>/GUIA.md:\n  Line 723: ## 4n. Lote y presupuesto: `--queries-file`, `--max-results`",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "path": "src",
+    "pattern": "\\.occurrence|kind = \\.|Occurrence"
+   },
+   "output_head": "Found 30 matches\n<clone>/src/regex.zig:\n  Line 563:                 return self.add(.{ .kind = .set, .set",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 70,
+    "offset": 776,
+    "path": "GUIA.md"
+   },
+   "output_head": "Read file GUIA.md, lines 776-845\n776: {\"schema\":\"zgrep/1\",\"type\":\"summary\",\"queries\":3,\"returned\":1,\"omitted\":2,\"truncated\":true,\"reason\":\"max-results\",\"output_bytes\":161,\"max_results\":1,\"max_output_t",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 1858,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1858-1887\n1858:     em.spill_name = try std.fmt.allocPrint(arena, \"spill-{d}-{d}.jsonl\", .{ ns, pid });\n1859: }\n1860: \n1861: /// Dispatch: a batch (`--queries-file`), a b",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 420,
+    "path": "src/batch.zig"
+   },
+   "output_head": "Read file src/batch.zig, lines 420-459\n420:         try self.staged.appendSlice(g, \",\\\"omitted\\\":\");\n421:         try appendInt(&self.staged, g, self.omitted);\n422:         try self.staged.appendSlice",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R07",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 7
+}

@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists the same seven values and the same semantics as the reference, and says utf-16 falls back to little-endian when there is no BOM. Its extra claim that the first character is lost is not in the reference, but it does not contradict it.",
+ "cost_usd": 0.008794
+}

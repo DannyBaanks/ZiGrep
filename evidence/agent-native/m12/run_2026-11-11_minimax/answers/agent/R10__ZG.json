@@ -1,0 +1,224 @@
+{
+ "rc": 0,
+ "seconds": 178.5,
+ "answer": "## Accepted values\n\n`--encoding` accepts exactly `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `latin1` (src/main.zig:807, src/main.zig:162-164; parsed at src/scan.zig:107-116). Any other value is a usage error, not a silent fallback (src/main.zig:1281, src/main.zig:1291).\n\nSemantics (src/scan.zig:95-101): `none` = raw bytes, `auto` (default) = BOM sniff only, `utf-16le`/`utf-16be` = decode ignoring BOM, `utf-16` = BOM decides, else little-endian, `utf-8`/`latin1` = bytes as-is.\n\n## `--encoding=utf-16` on a BOM-less file\n\nThe file is decoded as **UTF-16LE** (BOM absent → `isUtf16Bom(data) orelse .le`, src/scan.zig:966, src/scan.zig:1094, src/scan.zig:1199), so it is not treated as binary.\n\nHowever, the decoder unconditionally skips the first 2 bytes as if they were a BOM (src/scan.zig:138), so **the first character is lost**: searching a BOM-less UTF-16LE file for `hello` fails while `ello` matches (verified against zig-out/bin/zgrep).\n\nCaveat: on stdin the option is ignored; only BOM sniffing applies (src/main.zig:2333).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "encoding",
+    "path": ".",
+    "limit": 80
+   },
+   "output_head": "Found 80 matches\n<clone>/README.md:\n  Line 109:   `--vimgrep`, `-U`, `--pre`, `--encoding`, `--crlf`.\n\n  ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/scan.zig",
+    "offset": 60,
+    "limit": 140
+   },
+   "output_head": "Read file src/scan.zig, lines 60-199\n60:     /// size, mtime) before the events of every file that produced any.\n61:     provenance: bool = false,\n62:     /// `-b`: prefix each line with its byte offs",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/main.zig",
+    "offset": 1255,
+    "limit": 50
+   },
+   "output_head": "Read file src/main.zig, lines 1255-1304\n1255:                 };\n1256:             } else if (std.mem.eql(u8, body, \"multiline\") or std.mem.eql(u8, body, \"multiline-dotall\")) {\n1257:                 o",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 945,
+    "path": "src/scan.zig"
+   },
+   "output_head": "Read file src/scan.zig, lines 945-1024\n945:     return res;\n946: }\n947: \n948: fn processBuffer(\n949:     gpa: Allocator,\n950:     searcher: *const Searcher,\n951:     data: []const u8,\n952:     path: [",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 1080,
+    "path": "src/scan.zig"
+   },
+   "output_head": "Read file src/scan.zig, lines 1080-1159\n1080: \n1081:         // Did the entire file fit in the scratch buffer?\n1082:         if (got < sbuf.len) {\n1083:             if (got == 0) {\n1084:              ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "utf-16|utf16",
+    "path": "README.md"
+   },
+   "output_head": "No matches found",
+   "no_matches": true
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "utf16|utf-16",
+    "path": "src",
+    "limit": 60
+   },
+   "output_head": "Found 46 matches\n<clone>/src/main.zig:\n  Line 163:     \\\\                    auto | none | utf-8 | utf-16",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 795,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 795-819\n795: \n796: /// `--pre-glob` decides whether a file goes through --pre. rg uses its glob\n797: /// syntax; zgrep reuses the filter engine's.\n798: fn preApplies(glob",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 1695,
+    "path": "src/scan.zig"
+   },
+   "output_head": "Read file src/scan.zig, lines 1695-1714\n1695:     try std.testing.expectEqual(@as(u32, 0), st.misses.load(.monotonic));\n1696: }\n1697: \n1698: test \"utf16: BOM detection and LE decoding\" {\n1699:     // ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 155,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 155-174\n155:     \\\\  -U, --multiline   a match may span newlines (rg)\n156:     \\\\      --multiline-dotall\n157:     \\\\                    with -U, `.` also crosses a newli",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 50,
+    "offset": 1190,
+    "path": "src/scan.zig"
+   },
+   "output_head": "Read file src/scan.zig, lines 1190-1239\n1190:     // --- binary probe ------------------------------------------------------\n1191:     // `-a` disables it; otherwise a NUL in the first block means the",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 232,
+    "path": "README.md"
+   },
+   "output_head": "Read file README.md, lines 232-251\n232: - **Literal search.** A 32-byte SIMD scan (`@Vector(32, u8)`) is anchored on the\n233:   needle byte that is rarest according to a compile-time frequency table.\n",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 2315,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2315-2354\n2315:             .replace = opts.replace,\n2316:             .passthru = opts.passthru,\n2317:             .byte_offset = opts.byte_offset,\n2318:             .cr",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls zig-out/bin 2>/dev/null; which zgrep rg 2>/dev/null"
+   },
+   "output_head": "cell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\n~/.local/bin/zgrep\n/usr/bin/rg\n",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && printf 'hello\\nneedle here\\n' | iconv -f UTF-8 -t UTF-16LE > nobom.txt && xxd nobom.txt | head -5 && echo \"--- zgrep --encoding=utf-16 ---\" && <clone>/zig-out/bin/zgrep --encoding=utf-16 -n needle nobom.txt; echo \"rc=$?\"; echo \"--- zgrep --encoding=utf-16le ---\"; <clone>/zig-out/bin/zgrep --encoding=utf-16le -n needle nobom.txt; echo \"rc=$?\""
+   },
+   "output_head": "00000000: 6800 6500 6c00 6c00 6f00 0a00 6e00 6500  h.e.l.l.o...n.e.\n00000010: 6500 6400 6c00 6500 2000 6800 6500 7200  e.d.l.e. .h.e.r.\n00000020: 6500 0a00                                e...\n--- zgre",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "encoding=utf-16|encoding = utf-16|utf-16",
+    "path": "evidence",
+    "limit": 40
+   },
+   "output_head": "Found 2 matches\n<clone>/evidence/feature-corpus/README.md:\n  Line 187: - **`--encoding`**: auto/none/utf-",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && B=<clone>/zig-out/bin/zgrep; echo \"--- match 'hello' (first char) ---\"; $B --encoding=utf-16 -n hello nobom.txt; echo \"rc=$?\"; echo \"--- match 'ello' ---\"; $B --encoding=utf-16 -n ello nobom.txt; echo \"rc=$?\"; echo \"--- with BOM file ---\"; printf '\\xff\\xfe' > bom.txt; cat nobom.txt >> bom.txt; $B --encoding=utf-16 -n hello bom.txt; echo \"rc=$?\""
+   },
+   "output_head": "--- match 'hello' (first char) ---\nrc=1\n--- match 'ello' ---\n1:ello\nrc=0\n--- with BOM file ---\n1:hello\nrc=0\n",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 595,
+    "path": "GUIA.md"
+   },
+   "output_head": "Read file GUIA.md, lines 595-614\n595: partirse en líneas, el DFA resuelve `^`/`$` por línea dentro del registro, y la\n596: impresora emite cada línea que el match **abarca** — que es lo que hace rg, n",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "path": "src",
+    "pattern": "skip 2-byte BOM|i: usize = 2"
+   },
+   "output_head": "Found 1 matches\n<clone>/src/scan.zig:\n  Line 138:     var i: usize = 2; // skip 2-byte BOM\n",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R10",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 5
+}

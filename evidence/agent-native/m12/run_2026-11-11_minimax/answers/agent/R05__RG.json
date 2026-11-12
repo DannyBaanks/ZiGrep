@@ -1,0 +1,199 @@
+{
+ "rc": 0,
+ "seconds": 331.9,
+ "answer": "**`id`** must be a JSON **string** or a **non-negative integer**; negative integers, floats and other types are rejected (`src/batch.zig:512-524`; test `src/batch.zig:614-625`). It is serialized as JSON and compared verbatim, so `\"a\"` and `7` are distinct ids.\n\n**Unknown fields** abort the file: only `id`, `pattern`, `paths?`, `flags?` exist (`src/batch.zig:490-495`), and any parse failure yields “not a query object … (unknown fields are rejected)” (`src/batch.zig:507-510`; test `src/batch.zig:633-635`).\n\n**Duplicate ids** abort with `duplicate \"id\"` (`src/batch.zig:526-531`).\n\n**Blank/whitespace-only lines** are trimmed and skipped (`src/batch.zig:505-506`).\n\n**A bad line cannot half-run the batch**: the whole file is parsed before the first query executes (`src/main.zig:1950-1956` vs. the loop at `src/main.zig:2006`); zgrep prints `file:line: reason` to stderr and exits 2 with empty stdout (`src/main.zig:1951-1954`; `evidence/agent-native/contract.md:230`). Only a *runtime* problem (e.g. bad flags) fails alone: that query’s `query_end` gets rc 2, others still run, batch rc 2 (`src/main.zig:2044-2053`).",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "queries",
+    "include": "*.{rs,py,ts,js,go,zig}",
+    "limit": 50
+   },
+   "output_head": "Found 50 matches\n<clone>/src/batch.zig:\n  Line 1: //! M3 del plan agent-native: lote (`--queries-file`) y",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "queries-file|queries_file|queriesFile",
+    "limit": 50
+   },
+   "output_head": "Found 50 matches\n<clone>/GUIA.md:\n  Line 723: ## 4n. Lote y presupuesto: `--queries-file`, `--max-results",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "parseQueries",
+    "path": "<clone>/src",
+    "limit": 20
+   },
+   "output_head": "Found 6 matches\n<clone>/src/batch.zig:\n  Line 499: pub fn parseQueries(arena: Allocator, text: []const u8",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/batch.zig",
+    "limit": 200
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 1-200\n1: //! M3 del plan agent-native: lote (`--queries-file`) y p",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/batch.zig",
+    "offset": 440,
+    "limit": 240
+   },
+   "output_head": "Read file <clone>/src/batch.zig, lines 440-636\n440:             try self.staged.append(g, '}');\n441:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 140,
+    "offset": 1927,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 1927-2066\n1927: /// `--queries-file FILE|-`: every JSONL query runs",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 720,
+    "path": "<clone>/GUIA.md"
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 720-779\n720: orden fijo, `--sort`. `-N` es la navegación Befunge, no el ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 190,
+    "path": "<clone>/evidence/agent-native/batch_conformance.py"
+   },
+   "output_head": "Read file <clone>/evidence/agent-native/batch_conformance.py, lines 190-224\n190:     for k in sorted({0, ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "ignore_unknown_fields|UnknownField",
+    "path": "<clone>/src",
+    "limit": 20
+   },
+   "output_head": "No matches found",
+   "no_matches": true
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && ls && (zig version 2>/dev/null || echo \"no zig\") && grep -n \"minimum_zig_version\\|zig_version\" build.zig.zon 2>/dev/null | head"
+   },
+   "output_head": "bindings\nbuild.zig\nbuild.zig.zon\nevidence\nGUIA.md\ninstall.ps1\ninstall.sh\nPRUEBAS.md\nREADME.md\nscripts\nsrc\nVERIFICATION.md\nzig-out\n0.16.0\n28:    .minimum_zig_version = \"0.16.0\",\n",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "path": "<clone>/evidence/agent-native/contract.md",
+    "pattern": "id|queries-file"
+   },
+   "output_head": "Found 30 matches\n<clone>/evidence/agent-native/contract.md:\n  Line 1: # Contrato de máquina de zgrep — me",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && ls zig-out/bin 2>/dev/null; ls -la zig-out 2>/dev/null | head"
+   },
+   "output_head": "cell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\ntotal 12\ndrwxrwxr-x  3 user user 4096 nov 11 20:14 .\ndrwxrwxr-x 10 user user 4096 nov 11 20:14 ..\ndrwxrwxr-x  2 user user 4096 nov 11 20:14 bin\n",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 215,
+    "path": "<clone>/evidence/agent-native/contract.md"
+   },
+   "output_head": "Read file <clone>/evidence/agent-native/contract.md, lines 215-254\n215: comportamiento.\n216: \n217: ## 10.",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && printf '{\"id\":\"a\",\"pattern\":\"x\"}\\n\\n{\"id\":7,\"pattern\":\"y\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/main.zig; echo \"rc=$?\""
+   },
+   "output_head": "\"byte_end\":142012,\"match\":\"y\",\"text\":\"        try std.testing.expectEqualStrings(\\\"echo {}\\\", o.exec_cmd.?);\",\"inverted\":false}\n{\"schema\":\"zgrep/1\",\"query_id\":7,\"type\":\"match\",\"path\":\"src/main.zig\",\"l",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && echo \"--- unknown field ---\" && printf '{\"id\":\"a\",\"pattern\":\"x\",\"path\":[\"typo\"]}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig; echo \"rc=$?\"; echo \"--- dup id ---\" && printf '{\"id\":\"a\",\"pattern\":\"x\"}\\n{\"id\":\"a\",\"pattern\":\"y\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig; echo \"rc=$?\"; echo \"--- negative id ---\" && printf '{\"id\":-3,\"pattern\":\"x\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig; echo \"rc=$?\"; echo \"--- float id ---\" && printf '{\"id\":1.5,\"pattern\":\"x\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig; echo \"rc=$?\"; echo \"--- bad line in middle (half run?) ---\" && printf '{\"id\":\"ok\",\"pattern\":\"parseQueries\"}\\n{\"id\":\"bad\",\"pattern\":\"x\"}\\n{\"id\":\"ok2\",\"pattern\":\"parseQueries\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig | head -c 300; echo; echo \"rc=$?\""
+   },
+   "output_head": "--- unknown field ---\nzgrep: -:1: not a query object {\"id\", \"pattern\", \"paths\"?, \"flags\"?} (unknown fields are rejected)\nrc=2\n--- dup id ---\nzgrep: -:2: duplicate \"id\"\nrc=2\n--- negative id ---\nzgrep: ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd <clone> && echo \"--- broken JSON in middle ---\" && printf '{\"id\":\"ok\",\"pattern\":\"parseQueries\"}\\n{\"id\":\"broken\",\\n{\"id\":\"ok2\",\"pattern\":\"parseQueries\"}\\n' | ./zig-out/bin/zgrep --queries-file - src/batch.zig > /tmp/opencode/half.out 2>/tmp/opencode/half.err; echo \"rc=$?\"; echo \"stdout bytes: $(wc -c < /tmp/opencode/half.out)\"; cat /tmp/opencode/half.err"
+   },
+   "output_head": "--- broken JSON in middle ---\nrc=2\nstdout bytes: 0\nzgrep: -:2: not a query object {\"id\", \"pattern\", \"paths\"?, \"flags\"?} (unknown fields are rejected)\n",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 84,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 84-103\n84:     \\\\                    summary carries its path, sha2",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 395,
+    "path": "<clone>/evidence/agent-native/contract.md"
+   },
+   "output_head": "Read file <clone>/evidence/agent-native/contract.md, lines 395-419\n395: | nunca silencioso | DEMOSTRADO |",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R05",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

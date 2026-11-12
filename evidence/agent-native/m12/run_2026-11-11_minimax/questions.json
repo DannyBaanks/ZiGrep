@@ -1,0 +1,222 @@
+{
+ "questions": [
+  {
+   "id": "R02",
+   "set": "heldout2",
+   "symbol": "matchesExt",
+   "kind": "behaviour",
+   "question": "With `--exclude-ext=log`, are the files `a.log`, `catalog`, `.log` and `A.LOG` excluded?",
+   "reference": "matchesExt (src/filter.zig): for an extension without a leading dot, the name must be longer than ext+1 and have a '.' right before the extension. So `a.log` is excluded; `catalog` is not (no dot before `log`); `.log` is not (length 4 is not > 4); `A.LOG` is not (case-sensitive comparison).",
+   "required": [
+    [
+     "a\\.log.{0,40}(excluded|yes|matches)",
+     "only a\\.log"
+    ],
+    [
+     "catalog.{0,60}(not|no\\b|isn't)",
+     "(not|no\\b).{0,40}catalog"
+    ],
+    [
+     "\\.log.{0,60}(not|no\\b|isn't)"
+    ],
+    [
+     "case.sensitive",
+     "A\\.LOG.{0,60}(not|no\\b|isn't)"
+    ]
+   ],
+   "forbidden": [
+    "catalog.{0,30}(is|are|also) excluded"
+   ]
+  },
+  {
+   "id": "R03",
+   "set": "heldout2",
+   "symbol": "default_excluded_dirs",
+   "kind": "behaviour",
+   "question": "Which directories does zgrep skip by default? Are `dist` or `build` among them?",
+   "reference": "default_excluded_dirs (src/filter.zig): .git, .zig-cache, __pycache__, node_modules, .venv, venv, target, .cache, .idea, .vscode. Neither dist nor build is in the list. --no-ignore or --no-default-ignore disable the list.",
+   "required": [
+    [
+     "node_modules"
+    ],
+    [
+     "__pycache__"
+    ],
+    [
+     "\\.vscode",
+     "\\.idea"
+    ],
+    [
+     "(dist|build).{0,60}(not|neither|no\\b|aren't|isn't)",
+     "(not|neither|no\\b).{0,40}(dist|build)"
+    ]
+   ],
+   "forbidden": [
+    "(dist|build) (is|are) (also )?(skipped|excluded) by default"
+   ]
+  },
+  {
+   "id": "R05",
+   "set": "heldout2",
+   "symbol": "parseQueries",
+   "kind": "behaviour",
+   "question": "In a `--queries-file`, what values may \"id\" take, what happens with unknown fields, duplicate ids and blank lines, and can a bad line leave the batch half-run?",
+   "reference": "parseQueries (src/batch.zig): id is a string or a non-negative integer; unknown fields are rejected; a duplicate id is an error; blank lines are ignored. The whole file is parsed before anything runs (fails closed), so a bad line never leaves a batch half-run.",
+   "required": [
+    [
+     "non-negative integer",
+     "string or (a |an )?(non-negative )?integer"
+    ],
+    [
+     "unknown fields?.{0,40}reject",
+     "rejects? unknown"
+    ],
+    [
+     "duplicate"
+    ],
+    [
+     "(blank|empty) lines?.{0,30}ignored",
+     "ignores? (blank|empty)"
+    ],
+    [
+     "before (anything|executing|running|any query)",
+     "fails? closed",
+     "nothing (runs|is executed)",
+     "never .{0,20}half"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R07",
+   "set": "heldout2",
+   "symbol": "isResult",
+   "kind": "behaviour",
+   "question": "Which event types count as results for `--max-results`? Do context lines count?",
+   "reference": "isResult (src/batch.zig): match, occurrence, file and count events. Context, passthru, provenance, query_end and summary do not count.",
+   "required": [
+    [
+     "match"
+    ],
+    [
+     "occurrence"
+    ],
+    [
+     "\\bfile\\b"
+    ],
+    [
+     "\\bcount\\b"
+    ],
+    [
+     "context.{0,60}(not|don't|do not|no\\b)",
+     "(not|don't|do not).{0,40}context"
+    ]
+   ],
+   "forbidden": [
+    "context (lines|events) (do |also )?count"
+   ]
+  },
+  {
+   "id": "R10",
+   "set": "heldout2",
+   "symbol": "parseEncoding",
+   "kind": "behaviour",
+   "question": "What values does `--encoding` accept, and what does `--encoding=utf-16` do with a file that has no BOM?",
+   "reference": "parseEncoding (src/scan.zig): auto, none, utf-8, utf-16, utf-16le, utf-16be, latin1. auto = BOM sniff only (default); utf-16le/be decode ignoring any BOM; utf-16 lets the BOM decide and falls back to little-endian (like rg); utf-8/latin1 use the bytes as they are.",
+   "required": [
+    [
+     "latin1"
+    ],
+    [
+     "utf-16le"
+    ],
+    [
+     "(else|otherwise|without (a )?BOM|no BOM|fall(s)? back).{0,60}(LE\\b|little)"
+    ],
+    [
+     "auto.{0,60}BOM"
+    ]
+   ],
+   "forbidden": [
+    "(no BOM|without a BOM).{0,40}(big.endian|BE\\b)"
+   ]
+  },
+  {
+   "id": "R16",
+   "set": "heldout2",
+   "symbol": "micro_tree_max_bytes",
+   "kind": "behaviour",
+   "question": "What makes a directory tree a \"micro-tree\" in zgrep, and what changes when it is one?",
+   "reference": "Its regular files add up to less than 2 MB (micro_tree_max_bytes = 2*1024*1024 in src/main.zig) and the discovery stays within 2048 files, 512 directories and depth 32 (tryQuickTreeScan, src/kamikaze.zig). It is scanned on the calling thread: no worker pool, no io_uring, and no .gitignore/.dataignore inspection. --force-swarm disables the micro path.",
+   "required": [
+    [
+     "2 ?MB",
+     "2 \\* 1024 \\* 1024",
+     "2097152",
+     "2 MiB"
+    ],
+    [
+     "2048"
+    ],
+    [
+     "512"
+    ],
+    [
+     "ignore"
+    ],
+    [
+     "force-swarm"
+    ]
+   ],
+   "forbidden": []
+  },
+  {
+   "id": "R19",
+   "set": "heldout2",
+   "symbol": "BinaryFiles",
+   "kind": "behaviour",
+   "question": "Does zgrep accept `--binary-files=binary`? What do `text` and `without-match` do?",
+   "reference": "No: `binary` is rejected at parse time with a usage error, because zgrep cannot print matches while suppressing binary content (BinaryFiles in src/main.zig). `text` is exactly -a; `without-match` is the default (a binary file is treated as not matching).",
+   "required": [
+    [
+     "reject",
+     "not accepted",
+     "usage error",
+     "\\berror\\b",
+     "\\bno\\b"
+    ],
+    [
+     "text.{0,40}(-a\\b|as text)"
+    ],
+    [
+     "without-match.{0,40}default",
+     "default.{0,40}without-match"
+    ]
+   ],
+   "forbidden": [
+    "yes, .{0,30}binary"
+   ]
+  },
+  {
+   "id": "R23",
+   "set": "heldout2",
+   "symbol": "sort",
+   "kind": "behaviour",
+   "question": "Which options make zgrep use the sorted (ordered) path even when `--sort` is not given?",
+   "reference": "--exec, --heading and --pre each set opts.sort = true in runSearch (src/main.zig): exec needs to know which files matched, heading groups would interleave in completion order, and --pre runs per file.",
+   "required": [
+    [
+     "exec"
+    ],
+    [
+     "heading"
+    ],
+    [
+     "\\bpre\\b",
+     "--pre"
+    ]
+   ],
+   "forbidden": []
+  }
+ ]
+}

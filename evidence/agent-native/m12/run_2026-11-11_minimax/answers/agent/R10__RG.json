@@ -1,0 +1,230 @@
+{
+ "rc": 0,
+ "seconds": 311.8,
+ "answer": "**Accepted values:** `auto`, `none`, `utf-8`, `utf-16`, `utf-16le`, `utf-16be`, `latin1` (`src/main.zig:807`, `src/main.zig:1272-1278`; parsed at `src/scan.zig:107-116`). Default is `auto` (`src/main.zig:396`); anything else is a usage error, exit 2 (`src/main.zig:1281`). Semantics: `none` = raw bytes, `auto` = BOM sniff only, `utf-16le/be` = decode ignoring BOM, `utf-8`/`latin1` = bytes as-is (`src/scan.zig:95-101`).\n\n**`--encoding=utf-16` on a BOM-less file:** endianness falls back to little-endian (`src/scan.zig:99`, `src/scan.zig:965-966`), and the file is decoded, not treated as binary despite its NULs (`src/scan.zig:971`, `src/scan.zig:974`).\n\nHowever, the decoder unconditionally skips the first two bytes as if they were a BOM (`src/scan.zig:138`), so the first character is dropped. Verified on a BOM-less UTF-16LE file: `zgrep --encoding utf-16 hello` finds nothing, while `... 'ello'` matches — ripgrep matches `hello` in both cases.\n\nCaveat: the stdin path ignores `--encoding` entirely (`src/main.zig:2333`), so piping the same file yields no match.",
+ "tools": [
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la",
+    "workdir": "<clone>"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "--encoding",
+    "path": "<clone>",
+    "limit": 50
+   },
+   "output_head": "Found 18 matches\n<clone>/GUIA.md:\n  Line 581: zgrep --encoding utf-16 fichero.txt     # o none, para ver ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "encoding|Encoding|utf-16|utf16|latin1|bom|BOM",
+    "path": "<clone>/src",
+    "limit": 80
+   },
+   "output_head": "Found 80 matches\n<clone>/src/uring_linux.zig:\n  Line 190:                     const utf16_bom = scan.isUt",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/scan.zig",
+    "offset": 60,
+    "limit": 160
+   },
+   "output_head": "Read file <clone>/src/scan.zig, lines 60-219\n60:     /// size, mtime) before the events of every file tha",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/scan.zig",
+    "offset": 950,
+    "limit": 60
+   },
+   "output_head": "Read file <clone>/src/scan.zig, lines 950-1009\n950:     searcher: *const Searcher,\n951:     data: []const",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 1260,
+    "limit": 50
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 1260-1309\n1260:                 opts.multiline = false;\n1261:      ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/GUIA.md",
+    "offset": 570,
+    "limit": 40
+   },
+   "output_head": "Read file <clone>/GUIA.md, lines 570-609\n570: excluirlo). El camino rapido queda desactivado con `-z` por",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/README.md",
+    "offset": 230,
+    "limit": 30
+   },
+   "output_head": "Read file <clone>/README.md, lines 230-259\n230:   workers start, so an early match exits immediately. Pat",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "utf-16|utf16|encoding",
+    "path": "<clone>",
+    "include": "*.zig",
+    "limit": 80
+   },
+   "output_head": "Found 71 matches\n<clone>/scripts/cell_fuzz.zig:\n  Line 92:     synthetic_utf16_corrupt,\n\n  Line 174:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/main.zig",
+    "offset": 2310,
+    "limit": 70
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 2310-2379\n2310:             .show_line_no = opts.show_line_no,\n2311",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "path": "<clone>",
+    "pattern": "sin BOM|no BOM|without BOM|without a BOM|BOM-less|utf-16.*BOM|BOM.*utf-16"
+   },
+   "output_head": "Found 3 matches\n<clone>/src/scan.zig:\n  Line 96: ///   * `none`  -> raw bytes, no BOM sniffing at all (rg",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "path": "<clone>/src/scan.zig",
+    "pattern": "encoding|utf16|utf-16"
+   },
+   "output_head": "Found 38 matches\n<clone>/src/scan.zig:\n  Line 79:     /// `--encoding`: how bytes become the haystack.\n\n ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 70,
+    "offset": 1185,
+    "path": "<clone>/src/scan.zig"
+   },
+   "output_head": "Read file <clone>/src/scan.zig, lines 1185-1254\n1185:         } else if (owned) |b| {\n1186:             g",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls zig-out/bin 2>/dev/null; ls -la zig-out 2>/dev/null",
+    "workdir": "<clone>"
+   },
+   "output_head": "cell_fuzz\nfuzz\nmatcher_sweep\nzgrep\nzigrep\ntotal 12\ndrwxrwxr-x  3 user user 4096 nov 11 20:14 .\ndrwxrwxr-x 10 user user 4096 nov 11 20:14 ..\ndrwxrwxr-x  2 user user 4096 nov 11 20:14 bin\n",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "path": "<clone>",
+    "pattern": "encoding",
+    "include": "*.md"
+   },
+   "output_head": "Found 10 matches\n<clone>/GUIA.md:\n  Line 581: zgrep --encoding utf-16 fichero.txt     # o none, para ver ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && printf 'hello world\\nsecond line\\n' > utf16le_nobom.txt && python3 -c \"\nopen('utf16le_nobom.txt','wb').write('hello world\\nsecond line\\n'.encode('utf-16-le'))\n\" && xxd utf16le_nobom.txt | head -3 && echo \"--- rg utf-16 ---\" && rg --encoding utf-16 'hello' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- zgrep utf-16 ---\" && <clone>/zig-out/bin/zgrep --encoding utf-16 'hello' utf16le_nobom.txt; echo \"rc=$?\"",
+    "workdir": "/tmp/opencode"
+   },
+   "output_head": "00000000: 6800 6500 6c00 6c00 6f00 2000 7700 6f00  h.e.l.l.o. .w.o.\n00000010: 7200 6c00 6400 0a00 7300 6500 6300 6f00  r.l.d...s.e.c.o.\n00000020: 6e00 6400 2000 6c00 6900 6e00 6500 0a00  n.d. .l.i.n.e",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/uring_linux.zig",
+    "offset": 170,
+    "limit": 60
+   },
+   "output_head": "Read file <clone>/src/uring_linux.zig, lines 170-229\n170:                     // anillo y se descartaba e",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && echo \"--- zgrep utf-16 'ello' ---\" && <clone>/zig-out/bin/zgrep --encoding utf-16 'ello' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- zgrep utf-16 'world' ---\" && <clone>/zig-out/bin/zgrep --encoding utf-16 'world' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- zgrep utf-16le 'hello' ---\" && <clone>/zig-out/bin/zgrep --encoding utf-16le 'hello' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- rg utf-16le 'hello' ---\"; rg --encoding utf-16le 'hello' utf16le_nobom.txt; echo \"rc=$?\"",
+    "workdir": "/tmp/opencode"
+   },
+   "output_head": "--- zgrep utf-16 'ello' ---\nello world\nrc=0\n--- zgrep utf-16 'world' ---\nello world\nrc=0\n--- zgrep utf-16le 'hello' ---\nrc=1\n--- rg utf-16le 'hello' ---\nhello world\nrc=0\n",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 800,
+    "path": "<clone>/src/main.zig"
+   },
+   "output_head": "Read file <clone>/src/main.zig, lines 800-829\n800:     const name = std.fs.path.basename(path);\n801:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "cd /tmp/opencode && Z=<clone>/zig-out/bin/zgrep; echo \"--- no encoding (auto) ---\"; $Z 'hello' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- stdin utf-16 ---\"; cat utf16le_nobom.txt | $Z --encoding utf-16 'hello'; echo \"rc=$?\"; echo \"--- utf-16 'second' ---\"; $Z --encoding utf-16 'second' utf16le_nobom.txt; echo \"rc=$?\"; echo \"--- unknown encoding ---\"; $Z --encoding=bogus 'x' utf16le_nobom.txt; echo \"rc=$?\"",
+    "workdir": "/tmp/opencode"
+   },
+   "output_head": "--- no encoding (auto) ---\nrc=1\n--- stdin utf-16 ---\nrc=1\n--- utf-16 'second' ---\nsecond line\nrc=0\n--- unknown encoding ---\nzgrep: unknown encoding (zgrep supports auto|none|utf-8|utf-16|utf-16le|utf-",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R10",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

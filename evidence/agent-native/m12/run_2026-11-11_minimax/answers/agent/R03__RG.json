@@ -1,0 +1,108 @@
+{
+ "rc": 0,
+ "seconds": 113.4,
+ "answer": "**Default-skipped directories** (10), from `default_excluded_dirs` in `src/filter.zig:17-28`:\n\n`.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode`\n\nThese are applied in `isDirExcluded` whenever `use_defaults` is true (`src/filter.zig:512-521`); `use_defaults` defaults to true (`src/filter.zig:328`) and is enabled unless `--no-default-ignore` or `--no-ignore` is passed (`src/main.zig:2424`, `src/main.zig:2546`).\n\n**Neither `dist` nor `build` is in that list** — no `\"dist\"`/`\"build\"` entries exist anywhere in `src/*.zig` (the only literal `\"build\"` is a corpus directory name in `scripts/gen_corpus.zig:38`). Note that `target` (Rust's build dir) *is* skipped. To skip them yourself, use `--exclude-dir=build,dist` (`GUIA.md:325`).\n\nSeparately, zgrep also skips files by default extension (e.g. `.pyc`, `.o`, `.so`, `.log`, `.min.js`) via `default_excluded_exts` (`src/filter.zig:30-47`) — those are file extensions, not directories.",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "node_modules|ignore|exclude",
+    "include": "*.{js,ts,mjs,cjs,rb,py,go,rs,json,md}",
+    "limit": 60
+   },
+   "output_head": "Found 60 matches\n<clone>/GUIA.md:\n  Line 322: zigrep --exclude-ext=log,tmp,lock,min.js \"token\" .\n\n  Line ",
+   "no_matches": false
+  },
+  {
+   "tool": "glob",
+   "status": "completed",
+   "input": {
+    "pattern": "**/*zgrep*"
+   },
+   "output_head": "<clone>/evidence/raw/synth_l/zgrep.out\n<tmp>",
+   "no_matches": false
+  },
+  {
+   "tool": "glob",
+   "status": "completed",
+   "input": {
+    "pattern": "src/**/*.zig"
+   },
+   "output_head": "<clone>/src/walk.zig\n<tmp>",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "default_ignore|defaultIgnore|DEFAULT_IGNORE",
+    "include": "*.zig",
+    "limit": 40
+   },
+   "output_head": "Found 5 matches\n<clone>/src/main.zig:\n  Line 269:     no_default_ignore: bool = false,\n\n  Line 1462:     ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "filter.zig",
+    "limit": 40,
+    "pattern": "use_defaults|node_modules|\\.git|zig-cache"
+   },
+   "output_head": "Found 26 matches\n<clone>/src/filter.zig:\n  Line 5: //!   2. .dataignore (native zigrep ignore format) and",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "<clone>/src/filter.zig",
+    "offset": 1,
+    "limit": 60
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 1-60\n1: //! filter.zig — Universal Filter & Ignore Engine for zig",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 505,
+    "path": "<clone>/src/filter.zig"
+   },
+   "output_head": "Read file <clone>/src/filter.zig, lines 505-544\n505:     /// `--no-ignore` turns off what comes from igno",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "limit": 40,
+    "pattern": "\"dist\"|\"build\"|'dist'|'build'"
+   },
+   "output_head": "Found 1 matches\n<clone>/scripts/gen_corpus.zig:\n  Line 38:     \"edge\",           \"tree\",    \"branch\", \"co",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "limit": 20,
+    "pattern": "skip_hidden"
+   },
+   "output_head": "Found 9 matches\n<clone>/src/main.zig:\n  Line 283:     skip_hidden: bool = false,\n\n  Line 1458:           ",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R03",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}

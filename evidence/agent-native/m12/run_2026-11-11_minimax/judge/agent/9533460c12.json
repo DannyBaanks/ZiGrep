@@ -1,0 +1,6 @@
+{
+ "grade": 2,
+ "wrong_claims": [],
+ "reason": "The answer lists match, occurrence, file and count as results, says context and passthru do not count, and says provenance, query_end and summary do not count, which agrees with the reference; the compact-mode details are extra and don't contradict it.",
+ "cost_usd": 0.006472
+}

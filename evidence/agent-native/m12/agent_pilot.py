@@ -68,7 +68,11 @@ def main() -> int:
     ap.add_argument("--questions", default=str(Q))
     a = ap.parse_args()
     qs = {q["id"]: q for q in json.loads(Path(a.questions).read_text())["questions"]}
-    out = Path(a.out)
+    # Absolute: the grep tool spawns the wrapper with cwd = the searched
+    # directory, so a relative wrapper path is not found there (first run:
+    # every ZG grep call failed and no ziggrep call was logged; those records
+    # are kept in <out>/invalid_relative_wrapper/).
+    out = Path(a.out).resolve()
     (out / "answers" / "agent").mkdir(parents=True, exist_ok=True)
     (out / "zlog").mkdir(exist_ok=True)
     sel = [qs[i] for i in a.qids.split(",")]

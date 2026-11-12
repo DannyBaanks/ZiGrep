@@ -1,0 +1,7 @@
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e max-results|max_results|maxResults -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e max_results|max-results -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e "type":"(match|occurrence|file|count|context|passthru|summary|query_end)"|compact -- out_json.zig
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e emitLineRow|emitCompact|\"m\"|\"c\"|\"p\"|\"f\"|tag -- out_json.zig
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e max-results -- README.md
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e \.occurrence|kind = \.|Occurrence -- .
+--json --provenance --force-swarm --no-default-ignore --exclude-dir=.git -s -e max-results -- GUIA.md

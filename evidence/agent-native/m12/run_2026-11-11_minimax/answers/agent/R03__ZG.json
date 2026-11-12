@@ -1,0 +1,129 @@
+{
+ "rc": 0,
+ "seconds": 138.9,
+ "answer": "**Default-skipped directories (built-in list):** `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode` — defined in `src/filter.zig:17-28`.\n\nThe list is applied by `isDirExcluded()` only when `use_defaults` is true (`src/filter.zig:512-521`). That flag defaults to `true` (`src/filter.zig:328`) and is cleared only by `--no-default-ignore` or `--no-ignore` (`src/main.zig:2424`, `src/main.zig:2546`).\n\n**`dist` and `build`: no.** Neither name appears in `default_excluded_dirs` (`src/filter.zig:17-28`), nor anywhere in `src/` (grep for `\"dist\"`/`\"build\"` found no matches), so neither is skipped by default. The README's summary list — `.git`, `node_modules`, `target`, `.zig-cache`, `.venv` — is likewise partial and omits both (`README.md:224-227`).\n\nNote: `target` *is* skipped (`src/filter.zig:24`), so Rust/Java-style build dirs named `target` are excluded, but a dir literally named `build` or `dist` is searched unless you exclude it yourself (e.g. `--exclude-dir=build`).",
+ "tools": [
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "dist|build|skip|ignore|exclude",
+    "limit": 100
+   },
+   "output_head": "Found 100 matches\n<clone>/evidence/rg-glob-parity/glob_parity.py:\n  Line 2: \"\"\"--include/--exclude glob p",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls src"
+   },
+   "output_head": "batch.zig\nbre.zig\nclean.zig\nfilter.zig\nio_engine.zig\nkamikaze.zig\nmain.zig\nnav.zig\nout_json.zig\nplatform.zig\nregex.zig\nroot.zig\nscan.zig\nsearch.zig\ntypes.zig\nuring_linux.zig\nuring.zig\nvfs.zig\nwalk.zig",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "node_modules|zig-cache|\\.venv|default_ignore|defaultIgnore",
+    "path": "src",
+    "limit": 60
+   },
+   "output_head": "Found 20 matches\n<clone>/src/kamikaze.zig:\n  Line 966:     try std.testing.expect(f.isDirExcluded(\".zig-c",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/filter.zig",
+    "offset": 1,
+    "limit": 80
+   },
+   "output_head": "Read file src/filter.zig, lines 1-80\n1: //! filter.zig — Universal Filter & Ignore Engine for zigrep.\n2: //!\n3: //! Features:\n4: //!   1. Default noisy directories & file extensions (caches, virtualen",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "isDirExcluded|default_excluded_dirs|use_defaults|excluded_dirs",
+    "path": "src",
+    "limit": 80
+   },
+   "output_head": "Found 35 matches\n<clone>/src/kamikaze.zig:\n  Line 340:             if (ctx.filter.isDirExcluded(entry.nam",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/filter.zig",
+    "offset": 500,
+    "limit": 40
+   },
+   "output_head": "Read file src/filter.zig, lines 500-539\n500:         for (roots) |root| {\n501:             self.loadUpwardIgnoreFiles(io, root);\n502:         }\n503:     }\n504: \n505:     /// `--no-ignore` turns off wh",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/filter.zig",
+    "offset": 590,
+    "limit": 30
+   },
+   "output_head": "Read file src/filter.zig, lines 590-619\n590:         return out;\n591:     }\n592: \n593:     fn fileExcluded(self: *const FilterEngine, file_name: []const u8, rel: ?[]const u8) bool {\n594:         if (s",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "README.md",
+    "offset": 218,
+    "limit": 16
+   },
+   "output_head": "Read file README.md, lines 218-233\n218:   searchers, and traverse depth-first per branch. Output is streamed as results\n219:   arrive, unless `--sort` is given. `--sort` keeps the GNU grep order throu",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "path": "src",
+    "pattern": "\"dist\"|\"build\"|dist\\b"
+   },
+   "output_head": "No matches found",
+   "no_matches": true
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 50,
+    "offset": 320,
+    "path": "src/filter.zig"
+   },
+   "output_head": "Read file src/filter.zig, lines 320-369\n320:         const anchored = if (pat.len > 0 and pat[0] == '/') pat[1..] else pat;\n321:         return globMatch(r, anchored);\n322:     }\n323:     return globM",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R03",
+ "cond": "ZG",
+ "engine": "ziggrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 4
+}

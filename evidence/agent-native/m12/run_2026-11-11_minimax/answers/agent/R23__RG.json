@@ -1,0 +1,347 @@
+{
+ "rc": 0,
+ "seconds": 516.3,
+ "answer": "**Four option groups switch zgrep to the sorted/ordered path without `--sort`:**\n\n- **`--exec` / `--execute`** — needs to know *which* files matched, which only the ordered path tracks; it also forces quiet mode (`src/main.zig:2226`, `src/main.zig:2237`).\n- **`--heading`** — streaming emits in completion order, so per-file groups would interleave and headers point at the wrong cluster (`src/main.zig:2231`, `src/main.zig:2227-2230`). Aliases that set it: `--group-by-file` (`src/main.zig:1309`), `--pretty` (`src/main.zig:1313-1317`), `-p` (`src/main.zig:1572-1576`).\n- **`--pre`** — runs per file, so it needs the ordered path (`src/main.zig:2233`).\n- **`--queries-file`** (batch) — injects `--sort` into every query's argv (`src/main.zig:1961`).\n\nAdditionally, **more than one explicit FILE operand** forces the ordered path to keep GNU argument order (`src/main.zig:2402`).\n\nNote: `-k`/`--kamikaze`/`--dataflow` clear `sort` (`src/main.zig:989-991`, `src/main.zig:1642-1645`), but the exec/heading/pre checks run after parsing (`src/main.zig:2226-2233`), so they win.",
+ "tools": [
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "sort",
+    "include": "*zgrep*"
+   },
+   "output_head": "Found 8 matches\n<clone>/evidence/raw/real_pub_r/zgrep.out:\n  Line 215: <isyco>/work",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -la"
+   },
+   "output_head": "total 208\ndrwxrwxr-x 10 user user  4096 nov 11 20:14 .\ndrwx------ 25 user user  4096 nov 11 20:09 ..\ndrwxrwxr-x  3 user user  4096 nov 11 20:09 bindings\n-rw-rw-r--  1 user user  4229 nov 11 20",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "zgrep",
+    "include": "*.zig"
+   },
+   "output_head": "Found 100 matches\n<clone>/scripts/oracle.zig:\n  Line 298:     // Resolve binary path: prefer zig-out/bin/",
+   "no_matches": false
+  },
+  {
+   "tool": "shell",
+   "status": "completed",
+   "input": {
+    "command": "ls -R src | head -50"
+   },
+   "output_head": "src:\nbatch.zig\nbre.zig\nclean.zig\nfilter.zig\nio_engine.zig\nkamikaze.zig\nmain.zig\nnav.zig\nout_json.zig\nplatform.zig\nregex.zig\nroot.zig\nscan.zig\nsearch.zig\ntypes.zig\nuring_linux.zig\nuring.zig\nvfs.zig\nwal",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "pattern": "sort",
+    "include": "*.zig",
+    "path": "src"
+   },
+   "output_head": "Found 30 matches\n<clone>/src/main.zig:\n  Line 90:     \\\\                    \"flags\"?} in this one process",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/main.zig",
+    "offset": 960,
+    "limit": 80
+   },
+   "output_head": "Read file src/main.zig, lines 960-1039\n960:                     return error.Usage;\n961:                 };\n962:             } else if (std.mem.eql(u8, body, \"algo\")) {\n963:                 i += 1;\n96",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "path": "src/main.zig",
+    "offset": 1620,
+    "limit": 60
+   },
+   "output_head": "Read file src/main.zig, lines 1620-1679\n1620:                         opts.max_count = mc;\n1621:                     } else {\n1622:                         opts.nav_plan = try parseNav(opts, value, \"i",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 70,
+    "offset": 2380,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2380-2449\n2380:     const cpu_count: usize = @max(1, std.Thread.getCpuCount() catch 4);\n2381:     const worker_count: usize = if (opts.threads != 0) @max(1, opts.threads)",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 120,
+    "offset": 2210,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2210-2329\n2210:         const stdin_is_tty = std.Io.File.stdin().isTty(init.io) catch false;\n2211:         if (stdin_is_tty) {\n2212:             std.debug.print(\"{s}zgrep",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "path": "src",
+    "pattern": "opts\\.sort"
+   },
+   "output_head": "Found 8 matches\n<clone>/src/main.zig:\n  Line 991:                 opts.sort = false;\n\n  Line 1014:       ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 60,
+    "offset": 1925,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1925-1984\n1925: }\n1926: \n1927: /// `--queries-file FILE|-`: every JSONL query runs in THIS process, in file\n1928: /// order, as `zgrep --json --sort <global flags> <query",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "path": "src",
+    "pattern": "heading|exec_cmd|pre_cmd"
+   },
+   "output_head": "Found 89 matches\n<clone>/src/out_json.zig:\n  Line 15: //!   * `--color`, `--heading`, `--column` y los se",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 120,
+    "offset": 2530,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2530-2649\n2530:         }\n2531: \n2532:         // POSIX/GNU grep (and rg): with -q a match wins over an error, so\n2533:         // `zgrep -q pat present missing` is 0, no",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.md",
+    "pattern": "camino ordenado|ordered path|sorted path|ordenado",
+    "limit": 60
+   },
+   "output_head": "Found 12 matches\n<clone>/GUIA.md:\n  Line 454: * El contexto usa un bucle ordenado por línea; el salto dir",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 2460,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2460-2489\n2460:             .null_filename = opts.null_filename,\n2461:             .only_matching = opts.only_matching,\n2462:             .column = opts.column,\n2463:    ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 505,
+    "path": "GUIA.md"
+   },
+   "output_head": "Read file GUIA.md, lines 505-534\n505: \n506: Medido cara a cara (`evidence/feature-corpus/README.md`):\n507: \n508: | Escenario | Resultado |\n509: |---|---|\n510: | Un fichero, mismo trabajo que Python | ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 180,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 180-219\n180:     \\\\                    also consider zig-out (DANGER: installs live there)\n181:     \\\\      --cache-no-global\n182:     \\\\                    do not includ",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "path": "src/main.zig",
+    "pattern": "json",
+    "limit": 60
+   },
+   "output_head": "Found 60 matches\n<clone>/src/main.zig:\n  Line 30: const out_json = @import(\"out_json.zig\");\n\n  Line 72:  ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 598,
+    "path": "GUIA.md"
+   },
+   "output_head": "Read file GUIA.md, lines 598-622\n598: \n599: **`--pre`** reutiliza la maquinaria de procesos de `--exec`, pero capturando la\n600: salida en vez de heredarla. Verificado contra rg, incluido `--pre-glob`",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.md",
+    "pattern": "fuerza el camino ordenado|forces the ordered|ordered path"
+   },
+   "output_head": "Found 2 matches\n<clone>/GUIA.md:\n  Line 605: **`--heading`** fuerza el camino ordenado: en streaming los ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 80,
+    "offset": 2130,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 2130-2209\n2130:             .depth = opts.cache_depth,\n2131:             .dry_run = opts.cache_dry_run,\n2132:             .force = opts.cache_force,\n2133:         });\n213",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 1565,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1565-1584\n1565:                 'n' => opts.show_line_no = true,\n1566:                 's' => opts.no_messages = true,\n1567:                 'x' => opts.line_regexp = tru",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 20,
+    "offset": 1305,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1305-1324\n1305:             } else if (std.mem.eql(u8, body, \"stop-on-nonmatch\")) {\n1306:                 opts.stop_on_nonmatch = true;\n1307:             } else if (std.m",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.md",
+    "pattern": "--exec|--pre\\b",
+    "limit": 40
+   },
+   "output_head": "Found 19 matches\n<clone>/GUIA.md:\n  Line 493: ## 4d. `--exec`: de \"encontré\" a \"actúo\" (nuevo en 0.3.0)\n\n",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "GUIA.md",
+    "pattern": "--sort"
+   },
+   "output_head": "Found 9 matches\n<clone>/GUIA.md:\n  Line 294: zigrep --sort \"const\" workspace/assembly\n\n  Line 384: enjamb",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 105,
+    "path": "src/walk.zig"
+   },
+   "output_head": "Read file src/walk.zig, lines 105-134\n105:                 if (meta) |m| {\n106:                     if (m.size > max_filesize) continue;\n107:                 }\n108:             }\n109:         } else {",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "path": "src",
+    "pattern": "opts\\.kamikaze|kamikaze = "
+   },
+   "output_head": "Found 6 matches\n<clone>/src/uring_linux.zig:\n  Line 18: const kamikaze = @import(\"kamikaze.zig\");\n\n\n/tmp/",
+   "no_matches": false
+  },
+  {
+   "tool": "grep",
+   "status": "completed",
+   "input": {
+    "include": "*.zig",
+    "path": "src/main.zig",
+    "pattern": "kamikaze"
+   },
+   "output_head": "Found 23 matches\n<clone>/src/main.zig:\n  Line 22: const kamikaze = @import(\"kamikaze.zig\");\n\n  Line 45:  ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 30,
+    "offset": 1090,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1090-1119\n1090:             } else if (std.mem.eql(u8, body, \"replace\")) {\n1091:                 i += 1;\n1092:                 if (i >= args.len) {\n1093:                 ",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 25,
+    "offset": 1255,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 1255-1279\n1255:                 };\n1256:             } else if (std.mem.eql(u8, body, \"multiline\") or std.mem.eql(u8, body, \"multiline-dotall\")) {\n1257:                 o",
+   "no_matches": false
+  },
+  {
+   "tool": "read",
+   "status": "completed",
+   "input": {
+    "limit": 40,
+    "offset": 3025,
+    "path": "src/main.zig"
+   },
+   "output_head": "Read file src/main.zig, lines 3025-3064\n3025:         try std.testing.expectEqualStrings(\"log,tmp\", o.exclude_exts[0]);\n3026:         try std.testing.expectEqual(@as(usize, 1), o.include_exts_count);\n",
+   "no_matches": false
+  }
+ ],
+ "stderr_tail": "",
+ "qid": "R23",
+ "cond": "RG",
+ "engine": "ripgrep",
+ "model": "nvidia/minimaxai/minimax-m3.1-flash",
+ "ziggrep_calls": 0
+}
