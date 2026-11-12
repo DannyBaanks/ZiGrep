@@ -218,6 +218,55 @@ pub const Searcher = struct {
         return self;
     }
 
+    /// Buffers at least this large get their packed pair re-chosen from the
+    /// buffer's own byte histogram (`retunedFor`).
+    pub const retune_min_bytes: usize = 1 << 20;
+    const retune_sample: usize = 16 * 1024;
+
+    /// A copy of a literal searcher whose packed pair is chosen by how often
+    /// each needle byte REALLY occurs in `data` (4 samples of 16 KiB spread
+    /// over it), instead of by the static `byte_rank` table (which stays the
+    /// tie-break). null when nothing would change or it does not apply.
+    ///
+    /// Why: the table is tuned for source code, where `z` and `k` are rare.
+    /// In a 254 MB file where "kamikaze" fills 1.8 M lines, `HIT kamikaze`
+    /// anchored on `z`+`k` and verified every "kamikaze" (64 ms vs rg's
+    /// 25 ms); the sample says `H`/`I`/`T` never occur (2026-11-12).
+    pub fn retunedFor(self: *const Searcher, data: []const u8) ?Searcher {
+        if (self.kind != .literal or self.icase or !self.has_pair) return null;
+        if (self.effectiveAlgo() != .memchr or data.len < retune_min_bytes) return null;
+        const nd = self.needle;
+        var count = [_]u32{0} ** 256;
+        const step = (data.len - retune_sample) / 3;
+        for (0..4) |k| {
+            for (data[k * step ..][0..retune_sample]) |b| count[b] += 1;
+        }
+        // Lower is rarer: the sampled count first, the static rank second.
+        const score = struct {
+            fn f(c: *const [256]u32, b: u8) u64 {
+                return (@as(u64, c[b]) << 8) | byte_rank[b];
+            }
+        }.f;
+        var o1: u32 = 0;
+        for (nd, 0..) |b, idx| {
+            if (score(&count, b) < score(&count, nd[o1])) o1 = @intCast(idx);
+        }
+        var o2: u32 = if (o1 == 0) 1 else 0;
+        for (nd, 0..) |b, idx| {
+            if (idx == o1) continue;
+            if (score(&count, b) < score(&count, nd[o2])) o2 = @intCast(idx);
+        }
+        const same = (o1 == self.rarest_offset and o2 == self.rare2_offset) or
+            (o1 == self.rare2_offset and o2 == self.rarest_offset);
+        if (same) return null;
+        var t = self.*;
+        t.rarest_offset = o1;
+        t.rarest_byte = nd[o1];
+        t.rare2_offset = o2;
+        t.rare2_byte = nd[o2];
+        return t;
+    }
+
     /// Resolves `auto` against the actual needle length.
     pub fn effectiveAlgo(self: *const Searcher) Algo {
         return switch (self.algo) {
@@ -1077,4 +1126,39 @@ test "-i literal: Latin-1 folds only inside C3 xx (no Ā=Ġ, Ł=š, raw 0x80=0xA
     try std.testing.expect(try T.hit(a, "x\x80y", "X\x80Y"));
     // A raw continuation byte still matches itself after a C3 in the text.
     try std.testing.expect(try T.hit(a, "\x80", "\xc3\x80"));
+}
+
+test "retunedFor: the anchor pair follows the buffer's real byte frequencies" {
+    const pa = std.heap.page_allocator;
+    // 2 MiB of "kamikaze" lines with a rare "HIT kamikaze": the static table
+    // anchors on z+k (rare in code, everywhere here); the sample must not.
+    const n = 2 << 20;
+    const buf = try pa.alloc(u8, n);
+    defer pa.free(buf);
+    const line = "the kamikaze swarm kamikaze\n";
+    var i: usize = 0;
+    while (i + line.len <= n) : (i += line.len) @memcpy(buf[i..][0..line.len], line);
+    @memset(buf[i..], '\n');
+    const hits = [_]usize{ 7, 40_001, 1_000_003, n - 100 };
+    for (hits) |h| @memcpy(buf[h..][0..12], "HIT kamikaze");
+
+    const s = Searcher.init("HIT kamikaze", .auto);
+    try std.testing.expect(s.rarest_byte == 'z' or s.rare2_byte == 'z');
+    const t = s.retunedFor(buf).?;
+    for ([_]u8{ t.rarest_byte, t.rare2_byte }) |b| try std.testing.expect(b == 'H' or b == 'I' or b == 'T');
+    // Same answers as the static pair, from every start.
+    var pos: usize = 0;
+    var found: usize = 0;
+    while (s.find(buf, pos)) |m| {
+        try std.testing.expectEqual(@as(?usize, m), t.find(buf, pos));
+        found += 1;
+        pos = m + 1;
+    }
+    try std.testing.expectEqual(t.find(buf, pos), null);
+    try std.testing.expectEqual(hits.len, found);
+    // Small buffers, -i, regex: untouched.
+    try std.testing.expect(s.retunedFor(buf[0 .. Searcher.retune_min_bytes - 1]) == null);
+    var ci = s;
+    ci.icase = true;
+    try std.testing.expect(ci.retunedFor(buf) == null);
 }

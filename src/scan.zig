@@ -956,7 +956,7 @@ fn binaryFile(
 pub fn scanBuffer(
     gpa: Allocator,
     data: []const u8,
-    searcher: *const Searcher,
+    base_searcher: *const Searcher,
     path: []const u8,
     show_path: bool,
     mode: Mode,
@@ -964,6 +964,10 @@ pub fn scanBuffer(
     out: *std.ArrayList(u8),
 ) Allocator.Error!BufferResult {
     var res: BufferResult = .{};
+    // Large buffers: the literal's SIMD anchor pair is re-chosen from this
+    // buffer's own byte frequencies (once per buffer, ~64 KiB sampled).
+    const tuned: ?Searcher = base_searcher.retunedFor(data);
+    const searcher: *const Searcher = if (tuned) |*t| t else base_searcher;
 
     if (data.len == 0) {
         return res;
