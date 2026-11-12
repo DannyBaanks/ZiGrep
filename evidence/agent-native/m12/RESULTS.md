@@ -88,3 +88,20 @@ replaced in `run_2026-11-11_minimax/` with these rules:
 No credential appeared in any record (searched for `nvapi-` and `apiKey`).
 The original paths remain in the history of commit `9f9c6d3` unless that
 history is rewritten.
+
+## Rollout (2026-11-11, approved by Danny: Claude Code, Codex, OpenISy, agy)
+
+The canonical rule is `~/.config/ziggrep/agents.md`.
+
+| TUI | How it gets the rule | Verified |
+|---|---|---|
+| OpenISy | main `a794ba4`: the launcher sets `OPENISY_GREP_ENGINE=ziggrep` when ziggrep is on PATH, so the grep tool runs on ZiGrep | a run without the variable: 1 ziggrep call logged, correct answer |
+| Claude Code | `~/.claude/CLAUDE.md` imports the rule (`@~/.config/ziggrep/agents.md`) | asked, it states the rule; on a search task it ran `ziggrep -n 'fn batchQueryProblem' .` |
+| Codex | the rule is written **inline** in `~/.codex/AGENTS.md`: Codex does not resolve `@` imports, which also means the RTK line there was never loaded as instructions | on a search task it ran `ziggrep -n -F 'batchQueryProblem' .`; backup in `~/.codex/AGENTS.md.bak-2026-11-11-pre-ziggrep` |
+| agy | `~/.gemini/GEMINI.md`, a copy of the rule | NOT_DEMONSTRATED: agy's quota was exhausted ("Individual quota reached") |
+
+Not done:
+- `~/.openisy/config/AGENTS.md`, which would cover bash searches inside OpenISy:
+  its creation was refused by the session's safety classifier.
+- Restarting OpenISy's background service. The running one keeps ripgrep
+  until it is restarted.
