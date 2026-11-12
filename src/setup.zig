@@ -63,6 +63,7 @@ pub fn ruleText(gpa: Allocator, cmd: []const u8) Allocator.Error![]u8 {
         \\
         \\- **Always pass a path**, `.` for the current directory: `{0s} -n PATTERN .`. Without a path it reads standard input like grep, NOT the current directory like rg, and silently reports no matches.
         \\- Line numbers are off by default: add `-n`.
+        \\- Patterns are extended regex like `rg` / `grep -E`: alternation is `a|b`, NOT `a\|b` (there `\|` is a literal pipe and silently matches nothing). Use `-G` for grep's basic syntax, `-F` for literal text.
         \\- Usual flags: `-F` literal, `-i` ignore case, `-w` whole word, `-l` file names only, `-c` count, `-C N` context, `-e P` (repeatable).
         \\- Globs work like `rg -g`: `--include='*.{{ts,tsx}}'`, `--include='src/**/*.zig'`, `--exclude='**/test/**'`.
         \\- `--json` gives structured events (path, line, column, byte offsets); `--max-columns N` windows very long lines.
@@ -394,4 +395,5 @@ test "setup: the rule names the command and keeps rg glob braces" {
     defer gpa.free(r);
     try std.testing.expect(std.mem.indexOf(u8, r, "`zigrep -n PATTERN .`") != null);
     try std.testing.expect(std.mem.indexOf(u8, r, "'*.{ts,tsx}'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, r, "alternation is `a|b`, NOT `a\\|b`") != null);
 }
