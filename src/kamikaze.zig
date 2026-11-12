@@ -598,9 +598,11 @@ fn statNoFollow(io: std.Io, path: []const u8) ?vfs.Metadata {
 ///
 /// A micro-tree is a directory whose regular files add up to `max_bytes`
 /// (2 MB by default) and that stays inside the file/dir/depth budgets. It is
-/// scanned on the calling thread: no worker pool, no mutexes, no io_uring —
-/// and, because ignore-file upkeep is pointless in a tree that small, no
-/// `.dataignore` / `.gitignore` inspection either.
+/// scanned on the calling thread: no worker pool, no mutexes, no io_uring.
+/// It applies the same `.gitignore` / `.dataignore` rules as the swarm: the
+/// caller loads them first. Measured 2026-11-12 (evidence/micro-gitignore):
+/// loading them costs ~0-0.6 ms, and without them the fast path returned a
+/// different file set than the swarm in many real repos.
 ///
 /// The traversal goes through the portable `vfs` layer, so the same fast path
 /// runs natively on Linux and on Windows.
@@ -862,11 +864,13 @@ pub fn runKamikazePipeline(
             return true;
         }
     } else {
-        // 1. Zero-Spawn Fast Path for micro-trees (no threads, no ignore files).
+        // 1. Zero-Spawn Fast Path for micro-trees (no threads; same ignore
+        //    rules as the swarm, so the tree size never changes the result).
         //    The tree size decides the path, so this runs before the quiet
         //    probe: a micro-tree and the swarm do not see the same file set.
         if (roots.len == 1 and nav_plan.len == 0) {
             const root = roots[0];
+            filter_engine.loadIgnoreFiles(io, roots);
             if (vfs.stat(io, root, true)) |info| {
                 if (info.kind == .directory) {
                     if (tryQuickTreeScan(io, gpa, searcher, root, filter_engine, mode, binary, show_path, scan_config, micro_max_bytes, stats, max_depth, max_filesize)) |matched| {

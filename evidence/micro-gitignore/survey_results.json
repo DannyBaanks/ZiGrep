@@ -1,0 +1,22 @@
+{
+  "repos_scanned": 171,
+  "micro_path_repos": 100,
+  "old_micro_equals_swarm": 58,
+  "new_micro_equals_swarm": 100,
+  "old_micro_extra_files": 562,
+  "extra_files_by_top_component": {
+    ".pytest_cache/": 150,
+    "build/": 138,
+    "(other dir)": 52,
+    "src/": 51,
+    "(top-level file)": 38,
+    "**/obj/": 38,
+    "*.egg-info/": 33,
+    "results/": 29,
+    ".ruff_cache/": 14,
+    "evidence/": 8,
+    "web/": 6,
+    "data/": 3,
+    "tests/": 2
+  }
+}

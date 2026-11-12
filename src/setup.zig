@@ -67,7 +67,7 @@ pub fn ruleText(gpa: Allocator, cmd: []const u8) Allocator.Error![]u8 {
         \\- Usual flags: `-F` literal, `-i` ignore case, `-w` whole word, `-l` file names only, `-c` count, `-C N` context, `-e P` (repeatable).
         \\- Globs work like `rg -g`: `--include='*.{{ts,tsx}}'`, `--include='src/**/*.zig'`, `--exclude='**/test/**'`.
         \\- `--json` gives structured events (path, line, column, byte offsets); `--max-columns N` windows very long lines.
-        \\- A small tree (under 2 MB of matching files) is searched WITHOUT reading `.gitignore`; add `--force-swarm` when ignore rules must apply.
+        \\- `.gitignore`, `.dataignore` and built-in noise (`.git`, `node_modules`, `target`, `*.min.js`, …) are skipped, like `rg`; add `--no-ignore` to search everything.
         \\- Do not call `zgrep` unless it is this tool: on Linux that name can be gzip's.
         \\- If `{0s}` is missing or fails, fall back to `rg` or `grep` and say so.
         \\

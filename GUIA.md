@@ -338,19 +338,16 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
 2. **Archivos `.dataignore` y `.gitignore`:**
    * `zigrep` busca y respeta automáticamente archivos `.dataignore` y `.gitignore` presentes en el directorio raíz o de ejecución.
    * En `.dataignore` puedes escribir patrones estilo glob (`*.csv`, `logs/`, `temp_*`).
-   * **Micro-árboles (< 2 MB): el walk ascendente se omite.** Por defecto, un
-     árbol cuyos archivos regulares sumen menos de 2 MB se escanea en el
-     hilo llamante, con 0 hilos y **sin** inspeccionar `.dataignore` /
-     `.gitignore` hacia arriba: en un árbol tan pequeño el mantenimiento de
-     ignorados es ruido. Si necesitas ese comportamiento *sí* (o el
-     rendimiento del enjambre), pídelo explícitamente:
-
-     ```sh
-     zigrep --force-swarm "patrón" .
-     ```
-
-     `--force-swarm` restaura el comportamiento anterior completo: 12 hilos
-     Kamikaze y walk ascendente de `.dataignore` / `.gitignore`.
+   * **Micro-árboles (< 2 MB): mismas reglas de ignorado.** Un árbol cuyos
+     archivos regulares sumen menos de 2 MB se escanea en el hilo llamante
+     (0 hilos), pero respeta los mismos `.dataignore` / `.gitignore` que el
+     enjambre: el tamaño del árbol nunca cambia el resultado. Hasta
+     2026-11-12 este camino no los leía; se cambió con datos
+     (`evidence/micro-gitignore/`): cargarlos cuesta ~0-0.6 ms y, sin ellos,
+     el camino rápido devolvía otro conjunto de archivos que el enjambre en
+     muchos repos reales (`.pytest_cache/`, `*.egg-info/`, `build/lib/`;
+     conteos en `survey_results.json`).
+     `--force-swarm` sigue disponible para forzar los hilos Kamikaze.
 
 3. **Anulación para escaneo en bruto (`--no-ignore`):**
    * Si necesitas buscar en absolutamente todo (incluyendo `.git`, binarios, cachés y `.dataignore`):
@@ -380,7 +377,7 @@ zigrep --stats -F "const" . 2>&1 >/dev/null | grep micro_path
 # kamikaze: dirs=… files=… micro_path=yes elapsed_s=… throughput_MBps=…
 ```
 
-`micro_path=yes` ⇒ 0 hilos, sin walk de ignorados. `micro_path=no` ⇒ el
+`micro_path=yes` ⇒ 0 hilos (con las mismas reglas de ignorado). `micro_path=no` ⇒ el
 enjambre (árbol ≥ 2 MB, varias rutas, `--sort`, `--force-swarm`, …).
 
 ### Cómo se interpreta el resultado

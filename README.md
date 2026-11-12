@@ -155,7 +155,7 @@ how ZiGrep works and let you tune it.
 |---|---|
 | *(default)* `-k`, `--kamikaze` | **Kamikaze swarm.** Threads that both walk directories and search files, stealing work from each other. Results print as soon as each file finishes, so the order can change between runs. |
 | `--sort` | Deterministic output, in the same order GNU grep uses. |
-| *(automatic)* small-tree path | When the matching files total less than 2 MB, everything runs on one thread with no pool. `--force-swarm` always uses the swarm. This path does not read `.gitignore`. |
+| *(automatic)* small-tree path | When the matching files total less than 2 MB, everything runs on one thread with no pool, with the same ignore rules as the swarm. `--force-swarm` always uses the swarm. |
 | `-N`, `--nav SPEC` | **Befunge navigation.** Steers the walk like a pointer on a grid: `v^` searches only the files in the root, `^v` skips the root's files and searches only subdirectories, `<` walks siblings in reverse order. A plan that contradicts itself (`v^v`) is rejected. |
 | `--io-engine=auto\|sync\|uring`, `--uring` | How files are read on Linux. `auto` probes the page cache with the first read and switches to `io_uring` when the tree is cold. |
 | `--algo auto\|bmh\|memchr` | Picks the literal-search algorithm. |
@@ -232,8 +232,9 @@ within noise of each other; the 1.47x figure matches `zigrep --uring` (2.04 ms).
 ### Small trees
 
 A tree whose regular files total less than 2 MB is scanned on the calling
-thread. No worker pool is started, and the upward `.gitignore`/`.dataignore`
-lookup is skipped. The size check uses `statx` before any file is read, so a
+thread. No worker pool is started; the same `.gitignore`/`.dataignore` rules
+as the swarm apply, so the size of the tree never changes the result (loading
+them costs about 0-0.6 ms, see `evidence/micro-gitignore/`). The size check uses `statx` before any file is read, so a
 larger tree is handed to the thread pool without wasted I/O. `--force-swarm`
 always uses the thread pool, and `--stats` reports which path ran
 (`micro_path=yes|no`).
