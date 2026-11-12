@@ -32,6 +32,9 @@ pub const Options = struct {
     cmd: []const u8 = "ziggrep",
     /// Warning to print first (e.g. invoked as gzip's name `zgrep`).
     cmd_note: ?[]const u8 = null,
+    /// `--setup=claude,codex,...`: only these agent ids (null = every
+    /// installed agent).
+    only: ?[]const u8 = null,
 };
 
 pub const begin_marker = "<!-- ziggrep:setup begin -->";
@@ -39,16 +42,16 @@ pub const end_marker = "<!-- ziggrep:setup end -->";
 const rule_rel = ".config/ziggrep/agents.md";
 
 const Mode = enum { import, inline_rule };
-const Agent = struct { name: []const u8, dir: []const u8, file: []const u8, mode: Mode };
+const Agent = struct { id: []const u8, name: []const u8, dir: []const u8, file: []const u8, mode: Mode };
 
 /// The agents --setup knows. `dir` (relative to HOME) must exist for the
 /// agent to count as installed; `file` is its global instruction file.
 const agents = [_]Agent{
-    .{ .name = "Claude Code", .dir = ".claude", .file = ".claude/CLAUDE.md", .mode = .import },
-    .{ .name = "Codex", .dir = ".codex", .file = ".codex/AGENTS.md", .mode = .inline_rule },
-    .{ .name = "agy / Gemini", .dir = ".gemini", .file = ".gemini/GEMINI.md", .mode = .inline_rule },
-    .{ .name = "OpenISy", .dir = ".openisy/config", .file = ".openisy/config/AGENTS.md", .mode = .inline_rule },
-    .{ .name = "opencode", .dir = ".config/opencode", .file = ".config/opencode/AGENTS.md", .mode = .inline_rule },
+    .{ .id = "claude", .name = "Claude Code", .dir = ".claude", .file = ".claude/CLAUDE.md", .mode = .import },
+    .{ .id = "codex", .name = "Codex", .dir = ".codex", .file = ".codex/AGENTS.md", .mode = .inline_rule },
+    .{ .id = "agy", .name = "agy / Gemini", .dir = ".gemini", .file = ".gemini/GEMINI.md", .mode = .inline_rule },
+    .{ .id = "openisy", .name = "OpenISy", .dir = ".openisy/config", .file = ".openisy/config/AGENTS.md", .mode = .inline_rule },
+    .{ .id = "opencode", .name = "opencode", .dir = ".config/opencode", .file = ".config/opencode/AGENTS.md", .mode = .inline_rule },
 };
 
 /// The rule an agent reads, for command name `cmd`.
@@ -125,7 +128,7 @@ pub fn withoutBlock(gpa: Allocator, existing: []const u8) Allocator.Error!?[]u8 
     return try out.toOwnedSlice(gpa);
 }
 
-const Action = enum { create, add, update, already, remove, delete_file, absent, not_installed };
+const Action = enum { create, add, update, already, remove, delete_file, absent, not_installed, skipped };
 
 fn actionText(a: Action) []const u8 {
     return switch (a) {
@@ -137,6 +140,7 @@ fn actionText(a: Action) []const u8 {
         .delete_file => "se borra (solo tenía la regla)",
         .absent => "no tenía la regla",
         .not_installed => "no instalado",
+        .skipped => "omitido (no está en la lista)",
     };
 }
 
@@ -179,6 +183,32 @@ fn writeFileMkdir(io: std.Io, path: []const u8, data: []const u8) !void {
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = data });
 }
 
+/// Is agent `id` selected by `--setup=LIST` (comma-separated; "gemini" is
+/// accepted for agy)?
+pub fn selected(only: ?[]const u8, id: []const u8) bool {
+    const list = only orelse return true;
+    var it = std.mem.splitScalar(u8, list, ',');
+    while (it.next()) |raw| {
+        const want = std.mem.trim(u8, raw, " ");
+        if (std.ascii.eqlIgnoreCase(want, id)) return true;
+        if (std.mem.eql(u8, id, "agy") and std.ascii.eqlIgnoreCase(want, "gemini")) return true;
+        if (std.mem.eql(u8, id, "claude") and std.ascii.eqlIgnoreCase(want, "claude-code")) return true;
+    }
+    return false;
+}
+
+/// The ids `--setup=LIST` accepts, for the usage error.
+pub fn unknownId(only: []const u8) ?[]const u8 {
+    var it = std.mem.splitScalar(u8, only, ',');
+    outer: while (it.next()) |raw| {
+        const want = std.mem.trim(u8, raw, " ");
+        if (want.len == 0) continue;
+        for (agents) |ag| if (selected(want, ag.id)) continue :outer;
+        return want;
+    }
+    return null;
+}
+
 /// Returns the process exit code: 0 done (or nothing to do), 1 declined, 2 error.
 pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
     var arena_inst = std.heap.ArenaAllocator.init(gpa);
@@ -198,6 +228,10 @@ pub fn run(io: std.Io, gpa: Allocator, home: []const u8, opts: Options) u8 {
         const path = std.fs.path.join(arena, &.{ home, ag.file }) catch return 2;
         if (!exists(io, dir)) {
             plan.append(arena, .{ .agent = ag, .action = .not_installed, .path = path }) catch return 2;
+            continue;
+        }
+        if (!selected(opts.only, ag.id)) {
+            plan.append(arena, .{ .agent = ag, .action = .skipped, .path = path }) catch return 2;
             continue;
         }
         const body: []const u8 = if (ag.mode == .import) import_body else rule;
@@ -342,6 +376,16 @@ test "setup: withoutBlock restores the original exactly" {
         try std.testing.expectEqualStrings(want, back);
     }
     try std.testing.expect((try withoutBlock(gpa, "no block here\n")) == null);
+}
+
+test "setup: --setup=LIST selection" {
+    try std.testing.expect(selected(null, "codex"));
+    try std.testing.expect(selected("claude,codex", "codex"));
+    try std.testing.expect(!selected("claude,codex", "opencode"));
+    try std.testing.expect(selected("gemini", "agy"));
+    try std.testing.expect(selected(" Claude , agy", "claude"));
+    try std.testing.expect(unknownId("claude,codex,agy,openisy") == null);
+    try std.testing.expectEqualStrings("cursor", unknownId("claude,cursor").?);
 }
 
 test "setup: the rule names the command and keeps rg glob braces" {

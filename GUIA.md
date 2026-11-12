@@ -1184,6 +1184,7 @@ rc=0
 |---|---|
 | `--setup --dry-run` | solo enseña, no toca nada |
 | `--setup --force` | aplica sin preguntar (scripts, o un modelo que lo ejecuta) |
+| `--setup=claude,codex` | solo esos agentes (`claude`, `codex`, `agy`, `openisy`, `opencode`); los demás salen como «omitido» |
 | `--setup --undo` | quita exactamente lo que puso |
 
 Cómo lo hace:

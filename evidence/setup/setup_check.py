@@ -87,6 +87,14 @@ def main() -> int:
               not (home / ".claude" / "CLAUDE.md").exists() and not (home / ".gemini" / "GEMINI.md").exists()
               and not (home / ".config" / "opencode" / "AGENTS.md").exists())
 
+        r = run(binary, home, "--setup=claude", "--force")
+        check("--setup=claude: only Claude configured, others shown as skipped",
+              r.returncode == 0 and (home / ".claude" / "CLAUDE.md").exists() and not (home / ".gemini" / "GEMINI.md").exists()
+              and "omitido" in r.stdout and (home / ".codex" / "AGENTS.md").read_text() == "@/home/x/.codex/RTK.md\n", r.stdout[-300:])
+        run(binary, home, "--setup", "--undo", "--force")
+        r = run(binary, home, "--setup=claude,cursor")
+        check("--setup with an unknown agent: usage error rc 2", r.returncode == 2)
+
         r = run(binary, home, "--undo")
         check("--undo without --setup: usage error rc 2", r.returncode == 2)
         r = run(binary, home, "--setup", "--cache")

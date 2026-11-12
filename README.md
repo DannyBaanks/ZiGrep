@@ -85,6 +85,7 @@ file it edits is kept.
 |---|---|
 | `ziggrep --setup --dry-run` | only shows the changes |
 | `ziggrep --setup --force` | applies them without asking |
+| `ziggrep --setup=claude,codex` | only these agents (`claude`, `codex`, `agy`, `openisy`, `opencode`) |
 | `ziggrep --setup --undo` | removes exactly what it added |
 
 ## Building from source

@@ -177,6 +177,7 @@ const usage =
     \\                    (Claude Code, Codex, agy/Gemini, OpenISy, opencode)
     \\                    to search with this tool: shows the changes, asks
     \\                    [s/N], keeps a .bak-ziggrep of every file it edits
+    \\      --setup=LIST  only these agents: claude,codex,agy,openisy,opencode
     \\      --undo        with --setup: remove exactly what --setup added
     \\      --cache-root=PATH
     \\                    root to scan for caches (repeatable; default $HOME/Development)
@@ -379,6 +380,8 @@ pub const Options = struct {
     setup: bool = false,
     /// `--undo` (with --setup): remove what --setup added.
     setup_undo: bool = false,
+    /// `--setup=claude,codex,...`: only these agents.
+    setup_only: ?[]const u8 = null,
     cache_dry_run: bool = false,
     cache_force: bool = false,
     cache_include_out: bool = false,
@@ -1356,6 +1359,13 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 opts.cache_explicit = true;
             } else if (std.mem.eql(u8, body, "setup")) {
                 opts.setup = true;
+            } else if (std.mem.startsWith(u8, body, "setup=")) {
+                opts.setup = true;
+                opts.setup_only = body["setup=".len..];
+                if (setup.unknownId(opts.setup_only.?)) |bad| {
+                    opts.fail = .{ .what = "unknown agent for --setup (use claude, codex, agy, openisy, opencode)", .arg = bad };
+                    return error.Usage;
+                }
             } else if (std.mem.eql(u8, body, "undo")) {
                 opts.setup_undo = true;
             } else if (std.mem.eql(u8, body, "dry-run")) {
@@ -2173,6 +2183,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .dry_run = opts.cache_dry_run,
             .force = opts.cache_force,
             .undo = opts.setup_undo,
+            .only = opts.setup_only,
             .cmd = cmd,
             .cmd_note = note,
         });
