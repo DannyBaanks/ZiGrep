@@ -1,0 +1,363 @@
+{
+ "cases": 20000000,
+ "seed": 20261112,
+ "procs": 12,
+ "knob": "auto",
+ "elapsed_s": 328.1,
+ "divergences": 25,
+ "unique": 25,
+ "rejected_patterns": 0,
+ "zgrep_bug": [
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(\u0080a\\.)((\u00ff|0)|)?"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 12559438480478504939,
+   "haystack": "\u0080A."
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "\tA\u0080."
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 6523493128905074980,
+   "haystack": "\ta\u0080xcB\tc- BCc\u0080x0\u0080ax0 Cc.b\rCAc\u00ffbCcC\t__c\u0080b\t0\u00809ax_\u00ff  \n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[^0123456789-]{1,}(9a\u0080)(-?|.|A)."
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 8971902129770057379,
+   "haystack": "\r9A\u0080.BCx\rC.cA00\u00ff\tcaB\u0080Ab0.9a\r\u00ffC-cbC\r\r \u00ff0cc\rb\u0080\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(((c|[\rBabc])|-[^abc-]x)|([ a]|c)+|(\\.{2,})*)(B\u0080[B])"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 228725109349977799,
+   "haystack": "b\u0080b\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "a\u0080\\.(.\t?.)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": true,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 5368864614574116796,
+   "haystack": "a\u0080.\u00ff\u00ff aBc._CA\u0080\u0080x\r\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "B\u0080_([^\t_]|A)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 482390034780276705,
+   "haystack": "b\u0080_\u00809\r_cbB\r.b\u00ffb\raB9\r\u00ff_C9\tcc_x90A_9-Cc\u00ffbC__.bCx9\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[C]\u0080C(|\u00ff|\t)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": true,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 13694918450951006626,
+   "haystack": "c\u0080c\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[0123456789b-](.?\u0080 )c"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 13586259147808991004,
+   "haystack": "b\u0080 c\rBc aC\rcBb\tx0\tb.x-_aa9a .a-cA\u00ff\rbx\u0080\rc\u00ff_9_Ba.\tx BB\u00ffbAB0.Ac\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[\t.C]((.+ \u00800)([B_\u00ff]{2,})*(a?){0,2})"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 9060641952466621959,
+   "haystack": "-0\t0_\rAB9\u00ffBxxB-b\u0000ac\u00ff.9Aa\t \u00800A.. bxbx--.\u00800\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "((([Cabc]\u0080)B)a).\t*"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 6699826070627214665,
+   "haystack": "a\u0080ba\u00ff9-A\u00ffC"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    ".[\u0080]aa"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 10265430061793997217,
+   "haystack": "9-\t0\taa_b\t\u00ff\tBA\tcbc\r\u0080 aabx-c\t9\u0080AA.\u00ffx\r_\r0.\ta\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "([9a]?\t+(|C))+(\t\u0080)\\.[A-]"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 18107980739428332672,
+   "haystack": "c_-0B_\t\t\u0080.AB\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "((\u0080{0,2}){2,})?[^\r0C][^\t\rx](\u0080([A]\u00ff).)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 709146905175212742,
+   "haystack": "xA\u0080A\u00ff\u0080.\u0000b Bc9.b\u0080\u00ff.\t\u00ff.B\u00ffA\u00800b\u00ff\t\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(|[^9A-])\u0080(Ca([ Babc\u00ff]*b{0,1}[\t ][^\ra]))a*"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 399497709838168779,
+   "haystack": "\u0080ca c\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(aA\u0080)\u00ff?[\t0Aabc]"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": true,
+   "knob": 5,
+   "seed": 4098792565121612335,
+   "haystack": "aA\u0080A\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "((\u0080{0,}|9_|.+)(\t.)*\u0080\\.)Bx?"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 1891959268386685197,
+   "haystack": "\u00ff\u0000A\u0000BB\u00ff \r.CcC\t\u00ff-.\u00ffbc\u00ffa bxC_B \u0080\ra.9bC.0-\t\u0080\u00ff CA\u0080.Bb 9\tAx_\t\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(.b)b\u0080((-[^\t\rx][^\tBb])([^c]|){2,3})"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 9851190390164399148,
+   "haystack": "0bb\u0080-  bxac\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "((.[ACabc]+-)_\u0080)."
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 12872890918725902624,
+   "haystack": "\u0000b-_\u0080\u0080\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[^._-]B(0\u0080(\u0080[^_][ ]0|.|9)c)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 17117835952406653155,
+   "haystack": "9b0\u0080Cc.\u00ff \u00ff\tc B\u00ffA9-ACxx-\r0cxxb\u0080xbA\tc9\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(Bb)(\u0080.)[^ C]"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 760787956125554521,
+   "haystack": "bb\u0080xB\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    " \u0080C[\t0123456789C]"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": true,
+   "knob": 5,
+   "seed": 7856720119568745493,
+   "haystack": "_a\ra0\tbaaC.b\r \u0080C\t0a\r\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "\u0080c9_?"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 1830689205154654985,
+   "haystack": "\u0080C9\u0080._\u0000aA-cbaaAx_- BBa999-AC9\u0080\u00ff.ab.a09xa\u0080.xc_9\t\u00ffcAccB \n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(.(([\u0080]\u0080 )9?))(.|_?)"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 2491258027414085883,
+   "haystack": "BB9.acB\u0080\u0080 .cAa\u0080aB\u00ffc\u00ffxcB-c\u00ffxCb\u00009c x\u00ff9_C\u0080CA\u0080\t-bxxB9\u00ff-\u0080\r\u00ff\t-_\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "((.A)[\u0080])A."
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 5359714646154453820,
+   "haystack": "ba\u0080aC\u00ff\r\rCa\r\u0000_\t0\u00009c_-xx0- ..AC_xAC\t-CBx \r\ta-0B9\u00ff \u00ffB\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "[^\t0123456789_x]\\.(\u0080b).{2,4}"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "knob": 5,
+   "seed": 16180703490617211483,
+   "haystack": "A.\u0080Ba\u00ff\n"
+  }
+ ],
+ "oracle_bug": []
+}

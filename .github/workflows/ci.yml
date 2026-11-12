@@ -110,6 +110,15 @@ jobs:
       # La regla de binarios contra un modelo en Python, en los caminos sync,
       # io_uring, enjambre y -j1, con ficheros que pasan por el buffer, mmap
       # y los lotes de io_uring: lineas, -c, -l, -L, --count-matches, --json.
+      # Fuzzer diferencial (scripts/diff_fuzz.zig): el matcher contra una
+      # referencia independiente; cada divergencia se juzga con LC_ALL=C grep.
+      # Semilla fija para que el CI sea reproducible; las campanas grandes
+      # (millones) se corren a mano.
+      - name: Differential fuzzer (fixed seed)
+        run: |
+          zig build -Doptimize=ReleaseFast
+          python3 scripts/diff_fuzz_run.py 300000 --seed=20261112 --out=fuzz-out
+
       - name: Binary rule consistency
         run: python3 evidence/binary-rule/binary_consistency.py
 

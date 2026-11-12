@@ -99,6 +99,25 @@ pub fn toLowerByte(b: u8) u8 {
     return b;
 }
 
+/// Lower-case byte `b` given the byte before it: the 0x80-0x9E -> +0x20 rule
+/// is the Latin-1 upper/lower pair ONLY as the second byte of a `C3 xx`
+/// sequence (À = C3 80, à = C3 A0). Applied to any byte it also folded
+/// `Ā` (C4 80) into `Ġ` (C4 A0), `Ł` (C5 81) into `š` (C5 A1) and a raw
+/// 0x80 into 0xA0 (found by scripts/diff_fuzz.zig, 2026-11-12).
+pub fn toLowerByteAfter(prev: u8, b: u8) u8 {
+    return if (prev == 0xC3) toLowerByte(b) else std.ascii.toLower(b);
+}
+
+/// The needle of a `-i` literal search, folded with `toLowerByteAfter`.
+pub fn foldNeedle(text: []u8) void {
+    var prev: u8 = 0;
+    for (text) |*c| {
+        const raw = c.*;
+        c.* = toLowerByteAfter(prev, raw);
+        prev = raw;
+    }
+}
+
 pub const Kind = enum { literal, regex, never };
 
 /// A match location inside a line: `hay[start..end)`.
@@ -262,6 +281,11 @@ pub const Searcher = struct {
         var pos = start;
         while (pos <= hay.len) {
             const m = self.findRaw(hay, pos) orelse return null;
+            // An empty needle "matches" at hay.len too; after a trailing
+            // newline that is no line at all. `-w ''` used to select every
+            // line through it (grep/rg select only lines with an empty match
+            // between non-word bytes; found by scripts/diff_fuzz.zig).
+            if (m == hay.len and m > 0 and hay[m - 1] == '\n') return null;
             const end = m + self.needle.len;
             const left_ok = m == 0 or !isWordByte(hay[m - 1]);
             const right_ok = end >= hay.len or !isWordByte(hay[end]);
@@ -300,12 +324,19 @@ pub const Searcher = struct {
             const p = scanCi(hay, p_idx, self.rarest_byte) orelse return null;
             const cand = p - roff;
             if (cand + n > hay.len) return null;
+            // The needle was folded with its own previous byte; the hay byte
+            // is folded with ITS previous byte, which equals the needle's
+            // whenever the previous position matched (C3 folds to itself).
             var ok = true;
-            for (nd, hay[cand .. cand + n]) |a, b| {
-                if (a != toLowerByte(b)) {
+            var prev: u8 = if (cand > 0) hay[cand - 1] else 0;
+            for (nd, hay[cand .. cand + n], 0..) |a, b, k| {
+                // At k == 0 the needle had no previous byte: fold ASCII only.
+                const hb = if (k == 0) std.ascii.toLower(b) else toLowerByteAfter(prev, b);
+                if (a != hb) {
                     ok = false;
                     break;
                 }
+                prev = b;
             }
             if (ok) return cand;
             p_idx = p + 1;
@@ -559,9 +590,7 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
         if (pure) |lit| {
             const text = try gpa.dupe(u8, lit);
             if (!o.icase and !o.word) return Searcher.init(if (o.fixed) patterns[0] else text, o.algo);
-            if (o.icase) for (text) |*c| {
-                c.* = toLowerByte(c.*);
-            };
+            if (o.icase) foldNeedle(text);
             var s = Searcher.init(text, o.algo);
             s.icase = o.icase;
             s.word = o.word;
@@ -616,6 +645,13 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
         if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
             if (lit.len >= 3) {
                 const text = try gpa.dupe(u8, lit);
+                // findCi compares against toLowerByte(hay), which also folds
+                // the UTF-8 Latin-1 continuation bytes (0x80-0x9E -> +0x20);
+                // requiredLiteral lower-cases with std.ascii only. Without the
+                // same folding here a literal holding such a byte (`xa\x80.`
+                // with -i) never matched its own text: the prefilter dropped
+                // every true match (found by scripts/diff_fuzz.zig).
+                if (o.icase) foldNeedle(text);
                 const pf = try gpa.create(Searcher);
                 pf.* = Searcher.init(text, o.algo);
                 pf.icase = o.icase;
@@ -988,4 +1024,25 @@ test "build: no patterns selects nothing (-f with an empty file)" {
     const empty = try build(pa, &.{""}, .{});
     try std.testing.expectEqual(Kind.literal, empty.kind);
     try std.testing.expectEqual(@as(?usize, 0), empty.find("", 0));
+}
+
+test "-i literal: Latin-1 folds only inside C3 xx (no Ā=Ġ, Ł=š, raw 0x80=0xA0)" {
+    var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_inst.deinit();
+    const a = arena_inst.allocator();
+    const T = struct {
+        fn hit(al: Allocator, pat: []const u8, hay: []const u8) !bool {
+            const s = try build(al, &.{pat}, .{ .icase = true, .fixed = true });
+            return s.find(hay, 0) != null;
+        }
+    };
+    try std.testing.expect(try T.hit(a, "À", "xàx"));
+    try std.testing.expect(try T.hit(a, "ñandú", "ÑANDÚ"));
+    try std.testing.expect(!try T.hit(a, "Ā", "Ġ"));
+    try std.testing.expect(!try T.hit(a, "ā", "ġ"));
+    try std.testing.expect(!try T.hit(a, "Ł", "š"));
+    try std.testing.expect(!try T.hit(a, "x\x80y", "x\xa0y"));
+    try std.testing.expect(try T.hit(a, "x\x80y", "X\x80Y"));
+    // A raw continuation byte still matches itself after a C3 in the text.
+    try std.testing.expect(try T.hit(a, "\x80", "\xc3\x80"));
 }

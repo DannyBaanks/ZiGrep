@@ -18,3 +18,4 @@ __pycache__/
 # binding de Python: residuos de pip install
 bindings/python/build/
 **/*.egg-info/
+fuzz-out/

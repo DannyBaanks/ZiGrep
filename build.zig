@@ -111,4 +111,24 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| cell_run.addArgs(args);
     const cell_step = b.step("cell-fuzz", "Run the N-dimensional discrete cell space fuzzer");
     cell_step.dependOn(&cell_run.step);
+
+    // Differential fuzzer: the matcher vs an independent reference
+    // (scripts/diff_fuzz.zig); millions of in-process cases.
+    const dfz_mod = b.createModule(.{
+        .root_source_file = b.path("scripts/diff_fuzz.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    dfz_mod.addAnonymousImport("zgrep", .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const dfz_exe = b.addExecutable(.{ .name = "diff_fuzz", .root_module = dfz_mod });
+    b.installArtifact(dfz_exe);
+    const dfz_run = b.addRunArtifact(dfz_exe);
+    dfz_run.step.dependOn(b.getInstallStep());
+    if (b.args) |args| dfz_run.addArgs(args);
+    const dfz_step = b.step("diff-fuzz", "Differential fuzzer: matcher vs an independent reference");
+    dfz_step.dependOn(&dfz_run.step);
 }

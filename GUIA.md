@@ -22,6 +22,7 @@ Evidencia de esta release, ejecutada en Linux sobre el commit tageado:
 | BRE (15) · `\b` (12) | 15/15 · 12/12 |
 | fuzzer entrópico | 100.001 permutaciones, 0 anomalías |
 | cell-fuzz | 1.000 coordenadas, 0 anomalías |
+| fuzzer diferencial | `python3 scripts/diff_fuzz_run.py N`: el matcher contra una referencia independiente, juez `LC_ALL=C grep`; encontró y cerró 6 bugs el 2026-11-12 (`evidence/diff-fuzz/`) |
 | cross-build Windows | compila (`x86_64-windows`, ReleaseFast) |
 
 ## El comando de Windows

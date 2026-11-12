@@ -2306,3 +2306,58 @@ test "searchBytes: the binary rule (NUL in the probe window, NUL later, -a, -z)"
         try std.testing.expectEqual(@as(usize, 2), ts.br.matches);
     }
 }
+
+test "scanBuffer: a pattern that matches the empty string selects empty lines (grep, rg)" {
+    // Found by scripts/diff_fuzz.zig: `x*`, `^`, `(a|)` skipped empty lines.
+    for ([_][]const u8{ "x*", "^", "(a|)", "a?", "^b*", "c*$", "c?$" }) |pat| {
+        var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_inst.deinit();
+        const a = arena_inst.allocator();
+        const s = try @import("search.zig").build(a, &.{pat}, .{});
+        var out: std.ArrayList(u8) = .empty;
+        const br = try scanBuffer(a, "a\n\nb\n", &s, "f", false, .count, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 3), br.lines);
+        const bj = try scanBuffer(a, "\n", &s, "f", false, .count, .{ .json = true }, &out);
+        try std.testing.expectEqual(@as(usize, 1), bj.lines);
+    }
+}
+
+test "scanBuffer -o: leftmost-longest even when a nullable alternative matches first" {
+    // Found by scripts/diff_fuzz.zig: the empty `x*` at 0 hid `.$` = "C".
+    var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_inst.deinit();
+    const a = arena_inst.allocator();
+    const s = try @import("search.zig").build(a, &.{ ".$", "x*" }, .{});
+    var out: std.ArrayList(u8) = .empty;
+    _ = try scanBuffer(a, "C\n", &s, "f", false, .lines, .{ .only_matching = true }, &out);
+    try std.testing.expectEqualStrings("C\n", out.items);
+}
+
+test "scanBuffer -w with an empty pattern: only lines with an empty word match" {
+    // Found by scripts/diff_fuzz.zig: `-w ''` selected every line.
+    var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_inst.deinit();
+    const a = arena_inst.allocator();
+    for ([_]bool{ true, false }) |fixed| {
+        const s = try @import("search.zig").build(a, &.{""}, .{ .word = true, .fixed = fixed });
+        var out: std.ArrayList(u8) = .empty;
+        // grep -wc '' : "b" no, "a b" no, "" yes, " " yes, "b " yes
+        const br = try scanBuffer(a, "b\na b\n\n \nb \n", &s, "f", false, .lines, .{ .show_line_no = true }, &out);
+        try std.testing.expectEqualStrings("3:\n4: \n5:b \n", out.items);
+        try std.testing.expectEqual(@as(usize, 3), br.lines);
+    }
+}
+
+test "-i regex prefilter keeps lines whose literal holds a 0x80-0x9E byte" {
+    // Found by scripts/diff_fuzz.zig: `xa\x80.` -i lost "xa\x80x".
+    var arena_inst = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_inst.deinit();
+    const a = arena_inst.allocator();
+    for ([_][]const u8{ "xa\x80.", "\tA\x80(x|y)", "ab\x9e." }) |pat| {
+        const s = try @import("search.zig").build(a, &.{pat}, .{ .icase = true });
+        var out: std.ArrayList(u8) = .empty;
+        const hay = if (std.mem.indexOfScalar(u8, pat, 0x9e) != null) "ab\x9ex\n" else if (pat[0] == '\t') "\ta\x80x\n" else "xa\x80x\n";
+        const br = try scanBuffer(a, hay, &s, "f", false, .count, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 1), br.lines);
+    }
+}

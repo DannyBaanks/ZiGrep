@@ -1,0 +1,12 @@
+{
+ "cases": 20000000,
+ "seed": 20261112,
+ "procs": 12,
+ "knob": "auto",
+ "elapsed_s": 302.6,
+ "divergences": 0,
+ "unique": 0,
+ "rejected_patterns": 0,
+ "zgrep_bug": [],
+ "oracle_bug": []
+}

@@ -85,6 +85,7 @@ zig build test --summary all       # unit tests
 zig build oracle                   # differential oracle against GNU grep and ripgrep
 zig build fuzz -- 100000           # adversarial fuzzer, 100,000 operations
 zig build cell-fuzz -- --all       # exhaustive sweep of the option space
+python3 scripts/diff_fuzz_run.py 20000000   # differential fuzzer, 20 M cases
 ```
 
 `zig build oracle` and a plain `zig build` install a Debug binary into
@@ -339,7 +340,16 @@ Each commit runs CI on Linux and on native Windows:
 
 Pass counts come from each CI run, not from this document.
 
-There are two fuzzers:
+There are three fuzzers:
+
+- `zig build diff-fuzz` is differential: every case is a random regex AST (or
+  `-F` literals) plus a haystack, and the matcher's answer (selected lines,
+  `-o` spans, `-c`/`-q`/`-l`, the line-by-line path, the literal kernels) must
+  equal an independent reference matcher written in the fuzzer. An entropy
+  knob (1-5) scales the alphabet, nesting and line length.
+  `python3 scripts/diff_fuzz_run.py 20000000` runs it on every core and
+  replays each divergence under `LC_ALL=C grep` to say who is wrong
+  (`evidence/diff-fuzz/`; CI runs a fixed-seed slice).
 
 - `zig build fuzz` mutates regex grammars, option combinations and degenerate
   inputs (SIMD boundary sizes, truncated UTF-16, 1 MB lines, NUL floods). It

@@ -902,6 +902,12 @@ pub const Dfa = struct {
         crlf: bool,
     ) Allocator.Error!?usize {
         var s = self.init_bol;
+        // A pattern that accepts the empty string (`x*`, `^`, `(a|)`) matches
+        // every line, the empty ones included. Acceptance used to be checked
+        // only after consuming a byte (or at `$`), so an empty line, which
+        // consumes none, never matched them (found by scripts/diff_fuzz.zig;
+        // grep and rg select it).
+        if (self.isAccepting(s)) return from;
         var prev_word = false; // a line start is a non-word byte
         var ls = from;
         var i = from;
@@ -933,7 +939,10 @@ pub const Dfa = struct {
             s = t;
             i += 1;
         }
-        if (ls < to and try self.acceptEnd(s, prev_word)) return ls;
+        // `ls < to`: no phantom line after a trailing newline. `from == to`
+        // is different: the caller passed one EMPTY line on its own (the
+        // line-by-line path does), and `c*$` must match it like grep does.
+        if ((ls < to or from == to) and try self.acceptEnd(s, prev_word)) return ls;
         return null;
     }
 
@@ -1063,7 +1072,11 @@ pub const Dfa = struct {
                 prev_word = isWordByte(b);
                 if (self.isAccepting(t)) best_end = i + 1;
 
-                if (best_end == null and i + 1 == to and try self.acceptEnd(t, prev_word)) best_end = i + 1;
+                // Leftmost-LONGEST: a `$` match that reaches the end of the
+                // line is longer than any match recorded so far (an empty
+                // `x*` at the start used to win: `-o -e '.$' -e 'x*'` on
+                // "C" printed nothing; found by scripts/diff_fuzz.zig).
+                if (i + 1 == to and try self.acceptEnd(t, prev_word)) best_end = i + 1;
                 if (self.is_dead(t)) break;
                 s = t;
             }
