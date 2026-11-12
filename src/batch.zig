@@ -74,12 +74,26 @@ pub fn estimateTokens(b: []const u8) f64 {
 const json_prefix = "{\"schema\":\"zgrep/1\",";
 
 /// Eventos que son resultados (lo que un agente cuenta como "hallazgos").
+/// Un `binary` lo es solo si coincidio (`--binary-files=binary`); el aviso de
+/// `--binary-files=note` (`"matched":null`) es informativo, como la
+/// procedencia. La misma regla en compacto (`compactIsResult`).
 fn isResult(line: []const u8) bool {
     const rest = line[json_prefix.len..];
     inline for (.{ "match", "occurrence", "file", "count" }) |t| {
         if (std.mem.startsWith(u8, rest, "\"type\":\"" ++ t ++ "\"")) return true;
     }
+    if (std.mem.startsWith(u8, rest, "\"type\":\"binary\"")) {
+        return std.mem.endsWith(u8, std.mem.trimEnd(u8, line, "\n"), "\"matched\":true}");
+    }
     return false;
+}
+
+/// La regla de `isResult` para una fila de zgrep/1c con etiqueta `tag`.
+fn compactIsResult(tag: []const u8, line: []const u8) bool {
+    if (tag.len == 0) return true;
+    if (tag[0] == 'c' or tag[0] == 'p') return false;
+    if (std.mem.eql(u8, tag, "b")) return std.mem.endsWith(u8, std.mem.trimEnd(u8, line, "\n"), ",true]");
+    return true;
 }
 
 const Lock = struct {
@@ -266,7 +280,7 @@ pub const Emitter = struct {
         }
         const tag_end = std.mem.indexOfScalarPos(u8, line, 2, '"') orelse line.len;
         const tag = line[2..tag_end];
-        const result = !(tag.len > 0 and (tag[0] == 'c' or tag[0] == 'p'));
+        const result = compactIsResult(tag, line);
         self.line_buf.clearRetainingCapacity();
         try self.line_buf.appendSlice(self.gpa, self.pending_header.items);
         try self.line_buf.appendSlice(self.gpa, line);

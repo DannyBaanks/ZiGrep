@@ -144,7 +144,10 @@ Four differences from grep are worth knowing before they surprise you:
    gzip, …) or a NUL in the first 8 KiB makes the file binary; a NUL
    further in ends the text at the start of its line (`-l`, `-c` and the
    printed lines always agree; `evidence/binary-rule/`). `-a` searches
-   everything as text. `.gitignore`,
+   everything as text. `--binary-files=note` reports every skipped binary
+   with its format, `--binary-files=binary` (grep) searches binaries and
+   reports "binary file matches (pdf)" without content, and `--stats` counts
+   them per format. `.gitignore`,
    `.ignore`, `.dataignore` and a built-in list (`.git`, `node_modules`,
    `target`, `*.log`, `*.min.js`, …) are skipped too. Ignore files follow
    git's rules: nested files, `!` negation, anchored patterns (`/build`,

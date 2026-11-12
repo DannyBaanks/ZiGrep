@@ -547,8 +547,20 @@ Verificado contra `rg` y `grep` en 25 casos (`evidence/feature-corpus/`):
 
 * `-t` es libre (grep no lo tiene); `-T` **no** se asigno a `--type-not`
   porque en grep es `--initial-tab`. Manda la politica de colisiones.
-* `--binary-files=binary` se **rechaza** con un mensaje claro: zgrep nunca
-  imprime contenido binario, asi que aceptarlo seria mentir.
+* `--binary-files=TYPE` (desde 2026-11-12, `scan.BinaryReport`). Ninguno
+  imprime contenido binario:
+
+  | valor | busca dentro | dice |
+  |---|---|---|
+  | `without-match` (defecto) | no | nada; `--stats` cuenta los binarios por formato (`binary: binary_files=N binary_formats=pdf:1,nul:3`) |
+  | `note` (de zgrep) | no | `zgrep: P: binary file skipped (pdf)` por stderr, o un evento `binary` con `searched:false` en `--json` |
+  | `binary` (de grep) | si, como bytes | `zgrep: P: binary file matches (nul)` por stderr (grep 3.11 hace lo mismo), o un evento `binary` con `matched:true`; cuenta como coincidencia para el codigo de salida, `-l` y `-c` |
+  | `text` | todo es texto | igual que `-a` |
+
+  Antes `binary` se rechazaba porque el motor no podia buscar en un binario
+  sin imprimirlo. `binary` lee los binarios enteros: en un arbol con modelos
+  o builds grandes es mas lento que el defecto. `note` no lee nada mas que la
+  sonda. Con `--provenance`, un binario no buscado no lleva hash.
 * La regla de binarios (`scan.searchBytes`, la misma en todos los caminos de
   lectura): una firma de formato binario al principio (`%PDF-`, ELF, PNG,
   zip, gzip, xz, zstd, wasm, Mach-O…, `scan.binaryMagic`) o un NUL en los
@@ -687,6 +699,7 @@ zigrep --json -n HIT a.txt
 | `occurrence` | `-o`, `--vimgrep` | uno por ocurrencia, con span |
 | `file` | `-l` / `-L` | `mode`: with-match / without-match |
 | `count` | `-c` / `--count-matches` | `lines` o `matches` |
+| `binary` | `--binary-files=note` (cada binario omitido) o `--binary-files=binary` (cada binario que coincide, modo líneas) | `format` (`pdf`, `elf`, ..., `nul`), `searched`, `matched` (`null` si no se buscó); nunca el contenido |
 
 Reglas del schema, deliberadas:
 
@@ -801,8 +814,9 @@ zgrep --queries-file q.jsonl --max-results 1 a.txt b.txt
 {"schema":"zgrep/1","type":"summary","queries":3,"returned":1,"omitted":2,"truncated":true,"reason":"max-results","output_bytes":161,"max_results":1,"max_output_tokens":null,"token_estimate":"bytes/4","dropped_non_event":0}
 ```
 
-* `--max-results N`: cuenta resultados (`match`, `occurrence`, `file`, `count`;
-  el `context` y el `passthru` acompañan y no cuentan) en **toda** la llamada.
+* `--max-results N`: cuenta resultados (`match`, `occurrence`, `file`, `count`,
+  y `binary` solo con `matched:true`; el `context`, el `passthru` y el aviso de
+  `note` acompañan y no cuentan) en **toda** la llamada.
 * `--max-output-tokens N`: tamaño de la salida en tokens **estimados por clases
   de caracteres** (`token_estimate: "zgrep-classes-v1"`, desde M7), calibrado
   contra un BPE real para no subestimar; el `summary` informa
@@ -908,6 +922,7 @@ Cómo se lee (la leyenda no viaja en la salida, para no pagarla en cada llamada)
 | `[..., text, match]` | 7º elemento solo si el match NO es `text[col-1 .. col-1+len]` (con `--replace`) |
 | `["l",P]` / `["L",P]` | `-l` / `-L` |
 | `["#",P,n]` / `["#m",P,n]` | `-c` / `--count-matches` |
+| `["b",P,fmt,searched,matched]` | un binario (`--binary-files=note|binary`); sin cabecera `{"path"}` |
 
 `col` y `byte_start` cuentan bytes; `byte_start + len` = `byte_end` de zgrep/1.
 

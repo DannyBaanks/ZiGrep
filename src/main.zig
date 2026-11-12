@@ -188,8 +188,12 @@ const usage =
     \\      --cache-no-global
     \\                    do not include ~/.cache/zig
     \\      --binary-files=TYPE
-    \\                    text | without-match (zgrep never prints binary
-    \\                    content, so 'binary' is rejected, not faked)
+    \\                    without-match (default: binaries are skipped silently)
+    \\                    note   skipped, and each one reported with its format
+    \\                           (stderr, or a `binary` event with --json)
+    \\                    binary searched; a match is reported as "binary file
+    \\                           matches (FORMAT)", never its content (grep)
+    \\                    text   same as -a
     \\  -k, --kamikaze, --dataflow
     \\                    streaming dataflow with concurrent kamikaze swarm (default)
     \\      --sort, --deterministic
@@ -246,13 +250,38 @@ const usage =
 /// it properly needs isatty(stdout), which is not worth the flag.
 pub const ColorMode = enum { never, always, auto };
 
-/// `--binary-files=TYPE` (grep). zgrep only has two honest answers: hunt the
-/// file and print the matches, or pretend it does not match. `binary` in grep
-/// means "print matches but suppress binary content", which this engine cannot
-/// do, so it is rejected at parse time instead of silently accepted.
-pub const BinaryFiles = enum { text, without_match };
+/// `--binary-files=TYPE` (grep, plus zgrep's `note`). Binary content is never
+/// printed; `binary` (grep) reports a match as "binary file matches" without
+/// content, `note` reports every skipped binary with its format. `binary`
+/// used to be rejected because the engine could not search a binary without
+/// printing it; since 2026-11-12 (`scan.BinaryReport`) it can.
+pub const BinaryFiles = enum { text, without_match, note, binary };
 
 pub const usage_error = error{Usage};
+
+fn binaryReport(b: BinaryFiles) scan.BinaryReport {
+    return switch (b) {
+        .note => .note,
+        .binary => .matches,
+        .text, .without_match => .off,
+    };
+}
+
+/// `binary_files=N binary_formats=pdf:1,nul:3` for `--stats`.
+fn printBinaryStats() void {
+    var total: usize = 0;
+    for (&scan.binary_counts) |*c| total += c.load(.monotonic);
+    std.debug.print("binary: binary_files={d} binary_formats=", .{total});
+    var first = true;
+    for (&scan.binary_counts, 0..) |*c, k| {
+        const n = c.load(.monotonic);
+        if (n == 0) continue;
+        std.debug.print("{s}{s}:{d}", .{ if (first) "" else ",", scan.binaryKindName(k), n });
+        first = false;
+    }
+    if (first) std.debug.print("-", .{});
+    std.debug.print("\n", .{});
+}
 
 pub const Options = struct {
     mode: Mode = .lines,
@@ -1163,8 +1192,12 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                     .text
                 else if (std.mem.eql(u8, v, "without-match"))
                     .without_match
+                else if (std.mem.eql(u8, v, "note"))
+                    .note
+                else if (std.mem.eql(u8, v, "binary"))
+                    .binary
                 else {
-                    opts.fail = .{ .what = "bad value for --binary-files (expected text|without-match; zgrep never prints binary content)", .arg = v };
+                    opts.fail = .{ .what = "bad value for --binary-files (expected without-match|note|binary|text)", .arg = v };
                     return error.Usage;
                 };
             } else if (std.mem.startsWith(u8, body, "exclude-from=")) {
@@ -2409,6 +2442,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
             .provenance = opts.provenance,
+            .binary_report = binaryReport(opts.binary_files),
         };
         const path_label = "(standard input)";
         const show_p = opts.show_path orelse false;
@@ -2438,10 +2472,11 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
 
         // Same rule as files (scan.finishFile): compact needs the header only in
         // front of line rows; -c/-l rows carry their own path.
-        if (opts.json and out.items.len > 0 and (opts.provenance or (opts.json_compact and stdin_rows_end > 0))) {
+        const stdin_prov = opts.provenance and !(ts.binary and ts.searched == 0);
+        if (opts.json and out.items.len > 0 and (stdin_prov or (opts.json_compact and stdin_rows_end > 0 and !ts.binary))) {
             // stdin: the hash is of the bytes read (raw, before any UTF-16
             // decode); there is no file, so no mtime.
-            try scan.insertFileHeader(&out, gpa, path_label, 0, data, .stdin, null, opts.provenance);
+            try scan.insertFileHeader(&out, gpa, path_label, 0, data, .stdin, null, stdin_prov);
         }
         if (out.items.len > 0 and opts.mode != .quiet) {
             _ = platform.writeStdout(init.io, out.items);
@@ -2549,6 +2584,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
             .provenance = opts.provenance,
+            .binary_report = binaryReport(opts.binary_files),
         };
 
         const matched = kamikaze.runKamikazePipeline(
@@ -2601,6 +2637,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
                     mb_s,
                 },
             );
+            printBinaryStats();
         }
 
         // POSIX/GNU grep (and rg): with -q a match wins over an error, so
@@ -2725,6 +2762,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             .encoding = scan.parseEncoding(opts.encoding) orelse .auto,
             .json = opts.json,
             .provenance = opts.provenance,
+            .binary_report = binaryReport(opts.binary_files),
         },
         .gpa = gpa,
         .window = window,
@@ -2880,6 +2918,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
             "zgrep-stats: files={d} bytes={d} matched_files={d} matched_lines={d} errors={d} threads={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
             .{ stats_files, stats_bytes, stats_matched_files, stats_matched_lines, stats_err, worker_count, secs, mbps },
         );
+        printBinaryStats();
     }
 
     if (exec_failed) return 2;
@@ -3300,10 +3339,22 @@ test "parseArgs: -S, -t/-T/--type-list, --binary-files, --exclude-from, --max-de
     }
     {
         var o: Options = .{};
+        // Accepted since 2026-11-12: reports "binary file matches", never content.
         const a = [_][:0]const u8{ "zgrep", "--binary-files=binary", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(BinaryFiles.binary, o.binary_files);
+        try std.testing.expectEqual(scan.BinaryReport.matches, binaryReport(o.binary_files));
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--binary-files=note", "pat" };
+        _ = try parseArgs(alloc, &a, &o);
+        try std.testing.expectEqual(scan.BinaryReport.note, binaryReport(o.binary_files));
+    }
+    {
+        var o: Options = .{};
+        const a = [_][:0]const u8{ "zgrep", "--binary-files=raro", "pat" };
         try std.testing.expectError(error.Usage, parseArgs(alloc, &a, &o));
-        const f = o.fail orelse return error.TestExpectedEqual;
-        try std.testing.expect(std.mem.indexOf(u8, f.what, "never prints binary content") != null);
     }
     {
         var o: Options = .{};

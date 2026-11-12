@@ -193,6 +193,7 @@ pub const UringScanner = struct {
                     fs.matched = ts.br.matched;
                     fs.lines = ts.br.lines;
                     fs.matches = ts.br.matches;
+                    fs.binary = ts.binary;
                 }
                 const fdata = self.buffers[slot_idx][0..n];
                 if (scan.finishFile(out, gpa, path, show_path, mode, fs, config, before_len, fdata, if (scan.bomFor(fdata, config) != null) .file_utf16 else .file, .path)) |e| fs.err = e;

@@ -30,7 +30,9 @@ FIX = "evidence/feature-corpus"
 FIELDS = ("query_id", "type", "path", "line", "column", "byte_start", "byte_end", "match", "text",
           "inverted", "lines", "matches", "mode", "sha256", "size", "mtime_ns", "source",
           # M9: solo en filas recortadas; su ausencia significa "no recortada".
-          "win_start", "line_len")
+          "win_start", "line_len",
+          # binary (--binary-files=note|binary): formato y veredicto.
+          "format", "searched", "matched")
 ROW_TYPE = {"m": "match", "c": "context", "o": "occurrence", "p": "passthru"}
 
 
@@ -71,6 +73,10 @@ def decode_compact(lines: list[str]) -> tuple[list[dict], list[dict]]:
         tag = d[0]
         if tag in ("l", "L"):
             recs.append({"query_id": qid, "type": "file", "path": d[1], "mode": "with-match" if tag == "l" else "without-match"})
+        elif tag == "b":
+            # ["b",P,formato,buscado,coincidio]: un binario, nunca su contenido.
+            recs.append({"query_id": qid, "type": "binary", "path": d[1], "format": d[2],
+                         "searched": d[3], "matched": d[4]})
         elif tag in ("#", "#m"):
             recs.append({"query_id": qid, "type": "count", "path": d[1],
                          "lines": d[2] if tag == "#" else None, "matches": d[2] if tag == "#m" else None})
@@ -138,6 +144,23 @@ CASES += [
 ]
 
 
+# Binarios (--binary-files=note|binary): un arbol generado (no se versionan
+# binarios) con NUL en la ventana, una firma sin NUL (PDF) y texto.
+import tempfile
+BINDIR = tempfile.mkdtemp(prefix="zg-compact-bin-")
+for _name, _data in {"nul.bin": b"\x00head\nHIT here\n", "doc.pdf": b"%PDF-1.5\nHIT pdf\n",
+                     "nohit.bin": b"\x00nothing\n", "t.txt": b"a HIT line\n"}.items():
+    (Path(BINDIR) / _name).write_bytes(_data)
+CASES += [
+    ("bin_note", ["--sort", "--binary-files=note", "HIT", BINDIR]),
+    ("bin_binary", ["--sort", "--binary-files=binary", "HIT", BINDIR]),
+    ("bin_binary_l", ["--sort", "--binary-files=binary", "-l", "HIT", BINDIR]),
+    ("bin_binary_c", ["--sort", "--binary-files=binary", "-c", "HIT", BINDIR]),
+    ("bin_note_prov", ["--sort", "--provenance", "--binary-files=note", "HIT", BINDIR]),
+    ("bin_default", ["--sort", "HIT", BINDIR]),
+]
+
+
 def run(argv: list[str], stdin: bytes | None = None) -> tuple[bytes, int]:
     p = subprocess.run(argv, cwd=ROOT, input=stdin, capture_output=True)
     return p.stdout, p.returncode
@@ -186,6 +209,10 @@ def main() -> int:
         full, rc1 = run([z, "--json", *flags], a_txt)
         comp, rc2 = run([z, "--json=compact", *flags], a_txt)
         compare(f"stdin {' '.join(flags)}", full, comp, rc1, rc2)
+    for flags in (["--binary-files=binary", "HIT"], ["--binary-files=note", "HIT"]):
+        full, rc1 = run([z, "--json", *flags], b"\x00bin\nHIT\n")
+        comp, rc2 = run([z, "--json=compact", *flags], b"\x00bin\nHIT\n")
+        compare(f"stdin binario {' '.join(flags)}", full, comp, rc1, rc2)
 
     # Lote: mismos registros con su query_id, y los mismos query_end.
     q = (json.dumps({"id": "rare", "pattern": "ZGREP_RARE_TOKEN", "paths": [CORPUS], "flags": ["-C1"]}) + "\n" +

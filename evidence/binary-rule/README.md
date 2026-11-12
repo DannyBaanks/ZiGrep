@@ -68,9 +68,24 @@ medians 23.1 / 21.5 / 23.7 ms and 23.9 / 23.7 / 23.0 ms for before /
 after-without-the-late-check / after. The order flips between runs, so the
 cost is below the noise floor (at most about 1 ms here).
 
+## Reporting binaries (`--binary-files`, `--stats`)
+
+| value | searched | reported |
+|---|---|---|
+| `without-match` (default) | no | nothing; `--stats` prints `binary: binary_files=N binary_formats=pdf:1,nul:3` |
+| `note` (zgrep) | no | `zgrep: P: binary file skipped (FORMAT)` on stderr, or a `binary` event (`searched:false`) |
+| `binary` (grep) | yes, as bytes | `zgrep: P: binary file matches (FORMAT)` on stderr like grep 3.11, or a `binary` event (`matched:true`); a match for rc, `-l`, `-c` |
+
+The `binary` event counts as a result (`--max-results`, `returned`) only when
+`matched:true`, in `zgrep/1` and `zgrep/1c` alike (`["b",P,fmt,searched,matched]`,
+no `{"path"}` header). With `-l`/`-c` the file/count row reports a matching
+binary, so no `binary` row is added (it would count the file twice). A binary
+that was not searched gets no provenance hash. `binary_consistency.py` checks
+the stderr lines, `-l`, `-c`, rc and `--stats`; `compact_conformance.py`
+checks that compact decodes to exactly the full events, in batches too.
+
 ## Not demonstrated / not done
 
-- No notice for skipped binary files (grep prints "binary file matches", rg
-  does for files named explicitly). Reporting it would mean searching every
-  binary file past the probe; not done.
+- `--binary-files=binary` reads binaries whole: on trees with large models or
+  builds it costs what reading them costs. Not measured; it is opt-in.
 - `--pre` output is searched without the binary rule (as before).

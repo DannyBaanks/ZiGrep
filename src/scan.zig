@@ -16,6 +16,7 @@ const Allocator = std.mem.Allocator;
 const Searcher = @import("search.zig").Searcher;
 const Match = @import("search.zig").Match;
 const out_json = @import("out_json.zig");
+const platform = @import("platform.zig");
 const search = @import("search.zig");
 const io_engine = @import("io_engine.zig");
 
@@ -32,6 +33,22 @@ pub const Mode = enum {
     files_without_match,
     /// No output at all; exit status only.
     quiet,
+};
+
+/// What zgrep says about a file the binary rule (`searchBytes`) treats as
+/// binary. Its content is never printed in any of them.
+pub const BinaryReport = enum {
+    /// `--binary-files=without-match` (default): skipped silently.
+    off,
+    /// `--binary-files=note` (zgrep): skipped, not searched, and reported with
+    /// its format: `zgrep: P: binary file skipped (pdf)` on stderr, or a
+    /// `binary` event with `"searched":false` under `--json`.
+    note,
+    /// `--binary-files=binary` (grep): searched as bytes; a match is reported
+    /// as `zgrep: P: binary file matches (pdf)` on stderr (grep 3.11 does the
+    /// same) or a `binary` event with `"matched":true`, and counts as a match
+    /// for the exit code, `-l` and `-c`, like grep.
+    matches,
 };
 
 pub const ScanConfig = struct {
@@ -59,6 +76,9 @@ pub const ScanConfig = struct {
     /// M4 `--provenance` (only with `json`): a `provenance` event (sha256,
     /// size, mtime) before the events of every file that produced any.
     provenance: bool = false,
+    /// `--binary-files=note|binary`: what to say about binary files (see
+    /// `BinaryReport`). The default says nothing (only `--stats` counts them).
+    binary_report: BinaryReport = .off,
     /// `-b`: prefix each line with its byte offset in the file (grep).
     byte_offset: bool = false,
     /// `--crlf`: treat CRLF as the line terminator, dropping the CR (rg).
@@ -163,6 +183,9 @@ pub const FileScan = struct {
     matches: usize = 0,
     /// Bytes actually searched (excludes binary skips and failures).
     bytes: usize = 0,
+    /// The binary rule applied: the only row this file can have is a
+    /// `binary` event, which carries its own path.
+    binary: bool = false,
     err: ?linux.E = null,
 };
 
@@ -774,18 +797,38 @@ const binary_magics = [_]struct { sig: []const u8, name: []const u8 }{
 
 /// The binary format named by the first bytes of `data`, or null.
 pub fn binaryMagic(data: []const u8) ?[]const u8 {
-    for (binary_magics) |m| {
-        if (std.mem.startsWith(u8, data, m.sig)) return m.name;
+    const i = binaryMagicIndex(data) orelse return null;
+    return binary_magics[i].name;
+}
+
+fn binaryMagicIndex(data: []const u8) ?usize {
+    for (binary_magics, 0..) |m, i| {
+        if (std.mem.startsWith(u8, data, m.sig)) return i;
     }
     return null;
 }
+
+/// Index of the "no signature, NUL in the probe window" kind in the counters.
+pub const binary_kind_nul = binary_magics.len;
+pub const binary_kind_count = binary_magics.len + 1;
+
+/// Name of a binary kind: the format, or "nul".
+pub fn binaryKindName(kind: usize) []const u8 {
+    return if (kind < binary_magics.len) binary_magics[kind].name else "nul";
+}
+
+/// Binary files seen in this run, per kind (`--stats`). Incremented by the
+/// scan threads, read once by main after they finish.
+pub var binary_counts: [binary_kind_count]std.atomic.Value(usize) = @splat(.init(0));
 
 pub const TextScan = struct {
     br: BufferResult = .{},
     /// The haystack was this UTF-16 file decoded to UTF-8.
     bom: ?BomKind = null,
-    /// Skipped as binary: a NUL in the first `binary_probe_bytes`.
+    /// Treated as binary (signature or NUL in the first `binary_probe_bytes`).
     binary: bool = false,
+    /// With `binary`: which kind (`binaryKindName`).
+    binary_kind: usize = 0,
     /// Bytes searched: 0 when skipped, the text before the first NUL when a
     /// later NUL cut the file, else all of it.
     searched: usize = 0,
@@ -825,7 +868,11 @@ pub fn searchBytes(
     }
     const nul_is_binary = !allow_binary and !config.null_data;
     const probe = @min(data.len, binary_probe_bytes);
-    if (nul_is_binary and (binaryMagic(data) != null or std.mem.findScalar(u8, data[0..probe], 0) != null)) return .{ .binary = true };
+    if (nul_is_binary) {
+        const kind: ?usize = binaryMagicIndex(data) orelse
+            if (std.mem.findScalar(u8, data[0..probe], 0)) |_| binary_kind_nul else null;
+        if (kind) |k| return binaryFile(gpa, data, searcher, path, mode, config, out, k);
+    }
 
     const start = out.items.len;
     const br = try scanBuffer(gpa, data, searcher, path, show_path, mode, config, out);
@@ -843,6 +890,67 @@ pub fn searchBytes(
     const cut = if (std.mem.findScalarLast(u8, data[0..nul], '\n')) |nl| nl + 1 else 0;
     out.shrinkRetainingCapacity(start);
     return .{ .br = try scanBuffer(gpa, data[0..cut], searcher, path, show_path, mode, config, out), .searched = cut };
+}
+
+/// `zgrep: P: binary file VERB (FORMAT)` on stderr, as one write.
+fn binaryNotice(path: []const u8, verb: []const u8, kind: usize) void {
+    var buf: [4096]u8 = undefined;
+    const line = std.fmt.bufPrint(&buf, "zgrep: {s}: binary file {s} ({s})\n", .{ path, verb, binaryKindName(kind) }) catch {
+        std.debug.print("zgrep: {s}: binary file {s} ({s})\n", .{ path, verb, binaryKindName(kind) });
+        return;
+    };
+    platform.writeStderrLine(line);
+}
+
+/// A file the rule treats as binary: count it, and report it as the
+/// `--binary-files` policy asks. Its content is never printed.
+fn binaryFile(
+    gpa: Allocator,
+    data: []const u8,
+    searcher: *const Searcher,
+    path: []const u8,
+    mode: Mode,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+    kind: usize,
+) Allocator.Error!TextScan {
+    _ = binary_counts[kind].fetchAdd(1, .monotonic);
+    var ts: TextScan = .{ .binary = true, .binary_kind = kind };
+    switch (config.binary_report) {
+        .off => {},
+        .note => {
+            if (mode == .quiet) return ts;
+            if (config.json) {
+                try out_json.emitBinaryEvent(out, gpa, path, binaryKindName(kind), false, null);
+            } else {
+                binaryNotice(path, "skipped", kind);
+            }
+        },
+        .matches => {
+            // Searched as bytes; only the verdict (and the counts) come out.
+            // Lines mode needs just "is there a match"; the per-file modes
+            // need their own count, which `emitOncePerFile` prints.
+            var sub = config;
+            sub.json = false;
+            sub.binary_report = .off;
+            const sub_mode: Mode = if (mode == .lines) .quiet else mode;
+            var scratch: std.ArrayList(u8) = .empty;
+            defer scratch.deinit(gpa);
+            ts.br = try scanBuffer(gpa, data, searcher, path, false, sub_mode, sub, &scratch);
+            ts.searched = data.len;
+            // Only in lines mode: with -l/-L/-c the file/count row already
+            // reports it (grep prints no notice there either), and a second
+            // row would count the same file twice as a result.
+            if (ts.br.matched and mode == .lines) {
+                if (config.json) {
+                    try out_json.emitBinaryEvent(out, gpa, path, binaryKindName(kind), true, true);
+                } else {
+                    binaryNotice(path, "matches", kind);
+                }
+            }
+        },
+    }
+    return ts;
 }
 
 pub fn scanBuffer(
@@ -1087,6 +1195,7 @@ fn processBuffer(
     res.lines = ts.br.lines;
     res.matches = ts.br.matches;
     res.bytes = ts.searched;
+    res.binary = ts.binary;
 }
 
 fn mapIoError(err: anyerror) linux.E {
@@ -1182,6 +1291,7 @@ fn scanFileLinux(
             res.lines = ts.br.lines;
             res.matches = ts.br.matches;
             res.bytes = ts.searched;
+            res.binary = ts.binary;
             const utf16_bom = ts.bom;
             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, if (utf16_bom != null) .file_utf16 else .file, .{ .fd = fd })) |e| res.err = e;
             return res;
@@ -1257,6 +1367,7 @@ fn scanFileLinux(
     res.lines = ts.br.lines;
     res.matches = ts.br.matches;
     res.bytes = ts.searched;
+    res.binary = ts.binary;
     const utf16_bom = ts.bom;
 
     // --- modes that emit once per file ------------------------------------
@@ -1341,13 +1452,18 @@ pub fn finishFile(
     if (emitOncePerFile(out, gpa, path, show_path, mode, res, config.null_filename, config.json)) |e| return e;
     if (!config.json) return null;
     // compact: line rows carry no path, so they need the file header; the
-    // -l/-c rows carry their own path and only get one for --provenance.
+    // -l/-c rows and the `binary` row carry their own path and only get one
+    // for --provenance.
+    // A binary that was not searched (`note`) gets no provenance: there is
+    // nothing searched to vouch for, and hashing a multi-GB binary just to
+    // say "skipped" would cost more than the whole search.
+    const prov = config.provenance and out.items.len > start and !(res.binary and res.bytes == 0);
     const needs = if (out_json.compact)
-        rows_end > start or (config.provenance and out.items.len > start)
+        (rows_end > start and !res.binary) or prov
     else
-        config.provenance and out.items.len > start;
+        prov;
     if (needs) {
-        insertFileHeader(out, gpa, path, start, data, source, if (config.provenance) mtimeNs(mtime_from, path) else null, config.provenance) catch return .NOMEM;
+        insertFileHeader(out, gpa, path, start, data, source, if (config.provenance) mtimeNs(mtime_from, path) else null, prov) catch return .NOMEM;
     }
     return null;
 }

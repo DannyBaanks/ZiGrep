@@ -325,6 +325,30 @@ pub fn emitFileEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, 
     try out.appendSlice(gpa, "\"}\n");
 }
 
+/// Un fichero tratado como binario (`--binary-files=note|binary`): nunca su
+/// contenido, solo el formato (`pdf`, `elf`, ..., o `nul`), si se busco y, si
+/// se busco, si coincidio. compact: `["b",P,fmt,searched,matched]`.
+pub fn emitBinaryEvent(out: *std.ArrayList(u8), gpa: Allocator, path: []const u8, format: []const u8, searched: bool, matched: ?bool) Allocator.Error!void {
+    if (compact) {
+        try out.appendSlice(gpa, "[\"b\",");
+        try appendJsonString(out, gpa, path);
+        try out.append(gpa, ',');
+        try appendJsonString(out, gpa, format);
+        try out.appendSlice(gpa, if (searched) ",true," else ",false,");
+        try out.appendSlice(gpa, if (matched) |m| (if (m) "true" else "false") else "null");
+        try out.appendSlice(gpa, "]\n");
+        return;
+    }
+    try out.appendSlice(gpa, json_prefix ++ "\"type\":\"binary\",\"path\":");
+    try appendJsonString(out, gpa, path);
+    try out.appendSlice(gpa, ",\"format\":");
+    try appendJsonString(out, gpa, format);
+    try out.appendSlice(gpa, if (searched) ",\"searched\":true" else ",\"searched\":false");
+    try out.appendSlice(gpa, ",\"matched\":");
+    try out.appendSlice(gpa, if (matched) |m| (if (m) "true" else "false") else "null");
+    try out.appendSlice(gpa, "}\n");
+}
+
 /// `-c` (recuento de líneas) o `--count-matches` (recuento de ocurrencias). Uno
 /// de los dos campos viene informado; el otro `null`, para que el schema no
 /// cambie entre modos.

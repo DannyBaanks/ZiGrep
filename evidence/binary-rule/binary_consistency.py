@@ -126,6 +126,39 @@ def main():
                     if ev.get("type") == "match":
                         jm[ev["path"]] = jm.get(ev["path"], 0) + 1
             check(f"{tag} --json", jm == {p: len(l) for p, l in want.items() if l})
+        # --binary-files policies (never any binary content on stdout).
+        binaries = {os.path.join(root, r): d for r, d in files.items() if model(d) is None}
+        def fmt(d):
+            return "pdf" if d.startswith(b"%PDF-") else "nul"
+        def has_needle(d):
+            return PAT in d
+        p = subprocess.run([zg, "--binary-files=note", "needle", root], capture_output=True)
+        notes = sorted(l for l in p.stderr.decode().splitlines() if "binary file skipped" in l)
+        want_notes = sorted(f"zgrep: {b}: binary file skipped ({fmt(d)})" for b, d in binaries.items())
+        check("note: one stderr line per binary, with its format", notes == want_notes, f"{notes[:3]} vs {want_notes[:3]}")
+        check("note: stdout unchanged", p.stdout == run(zg, ["needle"], root)[1])
+        p = subprocess.run([zg, "--binary-files=binary", "needle", root], capture_output=True)
+        hits = sorted(l for l in p.stderr.decode().splitlines() if "binary file matches" in l)
+        want_hits = sorted(f"zgrep: {b}: binary file matches ({fmt(d)})" for b, d in binaries.items() if has_needle(d))
+        check("binary: stderr names exactly the matching binaries", hits == want_hits, f"{hits[:3]} vs {want_hits[:3]}")
+        check("binary: no binary content on stdout", b"\x00" not in p.stdout and p.stdout == run(zg, ["needle"], root)[1])
+        _, out = run(zg, ["--binary-files=binary", "-l", "needle"], root)
+        check("binary: -l lists matching binaries too",
+              set(out.decode().split()) == {p for p, l in want.items() if l} | {b for b, d in binaries.items() if has_needle(d)})
+        _, out = run(zg, ["--binary-files=binary", "-c", "needle"], root)
+        counts = {l.rsplit(b":", 1)[0].decode(): int(l.rsplit(b":", 1)[1]) for l in out.split(b"\n") if l}
+        check("binary: -c counts the binary's lines",
+              all(counts[b] == sum(1 for x in d.split(b"\n") if PAT in x) for b, d in binaries.items()))
+        lone = os.path.join(root, "small_nul_window.bin")
+        check("binary: rc 0 on a matching binary", run(zg, ["--binary-files=binary", "-q", "needle"], lone)[0] == 0)
+        check("default: rc 1 on the same binary", run(zg, ["-q", "needle"], lone)[0] == 1)
+        p = subprocess.run([zg, "--stats", "needle", root], capture_output=True)
+        line = next((l for l in p.stderr.decode().splitlines() if l.startswith("binary:")), "")
+        nfmt = {}
+        for d in binaries.values():
+            nfmt[fmt(d)] = nfmt.get(fmt(d), 0) + 1
+        check("--stats counts binaries per format",
+              f"binary_files={len(binaries)}" in line and all(f"{k}:{v}" in line for k, v in nfmt.items()), line)
         # -a: everything is text, so the late lines DO come back.
         _, out = run(zg, ["-a", "-c", "needle"], os.path.join(root, "small_nul_late.bin"))
         check("-a reads past the NUL", out.strip() == b"4", out)
