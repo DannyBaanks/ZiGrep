@@ -60,9 +60,31 @@ Single thread (`-j 1`, `malloc|calloc|realloc`): 1.341 s → 94.8 ms,
 Before, rg was about 6× faster than zgrep on alternations. Now zgrep is about
 1.7× faster than rg on these queries. Raw data: `halt_*.json`.
 
-## NOT_DEMONSTRATED / next
+## `-i` (added the same day)
 
-- `-i` with alternations still runs the DFA over every byte. It could use
-  case-folded first bytes.
+With `-i`, the literals come lower-case: `requiredLiteral` folds ASCII pairs,
+as the DFA does. `MultiLit` compares each of the first two bytes with BOTH
+cases and verifies with `std.ascii.eqlIgnoreCase`.
+
+- Output identical to the deployed 953f76b on `<assembly>` for 9 queries,
+  covering `-i`, several `-e` in mixed case, `-i -w`, `-S` (both smart-case
+  outcomes), `-i -o`, `-i -l` and regex branches.
+- Unit tests:
+  - a new naive case-insensitive test (2,000 cases);
+  - the searcher-level differential now also runs `-i` and `-i -w`, on
+    mixed-case text.
+- Negative control: dropping the upper-case compare of the first byte makes
+  both fail.
+
+| Query (`-i -c`) | Before (A→B / B→A) | After (A→B / B→A) | Speed-up |
+|---|---:|---:|---:|
+| `malloc\|calloc\|realloc` | 330.4 / 327.7 ms | 29.0 / 31.5 ms | **10.9×** |
+| `todo\|fixme\|xxx` | 362.4 / 333.7 ms | 33.5 / 31.5 ms | **10.7×** |
+| `printf\|fprintf\|sprintf\|snprintf` | 352.9 / 317.3 ms | 30.4 / 31.1 ms | **10.9×** |
+
+`rg -i -c malloc|calloc|realloc` on the same host: 56.3 ms. Raw data:
+`hialt_*.json`.
+
+## NOT_DEMONSTRATED / next
 - More than 16 branches, or a branch whose required literal is a single byte,
   keeps the DFA path.

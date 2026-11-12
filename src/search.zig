@@ -426,21 +426,30 @@ pub const MultiLit = struct {
     lits: [max_lits][]const u8 = undefined,
     first: [max_lits]V = undefined,
     second: [max_lits]V = undefined,
+    /// `-i`: the upper-case twins of `first`/`second` (ASCII, the same folding
+    /// the regex engine does); literals are stored lower-case.
+    first_up: [max_lits]V = undefined,
+    second_up: [max_lits]V = undefined,
+    icase: bool = false,
     count: usize = 0,
     min_len: usize = 0,
 
     /// null when the set does not qualify (empty, too many, or a literal of
     /// fewer than 2 bytes). Duplicates are dropped.
-    pub fn init(lits: []const []const u8) ?MultiLit {
-        var self: MultiLit = .{};
+    pub fn init(lits: []const []const u8, icase: bool) ?MultiLit {
+        var self: MultiLit = .{ .icase = icase };
         var min: usize = std.math.maxInt(usize);
         outer: for (lits) |lit| {
             if (lit.len < 2) return null;
             for (self.lits[0..self.count]) |seen| if (std.mem.eql(u8, seen, lit)) continue :outer;
             if (self.count == max_lits) return null;
             self.lits[self.count] = lit;
-            self.first[self.count] = @splat(lit[0]);
-            self.second[self.count] = @splat(lit[1]);
+            const a = if (icase) std.ascii.toLower(lit[0]) else lit[0];
+            const b = if (icase) std.ascii.toLower(lit[1]) else lit[1];
+            self.first[self.count] = @splat(a);
+            self.second[self.count] = @splat(b);
+            self.first_up[self.count] = @splat(std.ascii.toUpper(a));
+            self.second_up[self.count] = @splat(std.ascii.toUpper(b));
             self.count += 1;
             min = @min(min, lit.len);
         }
@@ -456,8 +465,16 @@ pub const MultiLit = struct {
             const v0: V = hay[i..][0..32].*;
             const v1: V = hay[i + 1 ..][0..32].*;
             var mask: u32 = 0;
-            for (0..self.count) |k| {
-                mask |= @as(u32, @bitCast((v0 == self.first[k]) & (v1 == self.second[k])));
+            if (self.icase) {
+                for (0..self.count) |k| {
+                    const m0 = (v0 == self.first[k]) | (v0 == self.first_up[k]);
+                    const m1 = (v1 == self.second[k]) | (v1 == self.second_up[k]);
+                    mask |= @as(u32, @bitCast(m0 & m1));
+                }
+            } else {
+                for (0..self.count) |k| {
+                    mask |= @as(u32, @bitCast((v0 == self.first[k]) & (v1 == self.second[k])));
+                }
             }
             while (mask != 0) : (mask &= mask - 1) {
                 const p = i + @ctz(mask);
@@ -473,7 +490,10 @@ pub const MultiLit = struct {
 
     fn matchAt(self: *const MultiLit, hay: []const u8, p: usize) bool {
         for (self.lits[0..self.count]) |lit| {
-            if (p + lit.len <= hay.len and std.mem.eql(u8, hay[p .. p + lit.len], lit)) return true;
+            if (p + lit.len > hay.len) continue;
+            if (self.icase) {
+                if (std.ascii.eqlIgnoreCase(hay[p .. p + lit.len], lit)) return true;
+            } else if (std.mem.eql(u8, hay[p .. p + lit.len], lit)) return true;
         }
         return false;
     }
@@ -575,17 +595,19 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     s.multiline = o.multiline;
     s.null_data = o.null_data;
     // Alternations: one required literal per branch -> MultiLit prefilter.
-    // Case-sensitive line search only (no -i, -U, -z) in this first version.
-    if (!o.icase and !o.multiline and !o.null_data) multi: {
+    // Line search only (no -U, -z). With -i the literals come lower-case
+    // (requiredLiteral folds ASCII pairs, as the DFA does) and MultiLit
+    // compares both cases of the first two bytes.
+    if (!o.multiline and !o.null_data) multi: {
         var branches: std.ArrayList(*regex.Node) = .empty;
         for (raw_nodes) |rn| try collectBranches(arena, rn, &branches);
         if (branches.items.len < 2 or branches.items.len > MultiLit.max_lits) break :multi;
         var lits: [MultiLit.max_lits][]const u8 = undefined;
         for (branches.items, 0..) |b, k| {
-            const lit = (try regex.requiredLiteral(arena, b, false)) orelse break :multi;
+            const lit = (try regex.requiredLiteral(arena, b, o.icase)) orelse break :multi;
             lits[k] = try gpa.dupe(u8, lit);
         }
-        const ml = MultiLit.init(lits[0..branches.items.len]) orelse break :multi;
+        const ml = MultiLit.init(lits[0..branches.items.len], o.icase) orelse break :multi;
         const mp = try gpa.create(MultiLit);
         mp.* = ml;
         s.multi = mp;
@@ -838,7 +860,7 @@ test "MultiLit: leftmost occurrence of any literal, against naive" {
             for (lit_store[k][0..len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
             lits[k] = lit_store[k][0..len];
         }
-        const ml = MultiLit.init(lits[0..nl]).?;
+        const ml = MultiLit.init(lits[0..nl], false).?;
         var hay_buf: [300]u8 = undefined;
         const hay_len = rnd.uintLessThan(usize, hay_buf.len + 1);
         for (hay_buf[0..hay_len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
@@ -859,9 +881,50 @@ test "MultiLit: leftmost occurrence of any literal, against naive" {
         }
     }
     // Qualification rules.
-    try std.testing.expect(MultiLit.init(&.{ "ab", "a" }) == null);
-    try std.testing.expect(MultiLit.init(&.{}) == null);
-    try std.testing.expectEqual(@as(usize, 1), MultiLit.init(&.{ "ab", "ab" }).?.count);
+    try std.testing.expect(MultiLit.init(&.{ "ab", "a" }, false) == null);
+    try std.testing.expect(MultiLit.init(&.{}, false) == null);
+    try std.testing.expectEqual(@as(usize, 1), MultiLit.init(&.{ "ab", "ab" }, false).?.count);
+}
+
+test "MultiLit -i: leftmost case-insensitive occurrence, against naive" {
+    var prng = std.Random.DefaultPrng.init(0xa17e_2222_2026_1112);
+    const rnd = prng.random();
+    const alphabet = "aAbBcC dD_9";
+    var iter: usize = 0;
+    while (iter < 2000) : (iter += 1) {
+        var lit_store: [5][5]u8 = undefined;
+        var lits: [5][]const u8 = undefined;
+        const nl = 2 + rnd.uintLessThan(usize, 4);
+        for (0..nl) |k| {
+            const len = 2 + rnd.uintLessThan(usize, 4);
+            // Literals arrive lower-case from requiredLiteral(icase).
+            for (lit_store[k][0..len]) |*c| c.* = std.ascii.toLower(alphabet[rnd.uintLessThan(usize, alphabet.len)]);
+            lits[k] = lit_store[k][0..len];
+        }
+        const ml = MultiLit.init(lits[0..nl], true).?;
+        var hay_buf: [260]u8 = undefined;
+        const hay_len = rnd.uintLessThan(usize, hay_buf.len + 1);
+        for (hay_buf[0..hay_len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
+        const hay = hay_buf[0..hay_len];
+        var start: usize = 0;
+        while (start <= hay_len) : (start += 1 + rnd.uintLessThan(usize, 9)) {
+            var want: ?usize = null;
+            var q = start;
+            outer: while (q < hay_len) : (q += 1) {
+                for (lits[0..nl]) |lit| {
+                    if (q + lit.len <= hay_len and std.ascii.eqlIgnoreCase(hay[q .. q + lit.len], lit)) {
+                        want = q;
+                        break :outer;
+                    }
+                }
+            }
+            const got = ml.find(hay, start);
+            if (want != got) {
+                std.debug.print("\nMISMATCH -i hay={s} start={d} want={?d} got={?d}\n", .{ hay, start, want, got });
+                return error.TestExpectedEqual;
+            }
+        }
+    }
 }
 
 test "build: alternation prefilter gives the same lines as the plain DFA" {
@@ -873,7 +936,7 @@ test "build: alternation prefilter gives the same lines as the plain DFA" {
         &.{"webgpu|wgpu|dawn"}, &.{ "foo", "bar" }, &.{"fo+|ba[rz]"}, &.{ "ab", "abc", "qux" },
         &.{"(foo|bar)baz"},     &.{"^foo|bar$"},    &.{ "wgpu", "da.n" }, &.{"foo\\b|\\bbar"},
     };
-    const flag_sets = [_]BuildOptions{ .{}, .{ .word = true }, .{ .line = true } };
+    const flag_sets = [_]BuildOptions{ .{}, .{ .word = true }, .{ .line = true }, .{ .icase = true }, .{ .icase = true, .word = true } };
     for (pats) |pat| for (flag_sets) |fl| {
         const with = try build(pa, pat, fl);
         var without = with;
@@ -886,6 +949,10 @@ test "build: alternation prefilter gives the same lines as the plain DFA" {
                 const w = if (rnd.uintLessThan(u8, 3) == 0) words[rnd.uintLessThan(usize, words.len)] else "xyz";
                 if (len + w.len + 1 > hay_buf.len) break;
                 @memcpy(hay_buf[len .. len + w.len], w);
+                // Mixed case, so the -i flag sets exercise the folding.
+                for (hay_buf[len .. len + w.len]) |*c| {
+                    if (rnd.uintLessThan(u8, 3) == 0) c.* = std.ascii.toUpper(c.*);
+                }
                 len += w.len;
                 hay_buf[len] = if (rnd.uintLessThan(u8, 6) == 0) '\n' else ' ';
                 len += 1;
@@ -907,7 +974,7 @@ test "build: alternation prefilter gives the same lines as the plain DFA" {
     // The prefilter is installed for alternations and not for -i.
     try std.testing.expect((try build(pa, &.{"webgpu|wgpu|dawn"}, .{})).multi != null);
     try std.testing.expect((try build(pa, &.{ "foo", "bar" }, .{})).multi != null);
-    try std.testing.expect((try build(pa, &.{"webgpu|wgpu"}, .{ .icase = true })).multi == null);
+    try std.testing.expect((try build(pa, &.{"webgpu|wgpu"}, .{ .icase = true })).multi != null);
     try std.testing.expect((try build(pa, &.{"a|bc"}, .{})).multi == null); // 1-byte literal
 }
 
