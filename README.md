@@ -69,24 +69,8 @@ irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
 | `zigrep-windows-x86_64.zip` | Windows x86_64 (`zigrep.exe`, `zgrep.exe`, `install.ps1`) |
 | `SHA256SUMS.txt` | Checksums for the three archives |
 
-### Set up your AI coding agents
-
-```sh
-ziggrep --setup
-```
-
-The command finds the AI coding agents installed on this machine: Claude
-Code, Codex, agy/Gemini, OpenISy and opencode. It shows what it would add to
-each agent's global instruction file, asks `[s/N]`, and only then writes the
-rule that tells them to search with this tool. A copy `.bak-ziggrep` of every
-file it edits is kept.
-
-| Command | What it does |
-|---|---|
-| `ziggrep --setup --dry-run` | only shows the changes |
-| `ziggrep --setup --force` | applies them without asking |
-| `ziggrep --setup=claude,codex` | only these agents (`claude`, `codex`, `agy`, `openisy`, `opencode`) |
-| `ziggrep --setup --undo` | removes exactly what it added |
+To make your AI coding agents search with ZiGrep, see
+[level 3 of Usage](#level-3-for-ai-coding-agents).
 
 ## Building from source
 
@@ -108,49 +92,104 @@ zig build cell-fuzz -- --all       # exhaustive sweep of the option space
 
 ## Usage
 
-Run `zigrep --help` for the complete option list. The help text is generated
-from the binary, so it always matches the build you have.
+The installer puts the binary on your `PATH` as `zigrep`, plus the alias
+`zgrep`. On Linux, gzip ships a different tool called `zgrep`, so `zigrep` is
+the safe name. `zigrep --help` lists every option for the build you have.
 
-The `--help` header shows the usage forms:
+ZiGrep is used at three levels. Level 1 is all you need to replace grep.
 
-```text
-usage: zgrep [OPTIONS] PATTERN [PATH...]
-       zgrep [OPTIONS] [-e PATTERN...] [PATH...]
-       cat FILE | zgrep [OPTIONS] PATTERN
-```
+### Level 1: like grep
 
-The option surface covers:
+If you know grep, you already know most of ZiGrep:
 
-- **GNU grep:** `-F`, `-E`, `-G`, `-e`, `-f`, `-x`, `-w`, `-i`, `-v`, `-c`,
-  `-l`, `-L`, `-q`, `-m`, `-A/-B/-C`, `-H/-h`, `-a`, `-Z`, `-z`, `-b`, `-o`.
-- **ripgrep:** `-S`, `-t`, `--type-not`, `--type-list`, `--max-depth`, `--max-filesize`,
-  `--column`, `--count-matches`, `--replace`, `--passthru`, `--heading`,
-  `--vimgrep`, `-U`, `--pre`, `--encoding`, `--crlf`.
-- **Filtering:** `--include`, `--exclude`, `--exclude-from`, `--exclude-dir`,
-  `--include-ext`, `--exclude-ext`, `--no-ignore`, `--no-hidden`. Ignore rules
-  come from `.gitignore` and `.dataignore`. Globs follow ripgrep's `-g`
-  (`*`, `?`, `**`, `[abc]`, `{a,b}`). A glob that contains `/` is matched
-  against the path relative to the search root. The CI checks parity with
-  `rg -g` (`evidence/rg-glob-parity/`).
-- **ZiGrep-specific:** `--sort`, `--io-engine=sync|uring|auto`, `--algo`,
-  `--stats`, `--force-swarm`, `--nav` (directory navigation plans), `--exec`,
-  `--cache` (inspect and clean Zig build caches).
+| What you want | grep | zigrep |
+|---|---|---|
+| search a tree | `grep -rn foo .` | `zigrep -n foo .` (recursion is always on) |
+| ignore case | `grep -i foo` | `zigrep -i foo .` |
+| whole word | `grep -w foo` | `zigrep -w foo .` |
+| literal text, no regex | `grep -F 'a.b'` | `zigrep -F 'a.b' .` |
+| several patterns | `grep -e foo -e bar` | `zigrep -e foo -e bar .` |
+| patterns from a file | `grep -f pats.txt` | `zigrep -f pats.txt .` |
+| lines that do NOT match | `grep -v foo` | `zigrep -v foo .` |
+| count matching lines | `grep -c foo` | `zigrep -c foo .` |
+| only file names | `grep -l foo` / `grep -L foo` | `zigrep -l foo .` / `zigrep -L foo .` |
+| only the matched part | `grep -o 'v[0-9]+'` | `zigrep -o 'v[0-9]+' .` |
+| context lines | `grep -A 2 -B 1 -C 3` | `zigrep -A 2 -B 1 -C 3 foo .` |
+| stop after N matches | `grep -m 5` | `zigrep -m 5 foo .` |
+| just the exit code | `grep -q foo` | `zigrep -q foo .` |
+| whole line must match | `grep -x foo` | `zigrep -x foo .` |
+| only some files | `grep --include='*.zig'` | `zigrep --include='*.{zig,py}' foo .` |
+| skip files / dirs | `grep --exclude=… --exclude-dir=…` | same flags |
+| grep's basic regex | `grep 'a\|b'` | `zigrep -G 'a\|b' .` |
+| colour | `grep --color=always` | `zigrep --color=always foo .` |
+| read standard input | `cat f \| grep foo` | `cat f \| zigrep foo` |
 
-Since 0.4.0, line numbers are off by default, as in GNU grep and in ripgrep when
-its output is piped. Pass `-n` to enable them, or use `--pretty`.
+ripgrep users will also find `-t py`, `--type-not`, `-S` (smart case),
+`--max-depth`, `--max-filesize`, `--replace`, `--column`, `--vimgrep`,
+`--heading`, `-p` (pretty), `--passthru`, `-U` (multiline), `--pre`,
+`--encoding`, `--crlf` and `-z` (NUL-separated records).
 
-The regex dialect matches ripgrep's:
-`.`, `[a-z]`, `[^x]`, `[[:alpha:]]`, `\d`, `\w`, `\s`, `*`, `+`, `?`, `{n,m}`,
-`|`, `( )`, `^`, `$`, `\b`, `\B`. Back-references and lookaround are rejected
-with an error rather than approximated. `-G` translates basic regular
-expressions to this dialect.
+Four differences from grep are worth knowing before they surprise you:
+
+1. **Always give a path** (`.` for the current directory). With no path,
+   zigrep reads standard input like grep does. It does not search the current
+   directory like ripgrep.
+2. **Line numbers are off by default**, as in grep. Add `-n`.
+3. **Patterns are extended regex**, as in ripgrep and `grep -E`. Alternation is
+   `a|b`; `a\|b` means a literal `|`. Use `-G` for grep's basic syntax.
+   Back-references and lookaround are rejected with an error, never
+   approximated.
+4. **Noise is skipped.** Binary files count as "no match". `.gitignore`,
+   `.dataignore` and a built-in list (`.git`, `node_modules`, `target`,
+   `*.log`, `*.min.js`, …) are skipped too. Turn them off with `--no-ignore`
+   or `--no-default-ignore`.
 
 Exit status: `0` a match was found, `1` no match, `2` error.
 
-### Structured output
+### Level 2: what only ZiGrep does
 
-The structured output is aimed at programs that consume search results. Every
-event carries a schema identifier, and the schemas only ever add fields.
+These options have no grep equivalent. You never need them, but they explain
+how ZiGrep works and let you tune it.
+
+| Option | What it does |
+|---|---|
+| *(default)* `-k`, `--kamikaze` | **Kamikaze swarm.** Threads that both walk directories and search files, stealing work from each other. Results print as soon as each file finishes, so the order can change between runs. |
+| `--sort` | Deterministic output, in the same order GNU grep uses. |
+| *(automatic)* small-tree path | When the matching files total less than 2 MB, everything runs on one thread with no pool. `--force-swarm` always uses the swarm. This path does not read `.gitignore`. |
+| `-N`, `--nav SPEC` | **Befunge navigation.** Steers the walk like a pointer on a grid: `v^` searches only the files in the root, `^v` skips the root's files and searches only subdirectories, `<` walks siblings in reverse order. A plan that contradicts itself (`v^v`) is rejected. |
+| `--io-engine=auto\|sync\|uring`, `--uring` | How files are read on Linux. `auto` probes the page cache with the first read and switches to `io_uring` when the tree is cold. |
+| `--algo auto\|bmh\|memchr` | Picks the literal-search algorithm. |
+| `--stats` | Prints timing, throughput and which path ran to stderr. |
+| `--include-ext`, `--exclude-ext` | Filter by extension list (`--include-ext=zig,py`). |
+| `-X`, `--exec CMD` | Runs `CMD` for every file with a match; `{}` is replaced by the path. |
+| `--cache` | Finds Zig build caches on disk, says which are safe to delete, and asks before deleting (`--dry-run` only shows). |
+
+### Level 3: for AI coding agents
+
+ZiGrep is meant to be the search tool of coding agents such as Claude Code,
+Codex, agy/Gemini, OpenISy and opencode.
+
+**Make your agents use it, with one command:**
+
+```sh
+zigrep --setup
+```
+
+The command finds the agents installed on this machine and shows what it would
+add to each agent's global instruction file. Only after you answer `s` does it
+write the rule that tells them to search with ZiGrep. That rule also teaches
+the four differences above. A copy `.bak-ziggrep` of every file it edits is
+kept.
+
+| Command | What it does |
+|---|---|
+| `zigrep --setup --dry-run` | only shows the changes |
+| `zigrep --setup=claude,codex` | only these agents (`claude`, `codex`, `agy`, `openisy`, `opencode`) |
+| `zigrep --setup --force` | applies without asking (scripts, or a model running it) |
+| `zigrep --setup --undo` | removes exactly what it added |
+
+**Output that a program can read.** Every event carries a schema identifier,
+and the schemas only ever add fields.
 
 | Option | Purpose |
 |---|---|
@@ -163,7 +202,7 @@ event carries a schema identifier, and the schemas only ever add fields.
 | `--max-columns N` | Emits a long line as a window around the match, with offsets to recover the full line |
 
 The contracts, and what each option was measured to save or cost, are in
-[`GUIA.md`](GUIA.md) (sections 4k-4s) and in `evidence/agent-native/`.
+[`GUIA.md`](GUIA.md) (sections 4k-4t) and in `evidence/agent-native/`.
 
 ## Performance
 
