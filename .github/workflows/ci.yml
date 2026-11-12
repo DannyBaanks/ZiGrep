@@ -103,6 +103,13 @@ jobs:
 
       # --setup contra un HOME falso: plan, pregunta, idempotencia, respaldo,
       # --undo exacto y errores de uso. Nunca toca el HOME real del runner.
+      # .gitignore con la semantica de git: el oraculo es el propio git
+      # (ls-files --exclude-standard) sobre un repo generado con .gitignore
+      # anidados, negacion, anclas, reglas de solo-directorio, ** y escapes;
+      # .ignore se compara con rg.
+      - name: gitignore semantics vs git
+        run: python3 evidence/gitignore-semantics/gitignore_parity.py
+
       - name: Agent setup (--setup) end-to-end
         run: python3 evidence/setup/setup_check.py
 
@@ -120,6 +127,8 @@ jobs:
           done
           echo "== glob parity (Debug)"
           python3 evidence/rg-glob-parity/glob_parity.py --zgrep zig-debug/bin/zgrep
+          echo "== gitignore semantics (Debug)"
+          python3 evidence/gitignore-semantics/gitignore_parity.py --zgrep zig-debug/bin/zgrep
 
   windows-native:
     name: Native Windows Build, Tests & Oracle

@@ -38,7 +38,7 @@ const version = "0.4.0-dev";
 
 /// Size budget for the zero-thread micro-tree fast path: a tree whose regular
 /// files add up to less than this is scanned on the calling thread, with no
-/// thread pool and without the upward `.dataignore`/`.gitignore` walk.
+/// thread pool (same ignore rules as the swarm).
 /// `--force-swarm` opts out and restores the concurrent swarm.
 const micro_tree_max_bytes: usize = 2 * 1024 * 1024;
 

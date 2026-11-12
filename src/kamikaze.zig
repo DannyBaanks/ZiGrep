@@ -98,6 +98,9 @@ pub const SpinLock = struct {
 pub const DirTask = struct {
     path: [:0]const u8,
     depth: usize = 0,
+    /// Ignore rules in force at this directory's parent (immutable chain,
+    /// shared between threads). The scout adds the directory's own files.
+    ign: ?*const filter.IgnoreNode = null,
 };
 
 /// Concurrent WorkPool coordinating both Directory Scouting and File Scanning.
@@ -131,11 +134,11 @@ pub const WorkPool = struct {
         self.aborted.store(true, .release);
     }
 
-    pub fn pushRoot(self: *WorkPool, root: [:0]const u8) Allocator.Error!void {
+    pub fn pushRoot(self: *WorkPool, root: [:0]const u8, ign: ?*const filter.IgnoreNode) Allocator.Error!void {
         self.lock.lock();
         defer self.lock.unlock();
         const copy = try self.gpa.dupeZ(u8, root);
-        try self.dir_queue.append(self.gpa, .{ .path = copy, .depth = 0 });
+        try self.dir_queue.append(self.gpa, .{ .path = copy, .depth = 0, .ign = ign });
         self.dirs_in_flight += 1;
     }
 
@@ -194,6 +197,7 @@ pub const WorkPool = struct {
         batch: ?DirectoryBatch,
         subdirs: []const [:0]const u8,
         depth: usize,
+        ign: ?*const filter.IgnoreNode,
     ) Allocator.Error!void {
         self.lock.lock();
         defer self.lock.unlock();
@@ -213,7 +217,7 @@ pub const WorkPool = struct {
         }
 
         for (subdirs) |sd| {
-            try self.dir_queue.append(self.gpa, .{ .path = sd, .depth = depth + 1 });
+            try self.dir_queue.append(self.gpa, .{ .path = sd, .depth = depth + 1, .ign = ign });
             self.dirs_in_flight += 1;
         }
     }
@@ -295,6 +299,7 @@ fn scoutDirConcurrent(
     ctx: *KamikazeContext,
     dir: [:0]const u8,
     depth: usize,
+    parent_ign: ?*const filter.IgnoreNode,
 ) Allocator.Error!void {
     if (ctx.mode == .quiet and ctx.found.load(.acquire)) return;
     if (ctx.pool.aborted.load(.acquire)) return;
@@ -307,6 +312,16 @@ fn scoutDirConcurrent(
 
     var stream = vfs.DirStream.open(ctx.io, dir) catch return;
     defer stream.close();
+
+    // Pass 1 applies every filter except the ignore files and notes which
+    // ignore files the directory holds; pass 2 (below) applies the rules,
+    // so a directory without ignore files costs no extra `openat`.
+    var present: FilterEngine.IgnoreFiles = .none;
+    var cand_dirs: std.ArrayList([:0]const u8) = .empty;
+    defer {
+        for (cand_dirs.items) |d| ctx.gpa.free(d);
+        cand_dirs.deinit(ctx.gpa);
+    }
 
     var subdirs: std.ArrayList([:0]const u8) = .empty;
     errdefer {
@@ -337,24 +352,43 @@ fn scoutDirConcurrent(
 
         if (kind == .directory) {
             if (!recurse_subdirs) continue;
-            if (ctx.filter.isDirExcluded(entry.name)) continue;
+            if (ctx.filter.isDirExcludedAt(null, dir, entry.name)) continue;
             // rg's --max-depth counts from the root, so depth 0 IS the root:
             // `--max-depth 1` never descends.
             if (ctx.max_depth != 0 and depth + 1 >= ctx.max_depth) continue;
-            try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, entry.name));
+            try cand_dirs.append(ctx.gpa, try ctx.gpa.dupeZ(u8, entry.name));
         } else if (kind == .file) {
+            present.note(entry.name);
             if (!scan_files) continue;
-            if (ctx.filter.isFileExcludedIn(dir, entry.name)) continue;
-            if (ctx.max_filesize > 0) {
-                const full = try joinPathSentinel(ctx.gpa, dir, entry.name);
-                defer ctx.gpa.free(full);
-                const meta = vfs.statFile(ctx.io, full, .{ .follow_symlinks = false }) catch null;
-                if (meta) |m| {
-                    if (m.size > ctx.max_filesize) continue;
-                }
-            }
+            if (ctx.filter.isFileExcludedAt(null, dir, entry.name)) continue;
             try files.append(ctx.gpa, try ctx.gpa.dupeZ(u8, entry.name));
         }
+    }
+
+    // Pass 2. A root's chain already holds its own ignore files.
+    const ign = if (depth == 0) parent_ign else ctx.filter.enterDirWith(ctx.io, parent_ign, dir, present);
+    for (cand_dirs.items) |name| {
+        if (FilterEngine.ignoredByRules(ign, dir, name, true)) continue;
+        try subdirs.append(ctx.gpa, try joinPathSentinel(ctx.gpa, dir, name));
+    }
+    {
+        var kept: usize = 0;
+        for (files.items) |name| {
+            var keep = !FilterEngine.ignoredByRules(ign, dir, name, false);
+            if (keep and ctx.max_filesize > 0) {
+                const full = try joinPathSentinel(ctx.gpa, dir, name);
+                defer ctx.gpa.free(full);
+                const meta = vfs.statFile(ctx.io, full, .{ .follow_symlinks = false }) catch null;
+                if (meta) |m| keep = m.size <= ctx.max_filesize;
+            }
+            if (keep) {
+                files.items[kept] = name;
+                kept += 1;
+            } else {
+                ctx.gpa.free(name);
+            }
+        }
+        files.shrinkRetainingCapacity(kept);
     }
 
     if (ctx.nav_plan.reverse_siblings and files.items.len > 1) {
@@ -370,7 +404,7 @@ fn scoutDirConcurrent(
         };
     }
 
-    try ctx.pool.pushScoutResults(batch, subdirs.items, depth);
+    try ctx.pool.pushScoutResults(batch, subdirs.items, depth, ign);
     subdirs.deinit(ctx.gpa);
 }
 
@@ -553,7 +587,7 @@ pub fn kamikazeWorker(ctx: *KamikazeContext) void {
         // 2. Try to pop a directory (Scout next directory)
         if (ctx.pool.popDir()) |task| {
             idle_count = 0;
-            scoutDirConcurrent(ctx, task.path, task.depth) catch {};
+            scoutDirConcurrent(ctx, task.path, task.depth, task.ign) catch {};
             ctx.pool.finishDir();
             ctx.gpa.free(task.path);
             continue;
@@ -637,7 +671,7 @@ fn tryQuickTreeScan(
     const micro_max_depth: usize = 32;
 
     var dir_queue: std.ArrayList(DirTask) = .empty;
-    dir_queue.append(arena, .{ .path = root, .depth = 0 }) catch return null;
+    dir_queue.append(arena, .{ .path = root, .depth = 0, .ign = filter_engine.rootNode(root) }) catch return null;
 
     var dirs_visited: usize = 0;
     var total_bytes: u64 = 0;
@@ -655,6 +689,11 @@ fn tryQuickTreeScan(
         dirs_visited += 1;
         if (dirs_visited > max_dirs) return null;
 
+        // The directory's entries are listed first and the rules applied
+        // after, so a directory without ignore files costs no extra `openat`.
+        const Entry = struct { name: []const u8, kind: vfs.EntryKind, size: u64 };
+        var entries: std.ArrayList(Entry) = .empty;
+        var present: FilterEngine.IgnoreFiles = .none;
         while (true) {
             const maybe_entry = stream.next() catch return null;
             const entry = maybe_entry orelse break;
@@ -671,30 +710,38 @@ fn tryQuickTreeScan(
                 kind = info.kind;
                 size = info.size;
             }
+            if (kind == .file) present.note(entry.name);
+            if (kind != .file and kind != .directory) {
+                // Symlinks, sockets, fifos and device nodes are skipped,
+                // exactly like the concurrent scout does.
+                continue;
+            }
+            const name = arena.dupe(u8, entry.name) catch return null;
+            entries.append(arena, .{ .name = name, .kind = kind, .size = size }) catch return null;
+        }
 
-            switch (kind) {
+        const ign = if (task.depth == 0) task.ign else filter_engine.enterDirWith(io, task.ign, task.path, present);
+        for (entries.items) |e| {
+            switch (e.kind) {
                 .directory => {
-                    if (filter_engine.isDirExcluded(entry.name)) continue;
+                    if (filter_engine.isDirExcludedAt(ign, task.path, e.name)) continue;
                     if (task.depth >= micro_max_depth) return null;
                     // rg's --max-depth counts from the root, so depth 0 IS the
                     // root: `--max-depth 1` never descends.
                     if (max_depth != 0 and task.depth + 1 >= max_depth) continue;
-                    const child_dir = joinPathSentinel(arena, task.path, entry.name) catch return null;
-                    dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1 }) catch return null;
+                    const child_dir = joinPathSentinel(arena, task.path, e.name) catch return null;
+                    dir_queue.append(arena, .{ .path = child_dir, .depth = task.depth + 1, .ign = ign }) catch return null;
                 },
                 .file => {
-                    if (filter_engine.isFileExcludedIn(task.path, entry.name)) continue;
-                    if (max_filesize > 0 and size > max_filesize) continue;
+                    if (filter_engine.isFileExcludedAt(ign, task.path, e.name)) continue;
+                    if (max_filesize > 0 and e.size > max_filesize) continue;
                     if (files.items.len >= max_files) return null;
-                    total_bytes += size;
+                    total_bytes += e.size;
                     if (total_bytes > @as(u64, max_bytes)) return null;
-                    const full_path = joinPathSentinel(arena, task.path, entry.name) catch return null;
+                    const full_path = joinPathSentinel(arena, task.path, e.name) catch return null;
                     files.append(arena, full_path) catch return null;
                 },
-                else => {
-                    // Symlinks, sockets, fifos and device nodes are skipped,
-                    // exactly like the concurrent scout does.
-                },
+                else => unreachable,
             }
         }
     }
@@ -777,7 +824,7 @@ fn tryQuickQuietProbe(
             kind = if (vfs.stat(io, probe_path, false)) |info| info.kind else .other;
         }
         if (kind != .file) continue;
-        if (filter_engine.isFileExcludedIn(root, entry.name)) continue;
+        if (filter_engine.isFileExcludedAt(filter_engine.rootNode(root), root, entry.name)) continue;
 
         const stack_path = formatPathBuf(&path_buf, root, entry.name);
         var heap_path: ?[:0]const u8 = null;
@@ -921,7 +968,7 @@ pub fn runKamikazePipeline(
     for (roots) |root| {
         if (vfs.stat(io, root, true)) |info| {
             if (info.kind == .directory) {
-                try pool.pushRoot(root);
+                try pool.pushRoot(root, filter_engine.rootNode(root));
             } else if (info.kind == .file) {
                 try pool.pushSingleFile(root);
             }
@@ -984,7 +1031,7 @@ test "WorkPool lifecycle and termination" {
     var pool = WorkPool.init(gpa);
     defer pool.deinit();
 
-    try pool.pushRoot("root_dir");
+    try pool.pushRoot("root_dir", null);
     try std.testing.expect(!pool.isDone());
 
     const r = pool.popDir();
@@ -1003,7 +1050,7 @@ test "WorkPool lifecycle and termination" {
         .batch_idx = 0,
     };
 
-    try pool.pushScoutResults(batch, &subdirs, 0);
+    try pool.pushScoutResults(batch, &subdirs, 0, null);
     pool.finishDir();
     gpa.free(r.?.path);
 

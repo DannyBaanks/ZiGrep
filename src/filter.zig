@@ -2,7 +2,8 @@
 //!
 //! Features:
 //!   1. Default noisy directories & file extensions (caches, virtualenvs, binaries).
-//!   2. .dataignore (native zigrep ignore format) and .gitignore file parsing.
+//!   2. .gitignore / .ignore / .dataignore with git's semantics (gitignore.zig):
+//!      nested files, negation, anchoring, dir-only rules, `**`.
 //!   3. CLI chaining:
 //!      --exclude-dir=DIR1,DIR2
 //!      --exclude-ext=EXT1,EXT2
@@ -13,6 +14,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const vfs = @import("vfs.zig");
+const gitignore = @import("gitignore.zig");
+pub const IgnoreNode = gitignore.Node;
 
 pub const default_excluded_dirs = [_][]const u8{
     ".git",
@@ -344,7 +347,11 @@ pub const FilterEngine = struct {
     /// An include name counts as one more alternative of the include-ext set.
     excluded_names: std.ArrayList([]const u8),
     included_names: std.ArrayList([]const u8),
-    ignore_patterns: std.ArrayList([]const u8),
+    /// `.gitignore` / `.dataignore` rules (git semantics, gitignore.zig).
+    /// Created by `loadIgnoreFiles`; null when ignore files are off.
+    ign_store: ?*gitignore.Store = null,
+    /// The rule chain that applies at each directory search root.
+    root_nodes: std.ArrayList(RootNode) = .empty,
     /// Search roots (the operands), used to turn `dir/name` into the path
     /// relative to its root for `--include`/`--exclude` globs that contain
     /// a '/' (rg matches those against the relative path). Borrowed.
@@ -363,7 +370,6 @@ pub const FilterEngine = struct {
             .included_patterns = .empty,
             .excluded_names = .empty,
             .included_names = .empty,
-            .ignore_patterns = .empty,
         };
     }
 
@@ -382,8 +388,13 @@ pub const FilterEngine = struct {
         self.excluded_names.deinit(self.gpa);
         for (self.included_names.items) |item| self.gpa.free(item);
         self.included_names.deinit(self.gpa);
-        for (self.ignore_patterns.items) |item| self.gpa.free(item);
-        self.ignore_patterns.deinit(self.gpa);
+        if (self.ign_store) |st| {
+            st.deinit();
+            self.gpa.destroy(st);
+            self.ign_store = null;
+        }
+        for (self.root_nodes.items) |rn| self.gpa.free(rn.root);
+        self.root_nodes.deinit(self.gpa);
     }
 
     pub fn addExcludedDirs(self: *FilterEngine, comma_separated: []const u8) !void {
@@ -443,73 +454,177 @@ pub const FilterEngine = struct {
         try self.included_patterns.append(self.gpa, dup);
     }
 
-    pub fn loadIgnoreFile(self: *FilterEngine, io: std.Io, dir_path: []const u8, file_name: []const u8) void {
-        if (self.no_ignore) return;
-        const full_path = std.fs.path.join(self.gpa, &.{ dir_path, file_name }) catch return;
-        defer self.gpa.free(full_path);
+    /// Which ignore files a directory holds. A walker that has already listed
+    /// the directory passes what it saw, so a directory without ignore files
+    /// costs no `openat` at all; `.all` means "not known, try each one".
+    pub const IgnoreFiles = packed struct {
+        dataignore: bool = false,
+        gitignore: bool = false,
+        ignore: bool = false,
+
+        pub const all: IgnoreFiles = .{ .dataignore = true, .gitignore = true, .ignore = true };
+        pub const none: IgnoreFiles = .{};
+
+        pub fn any(self: IgnoreFiles) bool {
+            return self.dataignore or self.gitignore or self.ignore;
+        }
+
+        /// Marks `name` if it is one of the ignore files.
+        pub fn note(self: *IgnoreFiles, name: []const u8) void {
+            if (name.len < 7 or name[0] != '.') return;
+            if (std.mem.eql(u8, name, ".gitignore")) self.gitignore = true else if (std.mem.eql(u8, name, ".ignore")) self.ignore = true else if (std.mem.eql(u8, name, ".dataignore")) self.dataignore = true;
+        }
+    };
+
+    pub const RootNode = struct { root: []const u8, node: ?*const IgnoreNode };
+
+    /// Largest ignore file read; a bigger one is read up to this size.
+    const max_ignore_file_bytes = 1 << 20;
+
+    /// Appends the rules of `dir_path/file_name` (if it exists) to `rules`.
+    fn readIgnoreFile(self: *const FilterEngine, io: std.Io, dir_path: []const u8, file_name: []const u8, rules: *std.ArrayList(gitignore.Rule)) void {
+        var path_buf: [4096]u8 = undefined;
+        const full_path = std.fmt.bufPrint(&path_buf, "{s}{s}{s}", .{
+            dir_path,
+            if (dir_path.len > 0 and (dir_path[dir_path.len - 1] == '/' or dir_path[dir_path.len - 1] == '\\')) "" else "/",
+            file_name,
+        }) catch return;
         const file = std.Io.Dir.cwd().openFile(io, full_path, .{}) catch return;
         defer file.close(io);
-
-        var buf: [32 * 1024]u8 = undefined;
-        const n = file.readPositionalAll(io, &buf, 0) catch return;
-        if (n == 0) return;
-        const content = buf[0..n];
-
-        var it = std.mem.splitScalar(u8, content, '\n');
-        while (it.next()) |raw_line| {
-            const line = std.mem.trim(u8, raw_line, " \r\t");
-            if (line.len == 0 or line[0] == '#') continue;
-            const dup = self.gpa.dupe(u8, line) catch continue;
-            self.ignore_patterns.append(self.gpa, dup) catch continue;
-        }
+        const size = std.math.cast(usize, (file.stat(io) catch return).size) orelse return;
+        if (size == 0) return;
+        const bytes = self.gpa.alloc(u8, @min(size, max_ignore_file_bytes)) catch return;
+        defer self.gpa.free(bytes);
+        const n = file.readPositionalAll(io, bytes, 0) catch return;
+        const parsed = gitignore.parse(self.gpa, bytes[0..n]) catch return;
+        defer self.gpa.free(parsed);
+        rules.appendSlice(self.gpa, parsed) catch {
+            for (parsed) |r| self.gpa.free(r.glob);
+        };
     }
 
-    /// Recursively discovers .dataignore and .gitignore walking upwards to the git/project root.
-    pub fn loadUpwardIgnoreFiles(self: *FilterEngine, io: std.Io, start_path: []const u8) void {
-        if (self.no_ignore) return;
-        var cur: []const u8 = start_path;
-        if (cur.len == 0) cur = ".";
+    /// The ignore files of one directory, lowest precedence first:
+    /// `.git/info/exclude` (repo root only), `.dataignore`, `.gitignore`,
+    /// `.ignore` (the file rg, ag and fd share; rg ranks it above
+    /// `.gitignore`). rg's own `.rgignore` is not read.
+    fn dirRules(self: *const FilterEngine, io: std.Io, dir: []const u8, with_info_exclude: bool, present: IgnoreFiles) []gitignore.Rule {
+        var rules: std.ArrayList(gitignore.Rule) = .empty;
+        if (with_info_exclude) self.readIgnoreFile(io, dir, ".git/info/exclude", &rules);
+        if (present.dataignore) self.readIgnoreFile(io, dir, ".dataignore", &rules);
+        if (present.gitignore) self.readIgnoreFile(io, dir, ".gitignore", &rules);
+        if (present.ignore) self.readIgnoreFile(io, dir, ".ignore", &rules);
+        return rules.toOwnedSlice(self.gpa) catch blk: {
+            for (rules.items) |r| self.gpa.free(r.glob);
+            rules.deinit(self.gpa);
+            break :blk &.{};
+        };
+    }
 
+    fn isGitRoot(io: std.Io, gpa: Allocator, dir: []const u8) bool {
+        const git_path = std.fs.path.join(gpa, &.{ dir, ".git" }) catch return false;
+        defer gpa.free(git_path);
+        return vfs.stat(io, git_path, false) != null;
+    }
+
+    /// Builds the rule chain of one directory root: the ignore files of the
+    /// root and of every ancestor up to the repository root (the first
+    /// directory with a `.git`), outermost first, so deeper files win.
+    fn loadRootChain(self: *FilterEngine, io: std.Io, store: *gitignore.Store, root: []const u8) ?*const IgnoreNode {
+        const abs = std.Io.Dir.cwd().realPathFileAlloc(io, root, self.gpa) catch return null;
+        defer self.gpa.free(abs);
+
+        var ancestors: std.ArrayList([]const u8) = .empty;
+        defer ancestors.deinit(self.gpa);
+        var git_root: ?[]const u8 = null;
+        var cur: []const u8 = abs;
         while (true) {
-            self.loadIgnoreFile(io, cur, ".dataignore");
-            self.loadIgnoreFile(io, cur, ".gitignore");
-
-            // If this directory contains a .git folder or file, it's the repo root; stop after reading it
-            const git_path = std.fs.path.join(self.gpa, &.{ cur, ".git" }) catch break;
-            defer self.gpa.free(git_path);
-            if (vfs.stat(io, git_path, false) != null) break;
-
+            ancestors.append(self.gpa, cur) catch return null;
+            if (isGitRoot(io, self.gpa, cur)) {
+                git_root = cur;
+                break;
+            }
             const parent = std.fs.path.dirname(cur) orelse break;
-            if (parent.len == 0 or std.mem.eql(u8, parent, cur) or std.mem.eql(u8, parent, "/")) break;
+            if (parent.len == 0 or std.mem.eql(u8, parent, cur)) break;
             cur = parent;
         }
+
+        var node: ?*const IgnoreNode = null;
+        var i = ancestors.items.len;
+        while (i > 0) {
+            i -= 1;
+            const dir = ancestors.items[i];
+            const is_git_root = git_root != null and dir.ptr == git_root.?.ptr and dir.len == git_root.?.len;
+            const rules = self.dirRules(io, dir, is_git_root, .all);
+            // Path from `dir` down to the root: the tail of `abs`.
+            const prefix = if (dir.len >= abs.len) "" else std.mem.trimStart(u8, abs[dir.len..], "/\\");
+            node = store.push(node, root, prefix, rules) orelse node;
+        }
+        return node;
     }
 
-    /// Loads `.dataignore` / `.gitignore` for the current directory and every
-    /// search root, walking upwards to the project root.
+    /// Loads the ignore rules of every directory search root.
     ///
-    /// Idempotent on purpose: the micro-tree fast path defers this call until
-    /// it knows the tree is too big for the single-threaded path, so a tiny
-    /// tree never pays for the upward walk, and a big one never pays twice.
+    /// Idempotent: every path (micro tree, swarm, `--sort` walk) calls it
+    /// before walking, and the rules are read once.
     pub fn loadIgnoreFiles(self: *FilterEngine, io: std.Io, roots: []const [:0]const u8) void {
         if (self.ignore_files_loaded) return;
         self.ignore_files_loaded = true;
         if (self.no_ignore) return;
 
-        self.loadUpwardIgnoreFiles(io, ".");
+        const store = self.gpa.create(gitignore.Store) catch return;
+        store.* = .{ .gpa = self.gpa };
+        self.ign_store = store;
         for (roots) |root| {
-            self.loadUpwardIgnoreFiles(io, root);
+            const info = vfs.stat(io, root, true) orelse continue;
+            if (info.kind != .directory) continue;
+            const node = self.loadRootChain(io, store, root);
+            const root_dup = self.gpa.dupe(u8, root) catch continue;
+            self.root_nodes.append(self.gpa, .{ .root = root_dup, .node = node }) catch self.gpa.free(root_dup);
         }
+    }
+
+    /// The rule chain to start a walk of `root` with.
+    pub fn rootNode(self: *const FilterEngine, root: []const u8) ?*const IgnoreNode {
+        for (self.root_nodes.items) |rn| {
+            if (std.mem.eql(u8, rn.root, root)) return rn.node;
+        }
+        return null;
+    }
+
+    /// Called by the walkers for every directory below a root, before its
+    /// entries are filtered: adds that directory's own ignore files to the
+    /// chain. Thread-safe. Returns `parent` when the directory has none.
+    pub fn enterDir(self: *const FilterEngine, io: std.Io, parent: ?*const IgnoreNode, dir: []const u8) ?*const IgnoreNode {
+        return self.enterDirWith(io, parent, dir, .all);
+    }
+
+    /// `enterDir` when the caller already knows which ignore files `dir` has.
+    pub fn enterDirWith(self: *const FilterEngine, io: std.Io, parent: ?*const IgnoreNode, dir: []const u8, present: IgnoreFiles) ?*const IgnoreNode {
+        const store = self.ign_store orelse return parent;
+        if (!present.any()) return parent;
+        const rules = self.dirRules(io, dir, false, present);
+        return store.push(parent, dir, "", rules) orelse parent;
+    }
+
+    /// Only the ignore-file verdict, for walkers that applied the other
+    /// filters (`...At(null, ...)`) before they knew the directory's chain.
+    pub fn ignoredByRules(node: ?*const IgnoreNode, dir: []const u8, name: []const u8, is_dir: bool) bool {
+        return gitignore.decide(node, dir, name, is_dir, matchPattern) orelse false;
     }
 
     /// `--no-ignore` turns off what comes from ignore FILES and the built-in
     /// default lists: the loaders skip `.gitignore`/`.dataignore` and the
-    /// caller clears `use_defaults`, so `ignore_patterns` stays empty. It must
+    /// caller clears `use_defaults`, so no ignore rules are loaded. It must
     /// NOT cancel what the user asked for explicitly (`--no-hidden`,
     /// `--exclude-dir`, `--exclude`, `--include`, `--include-ext`,
     /// `--exclude-ext`), as in ripgrep, where `--no-ignore` keeps `-g` globs.
     /// An early `return false` on `no_ignore` used to cancel all of them.
     pub fn isDirExcluded(self: *const FilterEngine, dir_name: []const u8) bool {
+        return self.isDirExcludedAt(null, "", dir_name);
+    }
+
+    /// `isDirExcluded` plus the ignore rules of `node` for `dir/dir_name`.
+    pub fn isDirExcludedAt(self: *const FilterEngine, node: ?*const IgnoreNode, dir: []const u8, dir_name: []const u8) bool {
         if (self.skip_hidden and dir_name.len > 0 and dir_name[0] == '.') {
             return true;
         }
@@ -524,15 +639,11 @@ pub const FilterEngine = struct {
             if (globMatch(dir_name, ex)) return true;
         }
 
-        for (self.ignore_patterns.items) |pat| {
-            if (matchPattern(dir_name, pat)) return true;
-        }
-
-        return false;
+        return ignoredByRules(node, dir, dir_name, true);
     }
 
     pub fn isFileExcluded(self: *const FilterEngine, file_name: []const u8) bool {
-        return self.fileExcluded(file_name, null);
+        return self.fileExcluded(null, "", file_name, null);
     }
 
     /// The same decision for a file found in directory `dir` (as the walker
@@ -540,9 +651,14 @@ pub const FilterEngine = struct {
     /// are matched against the path relative to that root, like rg's `-g`.
     /// Without such globs this costs nothing more than `isFileExcluded`.
     pub fn isFileExcludedIn(self: *const FilterEngine, dir: []const u8, file_name: []const u8) bool {
-        if (!self.has_path_patterns) return self.fileExcluded(file_name, null);
+        return self.isFileExcludedAt(null, dir, file_name);
+    }
+
+    /// `isFileExcludedIn` plus the ignore rules of `node`.
+    pub fn isFileExcludedAt(self: *const FilterEngine, node: ?*const IgnoreNode, dir: []const u8, file_name: []const u8) bool {
+        if (!self.has_path_patterns) return self.fileExcluded(node, dir, file_name, null);
         var buf: [4096]u8 = undefined;
-        return self.fileExcluded(file_name, self.relPath(&buf, dir, file_name));
+        return self.fileExcluded(node, dir, file_name, self.relPath(&buf, dir, file_name));
     }
 
     /// `dir/name` relative to the longest root that prefixes `dir`, with '/'
@@ -590,7 +706,7 @@ pub const FilterEngine = struct {
         return out;
     }
 
-    fn fileExcluded(self: *const FilterEngine, file_name: []const u8, rel: ?[]const u8) bool {
+    fn fileExcluded(self: *const FilterEngine, node: ?*const IgnoreNode, dir: []const u8, file_name: []const u8, rel: ?[]const u8) bool {
         if (self.skip_hidden and file_name.len > 0 and file_name[0] == '.') {
             return true;
         }
@@ -613,9 +729,7 @@ pub const FilterEngine = struct {
             if (cliGlob(pat, file_name, rel)) return true;
         }
 
-        for (self.ignore_patterns.items) |pat| {
-            if (matchPattern(file_name, pat)) return true;
-        }
+        if (ignoredByRules(node, dir, file_name, false)) return true;
 
         // If specific extensions or patterns were requested via --include,
         // any file not matching at least one is excluded:
@@ -805,4 +919,3 @@ test "FilterEngine: path globs use the path relative to the search root" {
     // A root-level file: the relative path is just the name.
     try std.testing.expect(!ex.isFileExcludedIn("src", "main.zig"));
 }
-

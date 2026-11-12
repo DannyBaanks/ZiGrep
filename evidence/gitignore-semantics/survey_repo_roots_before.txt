@@ -1,0 +1,1 @@
+roots 140  equal 86  differ_only_by_binary_detection 0  differ_otherwise 54

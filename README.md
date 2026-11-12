@@ -140,9 +140,13 @@ Four differences from grep are worth knowing before they surprise you:
    Back-references and lookaround are rejected with an error, never
    approximated.
 4. **Noise is skipped.** Binary files count as "no match". `.gitignore`,
-   `.dataignore` and a built-in list (`.git`, `node_modules`, `target`,
-   `*.log`, `*.min.js`, …) are skipped too. Turn them off with `--no-ignore`
-   or `--no-default-ignore`.
+   `.ignore`, `.dataignore` and a built-in list (`.git`, `node_modules`,
+   `target`, `*.log`, `*.min.js`, …) are skipped too. Ignore files follow
+   git's rules: nested files, `!` negation, anchored patterns (`/build`,
+   `src/gen/`), directory-only rules, `**`, and the repository's
+   `.git/info/exclude`; a CI test compares the result with `git ls-files`
+   (`evidence/gitignore-semantics/`). Turn them off with `--no-ignore` or
+   `--no-default-ignore`.
 
 Exit status: `0` a match was found, `1` no match, `2` error.
 

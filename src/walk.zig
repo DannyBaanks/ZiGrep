@@ -45,7 +45,10 @@ pub fn walk(
     max_depth: usize,
     max_filesize: usize,
 ) Error!void {
-    for (roots) |root| try walkOne(io, gpa, root, out, 0, filter_engine, nav_plan, max_depth, max_filesize);
+    for (roots) |root| {
+        const ign = if (filter_engine) |fe| fe.rootNode(root) else null;
+        try walkOne(io, gpa, root, out, 0, filter_engine, ign, nav_plan, max_depth, max_filesize);
+    }
 }
 
 fn walkOne(
@@ -55,6 +58,7 @@ fn walkOne(
     out: *std.ArrayList([:0]const u8),
     depth: usize,
     filter_engine: ?*const FilterEngine,
+    parent_ign: ?*const filter.IgnoreNode,
     nav_plan: ?NavPlan,
     max_depth: usize,
     max_filesize: usize,
@@ -70,6 +74,9 @@ fn walkOne(
 
     var stream = try vfs.DirStream.open(io, dir);
     defer stream.close();
+
+    // A root's chain already holds its own ignore files.
+    const ign = if (depth == 0) parent_ign else if (filter_engine) |fe| fe.enterDir(io, parent_ign, dir) else null;
 
     var items: std.ArrayList(Item) = .empty;
     defer items.deinit(gpa);
@@ -91,12 +98,12 @@ fn walkOne(
         if (kind == .directory) {
             if (!recurse_subdirs) continue;
             if (filter_engine) |fe| {
-                if (fe.isDirExcluded(entry.name)) continue;
+                if (fe.isDirExcludedAt(ign, dir, entry.name)) continue;
             }
         } else if (kind == .file) {
             if (!scan_files) continue;
             if (filter_engine) |fe| {
-                if (fe.isFileExcludedIn(dir, entry.name)) continue;
+                if (fe.isFileExcludedAt(ign, dir, entry.name)) continue;
             }
             if (max_filesize > 0) {
                 const child = try vfs.joinPathSentinel(gpa, dir, entry.name);
@@ -129,7 +136,7 @@ fn walkOne(
                 gpa.free(item.path);
                 continue;
             }
-            try walkOne(io, gpa, item.path, out, depth + 1, filter_engine, nav_plan, max_depth, max_filesize);
+            try walkOne(io, gpa, item.path, out, depth + 1, filter_engine, ign, nav_plan, max_depth, max_filesize);
         } else {
             try out.append(gpa, item.path);
         }

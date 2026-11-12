@@ -335,8 +335,20 @@ zigrep --exclude-dir=build,dist,temp "patrón" /ruta/al/repo
    * Carpetas omitidas automáticamente: `.git`, `.zig-cache`, `__pycache__`, `node_modules`, `.venv`, `venv`, `target`, `.cache`, `.idea`, `.vscode`.
    * Extensiones omitidas automáticamente: `.pyc`, `.pyo`, `.o`, `.a`, `.so`, `.dylib`, `.dll`, `.class`, `.jar`, `.log`, `.min.js`, `.min.css`, `.map`, `.lock`, `.swp`, `.DS_Store`.
 
-2. **Archivos `.dataignore` y `.gitignore`:**
-   * `zigrep` busca y respeta automáticamente archivos `.dataignore` y `.gitignore` presentes en el directorio raíz o de ejecución.
+2. **Archivos `.gitignore`, `.ignore` y `.dataignore`:**
+   * `zigrep` respeta los de cada raíz de búsqueda, los de sus directorios
+     padre hasta la raíz del repositorio (el primero con `.git`), los
+     anidados que encuentra al bajar, y `.git/info/exclude`.
+   * Semántica de git (desde 2026-11-12, `src/gitignore.zig`): `!` vuelve a
+     incluir, un patrón con `/` al principio o en medio se ancla al
+     directorio de su archivo (`/build`, `sub/gen/`), `dir/` solo casa
+     directorios, `**` cruza directorios y `*` no, el archivo más profundo
+     gana y dentro de un archivo gana la última línea. Lo verifica contra
+     `git ls-files --exclude-standard` `evidence/gitignore-semantics/`
+     (también en CI). Antes cada patrón se comparaba solo con el nombre:
+     `/build`, `sub/gen/`, `!` y los `.gitignore` anidados no funcionaban.
+   * `.ignore` es el archivo que comparten rg, ag y fd (precedencia sobre
+     `.gitignore`, como en rg); `.rgignore` no se lee.
    * En `.dataignore` puedes escribir patrones estilo glob (`*.csv`, `logs/`, `temp_*`).
    * **Micro-árboles (< 2 MB): mismas reglas de ignorado.** Un árbol cuyos
      archivos regulares sumen menos de 2 MB se escanea en el hilo llamante
