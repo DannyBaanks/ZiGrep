@@ -131,6 +131,10 @@ pub const Searcher = struct {
     /// Regex only: a required literal; lines are only handed to the DFA when
     /// the literal occurs in them (the common case for code searches).
     prefilter: ?*const Searcher = null,
+    /// Regex only, alternations (`a|b|c`, several `-e`): every branch has a
+    /// required literal; a line is only handed to the DFA when one of them
+    /// occurs in it. Without it an alternation ran the DFA over every byte.
+    multi: ?*const MultiLit = null,
     /// `skip[c]` = distance to advance the window when the byte at the last
     /// position of the window is `c`. Default is the pattern length.
     skip: [256]u32 = undefined,
@@ -311,6 +315,21 @@ pub const Searcher = struct {
 
     fn findRegex(self: *const Searcher, hay: []const u8, start: usize) ?usize {
         const dfa = regex.threadDfa(self.prog.?) catch return null;
+        if (self.multi) |ml| {
+            // Same line loop as the single prefilter: `find` returns the
+            // LEFTMOST occurrence of any literal, so no line with a match is
+            // ever skipped.
+            var pos = start;
+            while (pos < hay.len) {
+                const m = ml.find(hay, pos) orelse return null;
+                const ls = if (std.mem.findScalarLast(u8, hay[pos..m], '\n')) |k| pos + k + 1 else pos;
+                const le = std.mem.findScalarPos(u8, hay, m, '\n') orelse hay.len;
+                if (dfa.firstMatchingLine(hay, ls, le, self.crlf) != null) return ls;
+                if (le >= hay.len) return null;
+                pos = le + 1;
+            }
+            return null;
+        }
         if (self.prefilter) |pf| {
             var pos = start;
             while (pos < hay.len) {
@@ -397,6 +416,77 @@ pub const Searcher = struct {
     }
 };
 
+/// Up to `max_lits` literals of 2+ bytes; `find` returns the leftmost start of
+/// an occurrence of ANY of them. SIMD filter on the first two bytes of every
+/// literal over 32-byte blocks, then a full compare. Anchoring on the FIRST
+/// byte is what makes the first verified candidate the leftmost one.
+pub const MultiLit = struct {
+    pub const max_lits = 16;
+    const V = @Vector(32, u8);
+    lits: [max_lits][]const u8 = undefined,
+    first: [max_lits]V = undefined,
+    second: [max_lits]V = undefined,
+    count: usize = 0,
+    min_len: usize = 0,
+
+    /// null when the set does not qualify (empty, too many, or a literal of
+    /// fewer than 2 bytes). Duplicates are dropped.
+    pub fn init(lits: []const []const u8) ?MultiLit {
+        var self: MultiLit = .{};
+        var min: usize = std.math.maxInt(usize);
+        outer: for (lits) |lit| {
+            if (lit.len < 2) return null;
+            for (self.lits[0..self.count]) |seen| if (std.mem.eql(u8, seen, lit)) continue :outer;
+            if (self.count == max_lits) return null;
+            self.lits[self.count] = lit;
+            self.first[self.count] = @splat(lit[0]);
+            self.second[self.count] = @splat(lit[1]);
+            self.count += 1;
+            min = @min(min, lit.len);
+        }
+        if (self.count == 0) return null;
+        self.min_len = min;
+        return self;
+    }
+
+    pub fn find(self: *const MultiLit, hay: []const u8, start: usize) ?usize {
+        var i = start;
+        // Loads at i and i + 1 read 32 bytes each: i + 33 <= hay.len.
+        while (i + 33 <= hay.len) : (i += 32) {
+            const v0: V = hay[i..][0..32].*;
+            const v1: V = hay[i + 1 ..][0..32].*;
+            var mask: u32 = 0;
+            for (0..self.count) |k| {
+                mask |= @as(u32, @bitCast((v0 == self.first[k]) & (v1 == self.second[k])));
+            }
+            while (mask != 0) : (mask &= mask - 1) {
+                const p = i + @ctz(mask);
+                if (self.matchAt(hay, p)) return p;
+            }
+        }
+        var p = i;
+        while (p + self.min_len <= hay.len) : (p += 1) {
+            if (self.matchAt(hay, p)) return p;
+        }
+        return null;
+    }
+
+    fn matchAt(self: *const MultiLit, hay: []const u8, p: usize) bool {
+        for (self.lits[0..self.count]) |lit| {
+            if (p + lit.len <= hay.len and std.mem.eql(u8, hay[p .. p + lit.len], lit)) return true;
+        }
+        return false;
+    }
+};
+
+/// Every branch of `n` (flattening nested alternations) into `out`.
+fn collectBranches(arena: Allocator, n: *regex.Node, out: *std.ArrayList(*regex.Node)) Allocator.Error!void {
+    switch (n.*) {
+        .alt => |kids| for (kids) |k| try collectBranches(arena, k, out),
+        else => try out.append(arena, n),
+    }
+}
+
 pub const BuildOptions = struct {
     algo: Algo = .auto,
     /// Treat every pattern as a fixed string (-F).
@@ -460,12 +550,16 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     }
 
     const nodes = try arena.alloc(*regex.Node, patterns.len);
+    // The patterns BEFORE -x / -w wrapping: their required literals are
+    // still required once wrapped (wrapping only adds conditions).
+    const raw_nodes = try arena.alloc(*regex.Node, patterns.len);
     for (patterns, 0..) |p, idx| {
         const src = if (o.basic) bre.breToEre(arena, p) else p;
         var n = if (o.fixed)
             try regex.literalNode(arena, src, o.icase)
         else
             try regex.parse(arena, src, .{ .icase = o.icase, .dot_newline = o.null_data or o.dotall });
+        raw_nodes[idx] = n;
         if (o.line) n = try regex.lineWrap(arena, n);
         if (o.word) n = try regex.wordWrap(arena, n);
         nodes[idx] = n;
@@ -480,7 +574,23 @@ pub fn build(gpa: Allocator, patterns: []const []const u8, o: BuildOptions) Buil
     s.crlf = o.crlf;
     s.multiline = o.multiline;
     s.null_data = o.null_data;
-    if (patterns.len == 1) {
+    // Alternations: one required literal per branch -> MultiLit prefilter.
+    // Case-sensitive line search only (no -i, -U, -z) in this first version.
+    if (!o.icase and !o.multiline and !o.null_data) multi: {
+        var branches: std.ArrayList(*regex.Node) = .empty;
+        for (raw_nodes) |rn| try collectBranches(arena, rn, &branches);
+        if (branches.items.len < 2 or branches.items.len > MultiLit.max_lits) break :multi;
+        var lits: [MultiLit.max_lits][]const u8 = undefined;
+        for (branches.items, 0..) |b, k| {
+            const lit = (try regex.requiredLiteral(arena, b, false)) orelse break :multi;
+            lits[k] = try gpa.dupe(u8, lit);
+        }
+        const ml = MultiLit.init(lits[0..branches.items.len]) orelse break :multi;
+        const mp = try gpa.create(MultiLit);
+        mp.* = ml;
+        s.multi = mp;
+    }
+    if (patterns.len == 1 and s.multi == null) {
         if (try regex.requiredLiteral(arena, root, o.icase)) |lit| {
             if (lit.len >= 3) {
                 const text = try gpa.dupe(u8, lit);
@@ -712,6 +822,93 @@ test "build: -x with several patterns ORs the anchors" {
     try std.testing.expectEqual(@as(?usize, 0), s.find("dog", 0));
     try std.testing.expectEqual(@as(?usize, null), s.find("hotdog", 0));
     try std.testing.expectEqual(@as(?usize, null), s.find("dog food", 0));
+}
+
+test "MultiLit: leftmost occurrence of any literal, against naive" {
+    var prng = std.Random.DefaultPrng.init(0xa17e_0000_2026_1112);
+    const rnd = prng.random();
+    const alphabet = "abcde fgh";
+    var iter: usize = 0;
+    while (iter < 2000) : (iter += 1) {
+        var lit_store: [6][6]u8 = undefined;
+        var lits: [6][]const u8 = undefined;
+        const nl = 2 + rnd.uintLessThan(usize, 5);
+        for (0..nl) |k| {
+            const len = 2 + rnd.uintLessThan(usize, 5);
+            for (lit_store[k][0..len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
+            lits[k] = lit_store[k][0..len];
+        }
+        const ml = MultiLit.init(lits[0..nl]).?;
+        var hay_buf: [300]u8 = undefined;
+        const hay_len = rnd.uintLessThan(usize, hay_buf.len + 1);
+        for (hay_buf[0..hay_len]) |*c| c.* = alphabet[rnd.uintLessThan(usize, alphabet.len)];
+        const hay = hay_buf[0..hay_len];
+        var start: usize = 0;
+        while (start <= hay_len) : (start += 1 + rnd.uintLessThan(usize, 9)) {
+            var want: ?usize = null;
+            for (lits[0..nl]) |lit| {
+                if (naiveFind(hay, lit, start)) |w| {
+                    if (want == null or w < want.?) want = w;
+                }
+            }
+            const got = ml.find(hay, start);
+            if (want != got) {
+                std.debug.print("\nMISMATCH hay={s} start={d} want={?d} got={?d}\n", .{ hay, start, want, got });
+                return error.TestExpectedEqual;
+            }
+        }
+    }
+    // Qualification rules.
+    try std.testing.expect(MultiLit.init(&.{ "ab", "a" }) == null);
+    try std.testing.expect(MultiLit.init(&.{}) == null);
+    try std.testing.expectEqual(@as(usize, 1), MultiLit.init(&.{ "ab", "ab" }).?.count);
+}
+
+test "build: alternation prefilter gives the same lines as the plain DFA" {
+    const pa = std.heap.page_allocator;
+    var prng = std.Random.DefaultPrng.init(0xa17e_1111_2026_1112);
+    const rnd = prng.random();
+    const words = [_][]const u8{ "webgpu", "wgpu", "dawn", "foo", "bar", "baz", "qux", "ab", "abc" };
+    const pats = [_][]const []const u8{
+        &.{"webgpu|wgpu|dawn"}, &.{ "foo", "bar" }, &.{"fo+|ba[rz]"}, &.{ "ab", "abc", "qux" },
+        &.{"(foo|bar)baz"},     &.{"^foo|bar$"},    &.{ "wgpu", "da.n" }, &.{"foo\\b|\\bbar"},
+    };
+    const flag_sets = [_]BuildOptions{ .{}, .{ .word = true }, .{ .line = true } };
+    for (pats) |pat| for (flag_sets) |fl| {
+        const with = try build(pa, pat, fl);
+        var without = with;
+        without.multi = null;
+        var hay_buf: [2048]u8 = undefined;
+        var iter: usize = 0;
+        while (iter < 60) : (iter += 1) {
+            var len: usize = 0;
+            while (len < 1500) {
+                const w = if (rnd.uintLessThan(u8, 3) == 0) words[rnd.uintLessThan(usize, words.len)] else "xyz";
+                if (len + w.len + 1 > hay_buf.len) break;
+                @memcpy(hay_buf[len .. len + w.len], w);
+                len += w.len;
+                hay_buf[len] = if (rnd.uintLessThan(u8, 6) == 0) '\n' else ' ';
+                len += 1;
+            }
+            const hay = hay_buf[0..len];
+            var pos: usize = 0;
+            while (pos < hay.len) {
+                const a = with.find(hay, pos);
+                const b = without.find(hay, pos);
+                if (a != b) {
+                    std.debug.print("\nMISMATCH pat={s} pos={d} multi={?d} dfa={?d}\n", .{ pat[0], pos, a, b });
+                    return error.TestExpectedEqual;
+                }
+                const nxt = a orelse break;
+                pos = (std.mem.findScalarPos(u8, hay, nxt, '\n') orelse hay.len) + 1;
+            }
+        }
+    };
+    // The prefilter is installed for alternations and not for -i.
+    try std.testing.expect((try build(pa, &.{"webgpu|wgpu|dawn"}, .{})).multi != null);
+    try std.testing.expect((try build(pa, &.{ "foo", "bar" }, .{})).multi != null);
+    try std.testing.expect((try build(pa, &.{"webgpu|wgpu"}, .{ .icase = true })).multi == null);
+    try std.testing.expect((try build(pa, &.{"a|bc"}, .{})).multi == null); // 1-byte literal
 }
 
 test "build: no patterns selects nothing (-f with an empty file)" {
