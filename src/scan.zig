@@ -762,23 +762,6 @@ fn scanBufferLines(
 /// against known ground truth without touching the filesystem.
 /// True when `scanBuffer` decides with one `searcher.find(data, 0)` and stops
 /// (-l / -L / -q without -m, on the fast path).
-/// Index of the first '\n' or NUL at or after `from`, or `data.len`.
-fn lineEndOrNul(data: []const u8, from: usize) usize {
-    const V = @Vector(32, u8);
-    const nl: V = @splat('\n');
-    const zero: V = @splat(0);
-    var i = from;
-    while (i + 32 <= data.len) : (i += 32) {
-        const v: V = data[i..][0..32].*;
-        const mask: u32 = @bitCast((v == nl) | (v == zero));
-        if (mask != 0) return i + @ctz(mask);
-    }
-    while (i < data.len) : (i += 1) {
-        if (data[i] == '\n' or data[i] == 0) return i;
-    }
-    return data.len;
-}
-
 fn usesEarlyExit(mode: Mode, config: ScanConfig) bool {
     if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json or config.stop_on_nonmatch) return false;
     return config.max_count == null and (mode == .quiet or mode == .files or mode == .files_without_match);
@@ -1075,7 +1058,7 @@ pub fn scanBuffer(
         // NUL in its rest (`findOrNul` vouched for every byte before `m`).
         // A NUL drops the line and ends the text.
         const raw_end = if (fused) blk: {
-            const e = lineEndOrNul(data, m);
+            const e = search.lineEndOrNul(data, m);
             if (e < data.len and data[e] == 0) {
                 res.nul_cut = line_start;
                 break;

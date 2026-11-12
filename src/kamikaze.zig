@@ -56,6 +56,9 @@ pub const ScoutConfig = FilterEngine;
 
 /// Result of a Kamikaze scan run.
 pub const KamikazeStats = struct {
+    /// Workers the swarm really ran (0: it never started; the micro path and
+    /// the quiet probe run on the calling thread).
+    workers: usize = 0,
     dirs_scouted: usize = 0,
     files_scanned: usize = 0,
     bytes_scanned: usize = 0,
@@ -965,18 +968,27 @@ pub fn runKamikazePipeline(
     };
 
     // Seed root directories / files into the pool
+    var seeded_dirs: usize = 0;
+    var seeded_files: usize = 0;
     for (roots) |root| {
         if (vfs.stat(io, root, true)) |info| {
             if (info.kind == .directory) {
                 try pool.pushRoot(root, filter_engine.rootNode(root));
+                seeded_dirs += 1;
             } else if (info.kind == .file) {
                 try pool.pushSingleFile(root);
+                seeded_files += 1;
             }
         }
     }
 
-    // Spawn concurrent hybrid worker swarm
-    const actual_workers = @min(@max(1, threads_count), max_threads);
+    // Spawn concurrent hybrid worker swarm. Only files and no directory: the
+    // work never grows, so more workers than files would only spin. One
+    // 254 MB file woke 12 of them: same wall time, 2.5x the CPU of -j1
+    // (55 vs 22 ms user; 2026-11-12).
+    const wanted = if (seeded_dirs == 0 and seeded_files > 0) @min(threads_count, seeded_files) else threads_count;
+    const actual_workers = @min(@max(1, wanted), max_threads);
+    stats.workers = actual_workers;
     if (actual_workers == 1) {
         // Zero-spawn fast path: single thread runs directly on calling thread
         kamikazeWorker(&ctx);

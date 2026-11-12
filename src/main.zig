@@ -2628,7 +2628,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
                     k_stats.bytes_scanned,
                     k_stats.matched_files,
                     k_stats.matched_lines,
-                    worker_count,
+                    if (k_stats.workers != 0) k_stats.workers else 1,
                     if (k_stats.micro_path) "yes" else "no",
                     if (k_stats.micro_path) "micro" else if (k_stats.io_engine_uring) "uring" else "sync",
                     k_stats.probe_hits,
@@ -2728,6 +2728,8 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     // small jobs alone and only wakes the pool past this many files.
     const spawn_threshold = 32;
     const use_threads = worker_count > 1 and files.items.len > spawn_threshold;
+    // Never more workers than files; `--stats` reports what really ran.
+    const used_workers: usize = if (use_threads) @min(worker_count, files.items.len) else 1;
     // Quiet mode buffers no output, so it needs no run-ahead limit at all —
     // otherwise the cursor would never advance and the workers would deadlock.
     const window: usize = if (opts.mode == .quiet) std.math.maxInt(usize) else 128;
@@ -2814,7 +2816,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         var threads: std.ArrayList(std.Thread) = .empty;
         defer threads.deinit(gpa);
         var spawned: usize = 0;
-        while (spawned < worker_count) : (spawned += 1) {
+        while (spawned < used_workers) : (spawned += 1) {
             const t = std.Thread.spawn(.{}, worker, .{&ctx}) catch break;
             threads.append(gpa, t) catch break;
         }
@@ -2916,7 +2918,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         const mbps = if (secs > 0) @as(f64, @floatFromInt(stats_bytes)) / secs / 1e6 else 0;
         std.debug.print(
             "zgrep-stats: files={d} bytes={d} matched_files={d} matched_lines={d} errors={d} threads={d} elapsed_s={d:.4} throughput_MBps={d:.1}\n",
-            .{ stats_files, stats_bytes, stats_matched_files, stats_matched_lines, stats_err, worker_count, secs, mbps },
+            .{ stats_files, stats_bytes, stats_matched_files, stats_matched_lines, stats_err, used_workers, secs, mbps },
         );
         printBinaryStats();
     }
