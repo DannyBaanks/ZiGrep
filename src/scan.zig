@@ -775,12 +775,17 @@ pub fn scanBuffer(
     // from inventing a phantom line after a trailing newline.
     while (pos < data.len) {
         const m = searcher.find(data, pos) orelse break;
-        // Advance the line cursor to the line that contains the match.
-        while (true) {
-            const nl = std.mem.findScalarPos(u8, data, line_start, recordSep(config)) orelse break;
-            if (nl >= m) break;
-            line_start = nl + 1;
-            line_no += 1;
+        // Advance the line cursor to the line that contains the match. One
+        // backward search finds where that line starts; the separators in
+        // between are only COUNTED (vectorised countScalar) when the number
+        // is printed. It used to call findScalarPos once per intermediate
+        // line even with -n off, the default since 0.4.0.
+        if (m > line_start) {
+            const gap = data[line_start..m];
+            if (std.mem.findScalarLast(u8, gap, recordSep(config))) |last| {
+                if (config.show_line_no) line_no += std.mem.countScalar(u8, gap, recordSep(config));
+                line_start += last + 1;
+            }
         }
         // The RAW end is the byte of the '\n' itself; the VISIBLE end is one
         // byte earlier when `--crlf` is on (the CR is not part of the line).
