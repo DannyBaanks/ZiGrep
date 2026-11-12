@@ -139,7 +139,11 @@ Four differences from grep are worth knowing before they surprise you:
    `a|b`; `a\|b` means a literal `|`. Use `-G` for grep's basic syntax.
    Back-references and lookaround are rejected with an error, never
    approximated.
-4. **Noise is skipped.** Binary files count as "no match". `.gitignore`,
+4. **Noise is skipped.** Binary files count as "no match" and binary bytes
+   are never printed: a NUL in the first 8 KiB makes the file binary; a NUL
+   further in ends the text at the start of its line (`-l`, `-c` and the
+   printed lines always agree; `evidence/binary-rule/`). `-a` searches
+   everything as text. `.gitignore`,
    `.ignore`, `.dataignore` and a built-in list (`.git`, `node_modules`,
    `target`, `*.log`, `*.min.js`, …) are skipped too. Ignore files follow
    git's rules: nested files, `!` negation, anchored patterns (`/build`,

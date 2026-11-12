@@ -2414,32 +2414,21 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         const show_p = opts.show_path orelse false;
 
         const data = stdin_buf.items;
-        const probe = @min(data.len, scan.binary_probe_bytes);
-        const utf16_bom = scan.isUtf16Bom(data);
-        // Same rule as files (scan.scanFile): a NUL in the first probe window
-        // means binary unless -a, a UTF-16 BOM, or --null-data (where NUL is
-        // the record separator). A binary input is then treated as NOT
-        // matching (`--binary-files=without-match`, the default): no lines,
-        // `-c` prints 0, rc 1. This used to print "Binary file (standard
-        // input) matches" and return 0 WITHOUT searching, so any binary stdin
-        // "matched" every pattern (M11 round 2, R24).
-        const is_bin = !opts.binary and !opts.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-
-        var utf8_data: ?[]u8 = null;
-        defer if (utf8_data) |u| gpa.free(u);
-        const search_data = if (utf16_bom) |bom| blk: {
-            if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
-                utf8_data = decoded;
-                break :blk decoded;
-            } else |_| break :blk data;
-        } else data;
-
+        // Same rule as files (scan.searchBytes): a NUL in the first probe
+        // window means binary unless -a, a UTF-16 decoding, or --null-data
+        // (where NUL is the record separator); a later NUL ends the text. A
+        // binary input is treated as NOT matching (`--binary-files=
+        // without-match`, the default): no lines, `-c` prints 0, rc 1. This
+        // used to print "Binary file (standard input) matches" and return 0
+        // WITHOUT searching, so any binary stdin "matched" every pattern
+        // (M11 round 2, R24).
         var out: std.ArrayList(u8) = .empty;
         defer out.deinit(gpa);
 
-        const br: scan.BufferResult = if (is_bin) .{} else scan.scanBuffer(gpa, search_data, &searcher, path_label, show_p, opts.mode, scan_cfg, &out) catch {
+        const ts = scan.searchBytes(gpa, data, &searcher, path_label, show_p, opts.mode, opts.binary, scan_cfg, &out) catch {
             return 2;
         };
+        const br = ts.br;
 
         // stdin uses the same once-per-file emitter as files: the hand-written
         // copy printed `-c` as text under --json and nothing for

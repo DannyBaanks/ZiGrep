@@ -549,6 +549,17 @@ Verificado contra `rg` y `grep` en 25 casos (`evidence/feature-corpus/`):
   porque en grep es `--initial-tab`. Manda la politica de colisiones.
 * `--binary-files=binary` se **rechaza** con un mensaje claro: zgrep nunca
   imprime contenido binario, asi que aceptarlo seria mentir.
+* La regla de binarios (`scan.searchBytes`, la misma en todos los caminos de
+  lectura): un NUL en los primeros 8 KiB ⇒ binario, no se busca; un NUL mas
+  adelante ⇒ el fichero es texto hasta el principio de la linea del primer
+  NUL y nada desde ahi se imprime ni se cuenta. Hasta 2026-11-12 ese segundo
+  caso se trataba como texto entero y salian bytes binarios (y `-l`, `-c` y
+  las lineas podian no coincidir); ademas `--count-matches` daba 0 en
+  ficheros de mas de 256 KiB y el camino io_uring ignoraba `-z` y
+  `--encoding`. Lo verifica `evidence/binary-rule/binary_consistency.py`
+  contra un modelo, en los cuatro caminos (sync, io_uring, enjambre, `-j1`).
+  rg no es consistente aqui (decide por bloques de lectura), asi que no es
+  la referencia.
 * `--max-depth 1` es exactamente `--nav=v^` (mismo caso en la conformance).
 
 ---

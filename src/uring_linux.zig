@@ -186,29 +186,16 @@ pub const UringScanner = struct {
                 var fs = scan.FileScan{};
                 if (n > 0) {
                     const data = self.buffers[slot_idx][0..n];
-                    const probe = @min(data.len, scan.binary_probe_bytes);
-                    const utf16_bom = scan.isUtf16Bom(data);
-                    const is_bin = !binary and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-                    if (!is_bin) {
-                        // Solo los bytes que de verdad se escanean (mismo
-                        // criterio que el camino síncrono: un binario no suma).
-                        result.bytes_scanned += n;
-                        if (utf16_bom) |bom| {
-                            if (scan.decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
-                                defer gpa.free(decoded);
-                                const br = scan.scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch continue;
-                                fs.matched = br.matched;
-                                fs.lines = br.lines;
-                            } else |_| {}
-                        } else {
-                            const br = scan.scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch continue;
-                            fs.matched = br.matched;
-                            fs.lines = br.lines;
-                        }
-                    }
+                    // Same rule as the synchronous path (scan.searchBytes);
+                    // this copy used to ignore --null-data and --encoding.
+                    const ts = scan.searchBytes(gpa, data, searcher, path, show_path, mode, binary, config, out) catch continue;
+                    result.bytes_scanned += ts.searched;
+                    fs.matched = ts.br.matched;
+                    fs.lines = ts.br.lines;
+                    fs.matches = ts.br.matches;
                 }
                 const fdata = self.buffers[slot_idx][0..n];
-                if (scan.finishFile(out, gpa, path, show_path, mode, fs, config, before_len, fdata, if (scan.isUtf16Bom(fdata) != null) .file_utf16 else .file, .path)) |e| fs.err = e;
+                if (scan.finishFile(out, gpa, path, show_path, mode, fs, config, before_len, fdata, if (scan.bomFor(fdata, config) != null) .file_utf16 else .file, .path)) |e| fs.err = e;
                 if (context_mode and !config.json) scan.insertGroupSeparator(out, gpa, before_len);
 
                 const is_hit = if (mode == .files_without_match) !fs.matched else fs.matched;

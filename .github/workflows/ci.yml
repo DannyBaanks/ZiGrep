@@ -107,6 +107,12 @@ jobs:
       # (ls-files --exclude-standard) sobre un repo generado con .gitignore
       # anidados, negacion, anclas, reglas de solo-directorio, ** y escapes;
       # .ignore se compara con rg.
+      # La regla de binarios contra un modelo en Python, en los caminos sync,
+      # io_uring, enjambre y -j1, con ficheros que pasan por el buffer, mmap
+      # y los lotes de io_uring: lineas, -c, -l, -L, --count-matches, --json.
+      - name: Binary rule consistency
+        run: python3 evidence/binary-rule/binary_consistency.py
+
       - name: gitignore semantics vs git
         run: python3 evidence/gitignore-semantics/gitignore_parity.py
 
@@ -127,6 +133,8 @@ jobs:
           done
           echo "== glob parity (Debug)"
           python3 evidence/rg-glob-parity/glob_parity.py --zgrep zig-debug/bin/zgrep
+          echo "== binary rule (Debug)"
+          python3 evidence/binary-rule/binary_consistency.py --zgrep zig-debug/bin/zgrep
           echo "== gitignore semantics (Debug)"
           python3 evidence/gitignore-semantics/gitignore_parity.py --zgrep zig-debug/bin/zgrep
 

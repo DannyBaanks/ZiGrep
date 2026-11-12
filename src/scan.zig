@@ -728,6 +728,85 @@ fn scanBufferLines(
 /// Searches one in-memory buffer and, in `lines` mode, appends the matching
 /// lines to `out`. Separated from the syscall layer so it can be unit tested
 /// against known ground truth without touching the filesystem.
+/// True when `scanBuffer` decides with one `searcher.find(data, 0)` and stops
+/// (-l / -L / -q without -m, on the fast path).
+fn usesEarlyExit(mode: Mode, config: ScanConfig) bool {
+    if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json or config.stop_on_nonmatch) return false;
+    return config.max_count == null and (mode == .quiet or mode == .files or mode == .files_without_match);
+}
+
+/// The UTF-16 decoding a file gets under `--encoding` (null: searched as bytes).
+pub fn bomFor(data: []const u8, config: ScanConfig) ?BomKind {
+    if (config.encoding == .none) return null;
+    if (forcedBom(config.encoding)) |f| return f;
+    if (config.encoding == .utf16) return isUtf16Bom(data) orelse .le;
+    return isUtf16Bom(data);
+}
+
+pub const TextScan = struct {
+    br: BufferResult = .{},
+    /// The haystack was this UTF-16 file decoded to UTF-8.
+    bom: ?BomKind = null,
+    /// Skipped as binary: a NUL in the first `binary_probe_bytes`.
+    binary: bool = false,
+    /// Bytes searched: 0 when skipped, the text before the first NUL when a
+    /// later NUL cut the file, else all of it.
+    searched: usize = 0,
+};
+
+/// Searches the bytes of one file (or stdin) with ZiGrep's binary rule.
+///
+/// Every path (sync small/large, portable, io_uring, stdin) goes through
+/// here, so they cannot drift apart again (they had: io_uring ignored
+/// `--null-data` and `--encoding`, two paths lost `--count-matches`).
+///
+/// The rule, unless `-a` (`allow_binary`), `--null-data` (NUL is the record
+/// separator) or a UTF-16 decoding is in force:
+///   - a NUL in the first `binary_probe_bytes`: the file is binary and is not
+///     searched at all (as before; grep -I / rg skip it too);
+///   - a NUL further in: the file is text up to the line that holds the first
+///     NUL, and nothing from that line on is ever printed or counted.
+/// Before 2026-11-12 a NUL after the probe window went unnoticed and the
+/// binary lines were printed as text. The check only costs anything for
+/// files that matched, and for -l/-q/-L only up to the first match.
+pub fn searchBytes(
+    gpa: Allocator,
+    data: []const u8,
+    searcher: *const Searcher,
+    path: []const u8,
+    show_path: bool,
+    mode: Mode,
+    allow_binary: bool,
+    config: ScanConfig,
+    out: *std.ArrayList(u8),
+) Allocator.Error!TextScan {
+    if (bomFor(data, config)) |bom| {
+        const decoded = try decodeUtf16ToUtf8(gpa, data, bom == .le);
+        defer gpa.free(decoded);
+        return .{ .br = try scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out), .bom = bom, .searched = data.len };
+    }
+    const nul_is_binary = !allow_binary and !config.null_data;
+    const probe = @min(data.len, binary_probe_bytes);
+    if (nul_is_binary and std.mem.findScalar(u8, data[0..probe], 0) != null) return .{ .binary = true };
+
+    const start = out.items.len;
+    const br = try scanBuffer(gpa, data, searcher, path, show_path, mode, config, out);
+    if (!nul_is_binary or !br.matched or data.len <= probe) return .{ .br = br, .searched = data.len };
+
+    // Only the bytes the search had to read can hide a NUL that matters: the
+    // first matching line for the early-exit modes, the whole file otherwise.
+    const region_end = if (usesEarlyExit(mode, config)) blk: {
+        const m = searcher.find(data, 0) orelse data.len;
+        break :blk std.mem.findScalarPos(u8, data, m, '\n') orelse data.len;
+    } else data.len;
+    if (region_end <= probe) return .{ .br = br, .searched = data.len };
+    const nul = std.mem.findScalarPos(u8, data[0..region_end], probe, 0) orelse return .{ .br = br, .searched = data.len };
+
+    const cut = if (std.mem.findScalarLast(u8, data[0..nul], '\n')) |nl| nl + 1 else 0;
+    out.shrinkRetainingCapacity(start);
+    return .{ .br = try scanBuffer(gpa, data[0..cut], searcher, path, show_path, mode, config, out), .searched = cut };
+}
+
 pub fn scanBuffer(
     gpa: Allocator,
     data: []const u8,
@@ -758,7 +837,7 @@ pub fn scanBuffer(
 
     // Early-exit optimization for files (-l, -L) and quiet (-q) modes:
     // Once any match is found, we don't need to scan remaining lines.
-    if (config.max_count == null and (mode == .quiet or mode == .files or mode == .files_without_match)) {
+    if (usesEarlyExit(mode, config)) {
         if (searcher.find(data, 0) != null) {
             res.matched = true;
             res.lines = 1;
@@ -962,47 +1041,14 @@ fn processBuffer(
     out: *std.ArrayList(u8),
     res: *FileScan,
 ) void {
-    const probe = @min(data.len, binary_probe_bytes);
-    const utf16_bom = if (config.encoding == .none)
-        null
-    else if (forcedBom(config.encoding)) |f|
-        f
-    else if (config.encoding == .utf16)
-        isUtf16Bom(data) orelse .le
-    else
-        isUtf16Bom(data);
-    // `--null-data` makes NUL the separator, so it can no longer mean
-    // "binary": that probe is off (rg does the same).
-    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-    if (is_binary) return;
-
-    if (utf16_bom) |bom| {
-        const decoded = decodeUtf16ToUtf8(gpa, data, bom == .le) catch {
-            res.err = .NOMEM;
-            return;
-        };
-        defer gpa.free(decoded);
-        const match = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
-            res.err = .NOMEM;
-            return;
-        };
-        res.matched = match.matched;
-        res.lines = match.lines;
-        res.matches = match.matches;
-        res.bytes = data.len;
-        return;
-    }
-
-    const match = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
+    const ts = searchBytes(gpa, data, searcher, path, show_path, mode, binary, config, out) catch {
         res.err = .NOMEM;
         return;
     };
-    res.matched = match.matched;
-    res.lines = match.lines;
-    // `--count-matches` counts MATCHES, not lines: without this the count
-    // was always 0 on this path (the UTF-16 branch above already had it).
-    res.matches = match.matches;
-    res.bytes = data.len;
+    res.matched = ts.br.matched;
+    res.lines = ts.br.lines;
+    res.matches = ts.br.matches;
+    res.bytes = ts.searched;
 }
 
 fn mapIoError(err: anyerror) linux.E {
@@ -1090,43 +1136,15 @@ fn scanFileLinux(
                 return res;
             }
             const data = sbuf[0..got];
-            const probe = @min(data.len, binary_probe_bytes);
-            const utf16_bom = if (config.encoding == .none)
-        null
-    else if (forcedBom(config.encoding)) |f|
-        f
-    else if (config.encoding == .utf16)
-        isUtf16Bom(data) orelse .le
-    else
-        isUtf16Bom(data);
-            // `--null-data` makes NUL the separator, so it can no longer mean
-    // "binary": that probe is off (rg does the same).
-    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-            if (!is_binary) {
-                if (utf16_bom) |bom| {
-                    if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
-                        defer gpa.free(decoded);
-                        const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
-                            res.err = .NOMEM;
-                            return res;
-                        };
-                        res.matched = br.matched;
-                        res.lines = br.lines;
-                    res.matches = br.matches;
-                        res.matches = br.matches;
-                        res.bytes = data.len;
-                    } else |_| {}
-                } else {
-                    const br = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
-                        res.err = .NOMEM;
-                        return res;
-                    };
-                    res.matched = br.matched;
-                    res.lines = br.lines;
-                    res.matches = br.matches;
-                    res.bytes = data.len;
-                }
-            }
+            const ts = searchBytes(gpa, data, searcher, path, show_path, mode, binary, config, out) catch {
+                res.err = .NOMEM;
+                return res;
+            };
+            res.matched = ts.br.matched;
+            res.lines = ts.br.lines;
+            res.matches = ts.br.matches;
+            res.bytes = ts.searched;
+            const utf16_bom = ts.bom;
             if (finishFile(out, gpa, path, show_path, mode, res, config, prov_start, data, if (utf16_bom != null) .file_utf16 else .file, .{ .fd = fd })) |e| res.err = e;
             return res;
         }
@@ -1192,43 +1210,16 @@ fn scanFileLinux(
         }
     }
 
-    // --- binary probe ------------------------------------------------------
-    // `-a` disables it; otherwise a NUL in the first block means the file is
-    // skipped entirely (grep `-I`, ripgrep default).
-    const probe = @min(data.len, binary_probe_bytes);
-    const utf16_bom = if (config.encoding == .none)
-        null
-    else if (forcedBom(config.encoding)) |f|
-        f
-    else if (config.encoding == .utf16)
-        isUtf16Bom(data) orelse .le
-    else
-        isUtf16Bom(data);
-    // `--null-data` makes NUL the separator, so it can no longer mean
-    // "binary": that probe is off (rg does the same).
-    const is_binary = !binary and !config.null_data and utf16_bom == null and std.mem.findScalar(u8, data[0..probe], 0) != null;
-    if (!is_binary) {
-        if (utf16_bom) |bom| {
-            if (decodeUtf16ToUtf8(gpa, data, bom == .le)) |decoded| {
-                defer gpa.free(decoded);
-                const br = scanBuffer(gpa, decoded, searcher, path, show_path, mode, config, out) catch {
-                    res.err = .NOMEM;
-                    return res;
-                };
-                res.matched = br.matched;
-                res.lines = br.lines;
-                res.bytes = data.len;
-            } else |_| {}
-        } else {
-            const br = scanBuffer(gpa, data, searcher, path, show_path, mode, config, out) catch {
-                res.err = .NOMEM;
-                return res;
-            };
-            res.matched = br.matched;
-            res.lines = br.lines;
-            res.bytes = data.len;
-        }
-    }
+    // --- search (binary rule in searchBytes) ------------------------------
+    const ts = searchBytes(gpa, data, searcher, path, show_path, mode, binary, config, out) catch {
+        res.err = .NOMEM;
+        return res;
+    };
+    res.matched = ts.br.matched;
+    res.lines = ts.br.lines;
+    res.matches = ts.br.matches;
+    res.bytes = ts.searched;
+    const utf16_bom = ts.bom;
 
     // --- modes that emit once per file ------------------------------------
     // `-c` reports every scanned file, including binary-skipped ones as 0,
@@ -2070,4 +2061,83 @@ test "finishFile: sin salida del fichero no hay provenance (no se hashea)" {
     // -c emite siempre su evento de recuento, asi que si lleva provenance
     try std.testing.expect(finishFile(&out, gpa, "f.txt", false, .count, .{}, cfg, 0, "abc", .file, .none) == null);
     try std.testing.expect(std.mem.startsWith(u8, out.items, "{\"schema\":\"zgrep/1\",\"type\":\"provenance\""));
+}
+
+fn runBytes(data: []const u8, needle: []const u8, mode: Mode, allow_binary: bool, config: ScanConfig, out: *std.ArrayList(u8)) !TextScan {
+    const searcher = Searcher.init(needle, .auto);
+    return searchBytes(std.testing.allocator, data, &searcher, "f", false, mode, allow_binary, config, out);
+}
+
+test "searchBytes: the binary rule (NUL in the probe window, NUL later, -a, -z)" {
+    const gpa = std.testing.allocator;
+    var pad: std.ArrayList(u8) = .empty;
+    defer pad.deinit(gpa);
+    // A file whose first NUL is after the probe window:
+    //   line 1 matches, then > 8 KiB of text, then a line with a NUL that
+    //   also matches, then one more matching line.
+    try pad.appendSlice(gpa, "needle one\n");
+    try pad.appendNTimes(gpa, 'x', binary_probe_bytes + 100);
+    try pad.appendSlice(gpa, "\nbin\x00needle\nneedle three\n");
+    const late = pad.items;
+    const cut = std.mem.findScalarLast(u8, late[0..std.mem.findScalar(u8, late, 0).?], '\n').? + 1;
+
+    // NUL inside the probe window: binary, not searched.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes("needle\x00\nneedle\n", "needle", .lines, false, .{}, &out);
+        try std.testing.expect(ts.binary and !ts.br.matched);
+        try std.testing.expectEqual(@as(usize, 0), out.items.len);
+    }
+    // Late NUL, lines: only the text before the NUL's line is printed.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes(late, "needle", .lines, false, .{}, &out);
+        try std.testing.expectEqualStrings("needle one\n", out.items);
+        try std.testing.expectEqual(@as(usize, 1), ts.br.lines);
+        try std.testing.expectEqual(cut, ts.searched);
+    }
+    // -c counts the same lines.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes(late, "needle", .count, false, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 1), ts.br.lines);
+    }
+    // -l: a match before the NUL lists the file; a match only after it does not.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        try std.testing.expect((try runBytes(late, "needle", .files, false, .{}, &out)).br.matched);
+        try std.testing.expect(!(try runBytes(late, "three", .files, false, .{}, &out)).br.matched);
+        try std.testing.expect(!(try runBytes(late, "three", .quiet, false, .{}, &out)).br.matched);
+        // -L lists it then (no match in the text part).
+        try std.testing.expect(!(try runBytes(late, "three", .files_without_match, false, .{}, &out)).br.matched);
+        // The slow path (--json) agrees with the fast one.
+        try std.testing.expect(!(try runBytes(late, "three", .files, false, .{ .json = true }, &out)).br.matched);
+    }
+    // -a: everything is text.
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes(late, "needle", .count, true, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 3), ts.br.lines);
+        try std.testing.expectEqual(late.len, ts.searched);
+    }
+    // --null-data: NUL is the separator, never "binary".
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes("needle\x00other\x00needle\x00", "needle", .count, false, .{ .null_data = true }, &out);
+        try std.testing.expect(!ts.binary);
+        try std.testing.expectEqual(@as(usize, 2), ts.br.lines);
+    }
+    // --count-matches survives (two paths used to drop it).
+    {
+        var out: std.ArrayList(u8) = .empty;
+        defer out.deinit(gpa);
+        const ts = try runBytes("needle needle\n", "needle", .count_matches, false, .{}, &out);
+        try std.testing.expectEqual(@as(usize, 2), ts.br.matches);
+    }
 }
