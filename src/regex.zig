@@ -717,6 +717,8 @@ pub const Dfa = struct {
     stack: std.ArrayList(u32) = .empty,
     work: std.ArrayList(u32) = .empty,
     seeds: std.ArrayList(u32) = .empty,
+    /// Stack of the zero-width walks (`zeroWidthMatch`, `seedAfterAssert`).
+    zw_stack: std.ArrayList(u32) = .empty,
 
     pub fn create(gpa: Allocator, prog: *const Program) Allocator.Error!*Dfa {
         const d = try gpa.create(Dfa);
@@ -742,6 +744,7 @@ pub const Dfa = struct {
         self.stack.deinit(self.gpa);
         self.work.deinit(self.gpa);
         self.seeds.deinit(self.gpa);
+        self.zw_stack.deinit(self.gpa);
         self.gpa.destroy(self);
     }
 
@@ -772,11 +775,7 @@ pub const Dfa = struct {
     /// byte before this position and the byte being consumed are word bytes.
     /// That pair is exactly what `\b` and `\B` need.
     fn closure(self: *Dfa, at_bol: bool, at_eol: bool) Allocator.Error![]const u32 {
-        self.gen +%= 1;
-        if (self.gen == 0) {
-            @memset(self.mark, 0);
-            self.gen = 1;
-        }
+        self.nextGen();
         self.work.clearRetainingCapacity();
         self.stack.clearRetainingCapacity();
         for (self.seeds.items) |s| try self.stack.append(self.gpa, s);
@@ -874,7 +873,7 @@ pub const Dfa = struct {
             // holds. What follows is walked at this same position, so a run
             // of zero-width items (`(\>){2,3}`, `$\b`) resolves fully.
             const holds = n.kind == .eol or (isWordAssert(n.kind) and wordAssert(n.kind, prev_word, false));
-            if (holds and self.zeroWidthMatch(n.out, prev_word, false, true)) {
+            if (holds and try self.zeroWidthMatch(n.out, prev_word, false, true)) {
                 ok = true;
                 break;
             }
@@ -887,14 +886,14 @@ pub const Dfa = struct {
     /// Does the state accept because a `\b`/`\B` holds right here? `prev_word`
     /// says whether the byte already consumed was a word byte; the byte that
     /// follows is NOT consumed, so the match ends exactly at this position.
-    fn acceptWord(self: *Dfa, s: u32, prev_word: bool, next_word: bool) bool {
+    fn acceptWord(self: *Dfa, s: u32, prev_word: bool, next_word: bool) Allocator.Error!bool {
         if (!self.prog.has_wb) return false;
         const st = &self.states.items[s];
         const prog = self.prog;
         for (st.nodes) |id| {
             const n = prog.nodes[id];
             if (isWordAssert(n.kind) and wordAssert(n.kind, prev_word, next_word)) {
-                if (self.zeroWidthMatch(n.out, prev_word, next_word, false)) return true;
+                if (try self.zeroWidthMatch(n.out, prev_word, next_word, false)) return true;
             }
         }
         return false;
@@ -946,7 +945,7 @@ pub const Dfa = struct {
             }
             // A `\b`/`\B` holding here ends the match at this byte position,
             // without consuming b.
-            if (self.acceptWord(s, prev_word, isWordByte(b))) return ls;
+            if (try self.acceptWord(s, prev_word, isWordByte(b))) return ls;
             var t = self.trans.items[@as(usize, s) * 256 + b];
             if (t == unknown or self.prog.has_wb) t = try self.step(s, b, true, false, prev_word);
             prev_word = isWordByte(b);
@@ -1015,43 +1014,45 @@ pub const Dfa = struct {
         return target;
     }
 
+    /// Starts a fresh mark generation for a walk over the NFA (shared by
+    /// `closure`, `zeroWidthMatch` and `seedAfterAssert`; never nested).
+    fn nextGen(self: *Dfa) void {
+        self.gen +%= 1;
+        if (self.gen == 0) {
+            @memset(self.mark, 0);
+            self.gen = 1;
+        }
+    }
+
     /// Can `match` be reached from `first` without consuming a byte, at a
     /// position between a byte of class `prev_word` and one of `next_word`
     /// (`at_end`: the end of the line, where `$` holds)? Splits and holding
     /// assertions are followed; a set would consume, so it stops the walk.
     /// Chains of zero-width items used to stop after the first one:
     /// `(\>){2,3}` never matched (found by scripts/diff_fuzz.zig).
-    fn zeroWidthMatch(self: *Dfa, first: u32, prev_word: bool, next_word: bool, at_end: bool) bool {
+    /// The walk used fixed 64-entry buffers and silently dropped paths past
+    /// them; nested counted repeats (`(((C|\b)+)+){2,3}`) unroll into far more
+    /// zero-width nodes than that (found by the 20 M-case diff_fuzz run).
+    fn zeroWidthMatch(self: *Dfa, first: u32, prev_word: bool, next_word: bool, at_end: bool) Allocator.Error!bool {
         const prog = self.prog;
-        var stack_buf: [64]u32 = undefined;
-        var seen_buf: [64]u32 = undefined;
-        var sp: usize = 1;
-        var seen: usize = 0;
-        stack_buf[0] = first;
-        while (sp > 0) {
-            sp -= 1;
-            const id = stack_buf[sp];
-            if (std.mem.indexOfScalar(u32, seen_buf[0..seen], id) != null) continue;
-            if (seen < seen_buf.len) {
-                seen_buf[seen] = id;
-                seen += 1;
-            }
+        self.nextGen();
+        const st = &self.zw_stack;
+        st.clearRetainingCapacity();
+        try st.append(self.gpa, first);
+        while (st.pop()) |id| {
+            if (self.mark[id] == self.gen) continue;
+            self.mark[id] = self.gen;
             const n = prog.nodes[id];
             switch (n.kind) {
                 .match => return true,
-                .split => if (sp + 2 <= stack_buf.len) {
-                    stack_buf[sp] = n.out1;
-                    stack_buf[sp + 1] = n.out;
-                    sp += 2;
+                .split => {
+                    try st.append(self.gpa, n.out1);
+                    try st.append(self.gpa, n.out);
                 },
-                .wb, .nwb, .ws, .we => if (wordAssert(n.kind, prev_word, next_word) and sp < stack_buf.len) {
-                    stack_buf[sp] = n.out;
-                    sp += 1;
+                .wb, .nwb, .ws, .we => if (wordAssert(n.kind, prev_word, next_word)) {
+                    try st.append(self.gpa, n.out);
                 },
-                .eol => if (at_end and sp < stack_buf.len) {
-                    stack_buf[sp] = n.out;
-                    sp += 1;
-                },
+                .eol => if (at_end) try st.append(self.gpa, n.out),
                 .set, .bol => {},
             }
         }
@@ -1062,41 +1063,27 @@ pub const Dfa = struct {
     /// position, `b` being the byte about to be consumed. A `match` reached
     /// here ends the match at this position, which `acceptWord` already
     /// reports; `bol`/`eol` cannot hold between two bytes of a line.
+    /// Past 64 nodes the old fixed buffers seeded the node UNRESOLVED, so an
+    /// assertion was judged one byte later: `((( |[^ -]|\b)+)+){2,3}`
+    /// matched "C-" in "C-" (grep: "C"). Found by the 20 M-case diff_fuzz run.
     fn seedAfterAssert(self: *Dfa, first: u32, b: u8, prev_word: bool, next_word: bool) Allocator.Error!void {
         const prog = self.prog;
-        var stack_buf: [64]u32 = undefined;
-        var seen_buf: [64]u32 = undefined;
-        var sp: usize = 0;
-        var seen: usize = 0;
-        stack_buf[0] = first;
-        sp = 1;
-        while (sp > 0) {
-            sp -= 1;
-            const id = stack_buf[sp];
-            if (std.mem.indexOfScalar(u32, seen_buf[0..seen], id) != null) continue;
-            if (seen == seen_buf.len) {
-                // Pathologically long chain: fall back to the old seeding
-                // for the rest (only reachable with > 64 nested nodes).
-                try self.seeds.append(self.gpa, id);
-                continue;
-            }
-            seen_buf[seen] = id;
-            seen += 1;
+        self.nextGen();
+        const st = &self.zw_stack;
+        st.clearRetainingCapacity();
+        try st.append(self.gpa, first);
+        while (st.pop()) |id| {
+            if (self.mark[id] == self.gen) continue;
+            self.mark[id] = self.gen;
             const n = prog.nodes[id];
             switch (n.kind) {
                 .set => if (prog.sets[n.set][b]) try self.seeds.append(self.gpa, n.out),
                 .split => {
-                    if (sp + 2 > stack_buf.len) {
-                        try self.seeds.append(self.gpa, id);
-                        continue;
-                    }
-                    stack_buf[sp] = n.out1;
-                    stack_buf[sp + 1] = n.out;
-                    sp += 2;
+                    try st.append(self.gpa, n.out1);
+                    try st.append(self.gpa, n.out);
                 },
                 .wb, .nwb, .ws, .we => if (wordAssert(n.kind, prev_word, next_word)) {
-                    stack_buf[sp] = n.out;
-                    sp += 1;
+                    try st.append(self.gpa, n.out);
                 },
                 .match, .bol, .eol => {},
             }
@@ -1131,7 +1118,7 @@ pub const Dfa = struct {
             while (i < to) : (i += 1) {
                 const b = data[i];
                 const nl = b == '\n';
-                if (self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
+                if (try self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
                 var t = self.trans_span.items[@as(usize, s) * 256 + b];
                 if (t == unknown or self.prog.has_wb) t = try self.step(s, b, false, nl, prev_word);
                 prev_word = isWordByte(b);
@@ -1163,7 +1150,7 @@ pub const Dfa = struct {
                 const b = data[i];
                 // A `\b`/`\B` holding at i ends the match HERE, without
                 // consuming b: that is what a zero-width assertion means.
-                if (self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
+                if (try self.acceptWord(s, prev_word, isWordByte(b))) best_end = i;
                 var t = self.trans_span.items[@as(usize, s) * 256 + b];
                 if (t == unknown or self.prog.has_wb) t = try self.step(s, b, false, false, prev_word);
                 prev_word = isWordByte(b);
@@ -1330,4 +1317,26 @@ test "regex: cache flush keeps results correct" {
     buf[19000] = 'c';
     buf[18988] = 'a';
     try std.testing.expectEqual(@as(?usize, 0), d.firstMatchingLine(&buf, 0, buf.len, false));
+}
+
+fn testSpan(pattern: []const u8, line: []const u8) !?Span {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const root = try parse(arena.allocator(), pattern, plain);
+    const prog = try compile(std.heap.page_allocator, root);
+    const d = try Dfa.create(std.heap.page_allocator, prog);
+    return d.nextMatch(line, 0, line.len);
+}
+
+test "regex: zero-width walks past 64 nodes (nested counted repeats of \\b)" {
+    // The walks after a word assertion used fixed 64-entry buffers: past
+    // them an assertion was seeded unresolved and judged one byte later, so
+    // "-" (which no branch accepts) ended up inside the span. GNU grep: "C".
+    const s = (try testSpan("((( |[^ -]|\\b)+)+){2,3}", "C-")).?;
+    try std.testing.expectEqual(@as(usize, 0), s.start);
+    try std.testing.expectEqual(@as(usize, 1), s.end);
+    // Deeper (GNU grep backtracks for minutes here, no verdict): no branch
+    // accepts "-", so the longest span from 0 can only be "C".
+    const t = (try testSpan("(((( |[^ -]|\\b)+)+){2,3}){2,3}", "C-")).?;
+    try std.testing.expectEqual(@as(usize, 1), t.end);
 }

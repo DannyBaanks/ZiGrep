@@ -70,12 +70,34 @@ Bugs 7, 8, 10 came from probing the new features by hand against grep
 before writing the oracle; 9, 11, 12 from the fuzzer (300 000 cases: 138
 divergences and 1 294 rejected patterns before, 0 after).
 
+## Round 3: zero-width walks past 64 nodes (2026-11-12, same day)
+
+A 30 M run (seed 31337, 12 processes) on `7863192` was cut short by the
+session: 8 of 12 processes finished (20 000 000 cases) with 24 unique
+divergences, all at knobs 4-5 and all nested counted repeats of groups that
+hold `\b \B \< \>`. Judged afterwards with `--triage-only`: 12
+`zgrep_bug`, 1 `oracle_bug`, 11 `judge_timeout` (GNU grep backtracks for
+minutes on them).
+
+| # | bug | example | fix |
+|---|---|---|---|
+| 13 | the zero-width walks after a word assertion (`seedAfterAssert`, `zeroWidthMatch`) used fixed 64-entry buffers; nested counted repeats unroll into more nodes than that. Past the limit `seedAfterAssert` seeded the node UNRESOLVED (judged one byte late: over-match) and `zeroWidthMatch` dropped paths (under-match) | `-o '((( \|[^ -]\|\b)+)+){2,3}'` on `C-` printed `C-` (grep: `C`; no branch accepts `-`) | `regex.zig`: both walks use a growable stack and the `mark`/`gen` scratch of `closure` |
+
+After the fix: the 24 records give 0 `zgrep_bug` (13 now agree with grep;
+the other 11 still get no grep verdict), and the SAME 30 000 000 cases (seed
+31337, 12 processes, so the cut ones too) give 0 divergences against the
+in-process reference. Unit test: `regex.zig` "zero-width walks past 64
+nodes".
+
 ## Runs
 
 - `run_20m_before_fix6.json`: 20 000 000 cases, seed 20261112, 12 processes,
   25 divergences, all `zgrep_bug` (bug 5).
 - `run_20m_after.json`: the same 20 000 000 cases after the fixes: 0.
 - `early_findings.jsonl`: the shrunk findings of the first short runs.
+- `run_30m_partial_before_fix13.json`: the cut 30 M run (20 M finished), its
+  24 shrunk records and their triage (bug 13).
+- `run_30m_after_fix13.json`: the same 30 000 000 cases after the fix: 0.
 - CI: 300 000 cases with seed 20261112 on every push.
 
 ## Not covered (NOT_DEMONSTRATED by this fuzzer)

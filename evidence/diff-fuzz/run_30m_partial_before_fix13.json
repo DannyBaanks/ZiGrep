@@ -1,0 +1,467 @@
+{
+ "note": "partial 30 M run (seed 31337, 12 procs x 2 500 000) on commit 7863192; 4 processes (p00 p03 p06 p08) were killed with the session and left empty logs; triage done afterwards with scripts/diff_fuzz_run.py --triage-only on the pre-fix binary: zgrep_bug=12 oracle_bug=1 judge_timeout=11",
+ "processes_finished": [
+  "p01",
+  "p02",
+  "p04",
+  "p05",
+  "p07",
+  "p09",
+  "p10",
+  "p11"
+ ],
+ "cases_finished": 20000000,
+ "divergences": 24,
+ "records": [
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\b)+|(x|\u0080|[][:punct:]0123456789^-])){2,}){2,4}",
+    "([^[:lower:].]|(c|.| )|_)",
+    "A"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 3515531209938247678,
+   "haystack": "\u0080C\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "((( |[^ -]|\\b)+)+){2,3}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 12242300775329012740,
+   "haystack": "C-\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "((((\\>){2,4}){2,3})+){2,4}"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 10349239269496565064,
+   "haystack": "b \n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "B",
+    "(((B|\\B|\\W)([\r0123456789B]|a|)[^[:xdigit:]-]?){2,3}){2,}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": true,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 5933131682882113795,
+   "haystack": "-C\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\B|[b]|9)|(\\<){2,}|A){2,4})+",
+    "\\d"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 6380431998171966594,
+   "haystack": "c\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((B|x)|(\\B|x)|\\d0\\B){1,3}){1,3}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 4289194851509253787,
+   "haystack": "9\u00800\r\u00ffC\t\tA.b\rA 9_.BC9AA\r.xB\u0000 \u0080b0x\u0080\u0080a\u00ffb\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\B|\\s)|[[:digit:] AC]|){2,4}){2,4}",
+    "-",
+    "([9Bx]|((9x[0]){0,1})+)"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 2,
+   "before": 2,
+   "knob": 4,
+   "seed": 6415964479242521804,
+   "haystack": "_a\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "\\(\\(\\(\\B\\|[^[:alnum:]]\\|[\rc]\\)\\|\\(\\|b\\)\\|\\(c\\|\\|\\)\\)\\+\\)\\{2,3\\}"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": true,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 7766730772260215414,
+   "haystack": "0A\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "((\\>|(\\>)*|(|B|b)){1,3}){2,4}$"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 1,
+   "before": 2,
+   "knob": 4,
+   "seed": 17243099587469081776,
+   "haystack": "C-\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "(((\\.|\\b|0)+){1,3}){2,}$"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 14169159720981585498,
+   "haystack": " \u00ff-\tx \u0000\u0080\u00ffcA.\u0080\u0080b\u0080BC_\u00ff\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "\\(\\(\\(\\.\\|[ abc]\\|\\b\\)\\+\\)\\{2,3\\}\\)\\+",
+    "\\(B[^_abc]\\)\\+"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": true,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 3584107527449361364,
+   "haystack": "b-\n"
+  },
+  {
+   "what": "selected lines differ from the reference",
+   "patterns": [
+    "^((([^[:xdigit:]_x]|9|9)_(a9\\.)C|(\\<){1,3}|( \\D9)?)|\\s+)",
+    "^.",
+    "((A[^.9-][^a]|(x|a|[_x])|(9|_|\\<))+){2,4}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": true,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 1292562169789147242,
+   "haystack": "B0\t0\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    " \\?",
+    "\r\\(\\(b\\|\\)\\|\\|\\.\\)",
+    "\\(\\(\\([^\r]\\|\\S\\|\\B\\)\\{2,\\}\\)\\{2,3\\}\\)\\+"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": true,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 5003720625943327888,
+   "haystack": "\rbca99Ba\u0080\u0080\u00ff-CB0_.9x-C9-ba\u00800B\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "\\(\\(\\(\\(\\<\\)\\{1,\\}\\)\\{2,4\\}\\)\\{2,3\\}\\)\\+"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": true,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 16953461569894794722,
+   "haystack": "\u00ff_\tbA\u0080 .\t A\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "\\([[:alnum:]]\\|\\(\\(\\B\\)\\{2,4\\}\\)\\+\\|-\\)\\{2,4\\}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": true,
+   "max_count": 0,
+   "after": 2,
+   "before": 0,
+   "knob": 4,
+   "seed": 9601044200597603648,
+   "haystack": " -\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((_|\u00ff|\\b)|){2,4}){2,4}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 11895387728382710540,
+   "haystack": "c\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "\\>",
+    "(((\u0080|[][:punct:]a^-]|\\<){1,3}){2})+",
+    "((||_B\rc)\\w(|)(|))[C_abc]"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 868870535806414363,
+   "haystack": "9\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\B)+)?|_|(B|([^0].-)09+(\\B)*))",
+    "((([.c]|a|\\W)|\\b|A){2,4}){1,}$",
+    "^(c|(\\B|[^.]|([^Ax]?)?))"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 12448064957294268604,
+   "haystack": " 9\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "((\\b|\\d|[_c])+|B|(x|b|C)){2,4}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 3484276598143196653,
+   "haystack": "ab\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\<|A|){2,4})+){2}"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 29117074472390344,
+   "haystack": "_\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\t|_)|\\>){2,4}){2,4}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 11183847045331414069,
+   "haystack": "Cxx0B- BaBcx\u00ff\rbc9..\u00ff9\t\u00ff\u0080\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "a$",
+    "\u0080\\.",
+    "((([.]|\\d|9)|(\\>){1,}){2,4})+"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 5,
+   "seed": 12174522577723889362,
+   "haystack": "c-\u0080b..-A9 x00 _b\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "(((\\b|\\w|C)+){2,})+",
+    "_"
+   ],
+   "fixed": false,
+   "icase": true,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 8863186787308974667,
+   "haystack": "0.c\n"
+  },
+  {
+   "what": "-o spans differ from the reference (leftmost-longest)",
+   "patterns": [
+    "((9|([[:blank:]_]|\\<)|C\\wC\\b){2,4}){1,3}"
+   ],
+   "fixed": false,
+   "icase": false,
+   "word": false,
+   "line": false,
+   "invert": false,
+   "bre": false,
+   "max_count": 0,
+   "after": 0,
+   "before": 0,
+   "knob": 4,
+   "seed": 15044526441479328952,
+   "haystack": "c\n"
+  }
+ ]
+}
