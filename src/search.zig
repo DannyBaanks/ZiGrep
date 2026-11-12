@@ -232,14 +232,32 @@ pub const Searcher = struct {
     /// In a 254 MB file where "kamikaze" fills 1.8 M lines, `HIT kamikaze`
     /// anchored on `z`+`k` and verified every "kamikaze" (64 ms vs rg's
     /// 25 ms); the sample says `H`/`I`/`T` never occur (2026-11-12).
+    ///
+    /// `-i` literals (`findCi`) anchor on ONE byte, matched in both cases
+    /// (`scanCi`): it is chosen by the summed count of both cases.
+    /// A regex is retuned through its literal `prefilter` (`retunedRegex`).
     pub fn retunedFor(self: *const Searcher, data: []const u8) ?Searcher {
-        if (self.kind != .literal or self.icase or !self.has_pair) return null;
-        if (self.effectiveAlgo() != .memchr or data.len < retune_min_bytes) return null;
+        if (self.kind != .literal or data.len < retune_min_bytes) return null;
         const nd = self.needle;
+        if (self.icase) {
+            if (nd.len < 2) return null;
+        } else {
+            if (!self.has_pair or self.effectiveAlgo() != .memchr) return null;
+        }
         var count = [_]u32{0} ** 256;
         const step = (data.len - retune_sample) / 3;
         for (0..4) |k| {
             for (data[k * step ..][0..retune_sample]) |b| count[b] += 1;
+        }
+        if (self.icase) {
+            // The needle is lower-cased; `scanCi` also accepts `b ^ 0x20`
+            // for a foldable byte, so both cases count.
+            var folded = count;
+            for (0..256) |b| {
+                const lb: u8 = @intCast(b);
+                if (isCaseFoldable(lb)) folded[b] += count[b ^ 0x20];
+            }
+            count = folded;
         }
         // Lower is rarer: the sampled count first, the static rank second.
         const score = struct {
@@ -250,6 +268,13 @@ pub const Searcher = struct {
         var o1: u32 = 0;
         for (nd, 0..) |b, idx| {
             if (score(&count, b) < score(&count, nd[o1])) o1 = @intCast(idx);
+        }
+        if (self.icase) {
+            if (o1 == self.rarest_offset) return null;
+            var c = self.*;
+            c.rarest_offset = o1;
+            c.rarest_byte = nd[o1];
+            return c;
         }
         var o2: u32 = if (o1 == 0) 1 else 0;
         for (nd, 0..) |b, idx| {
@@ -265,6 +290,17 @@ pub const Searcher = struct {
         t.rare2_offset = o2;
         t.rare2_byte = nd[o2];
         return t;
+    }
+
+    /// A regex whose literal `prefilter` is retuned for `data` (see
+    /// `retunedFor`): the copy points at `pf_storage`, which must outlive it.
+    pub fn retunedRegex(self: *const Searcher, data: []const u8, pf_storage: *Searcher) ?Searcher {
+        if (self.kind != .regex) return null;
+        const pf = self.prefilter orelse return null;
+        pf_storage.* = pf.retunedFor(data) orelse return null;
+        var c = self.*;
+        c.prefilter = pf_storage;
+        return c;
     }
 
     /// Resolves `auto` against the actual needle length.
@@ -482,6 +518,65 @@ pub const Searcher = struct {
         }
         // Tail (fewer than 32 + n - 1 bytes left): the single-anchor scan.
         return self.findAnchor(hay, i);
+    }
+
+    /// `findOrNul` result: the first occurrence (`nul == false`) or the
+    /// first NUL byte (`nul == true`), whichever comes first.
+    pub const Hit = struct { pos: usize, nul: bool };
+
+    /// Can `findOrNul` serve this searcher? Literals on the packed-pair
+    /// kernel only (no -i, no -w, no regex).
+    pub fn supportsFindOrNul(self: *const Searcher) bool {
+        return self.kind == .literal and !self.icase and !self.word and self.has_pair and
+            self.needle.len > 0 and self.effectiveAlgo() == .memchr;
+    }
+
+    /// `find` that also stops at the first NUL byte at or after `start`:
+    /// returns whichever comes first. Every byte in [start, result) is
+    /// guaranteed NUL-free. The NUL test reuses the kernel's 32-byte loads
+    /// (one compare per block), which is what makes the binary rule's
+    /// late-NUL check free (`scan.scanBuffer`).
+    pub fn findOrNul(self: *const Searcher, hay: []const u8, start: usize) ?Hit {
+        std.debug.assert(self.supportsFindOrNul());
+        const nd = self.needle;
+        const n = nd.len;
+        const V = @Vector(32, u8);
+        const o1 = self.rarest_offset;
+        const o2 = self.rare2_offset;
+        const w1: V = @splat(self.rarest_byte);
+        const w2: V = @splat(self.rare2_byte);
+        const zero: V = @splat(0);
+        if (start >= hay.len) return null;
+        // The loads at `i + o1` cover [start + o1, ...): the head (fewer than
+        // `n` bytes) is checked byte by byte.
+        for (start..@min(start + o1, hay.len)) |k| {
+            if (hay[k] == 0) return self.beforeNul(hay, start, k);
+        }
+        var i = start;
+        while (i + n + 31 <= hay.len) : (i += 32) {
+            const v1: V = hay[i + o1 ..][0..32].*;
+            const v2: V = hay[i + o2 ..][0..32].*;
+            var mask: u32 = @bitCast((v1 == w1) & (v2 == w2));
+            const zmask: u32 = @bitCast(v1 == zero);
+            if (zmask != 0) return self.beforeNul(hay, i, i + o1 + @ctz(zmask));
+            while (mask != 0) : (mask &= mask - 1) {
+                const cand = i + @ctz(mask);
+                if (std.mem.eql(u8, hay[cand .. cand + n], nd)) return .{ .pos = cand, .nul = false };
+            }
+        }
+        // Tail: [i + o1, len) was not covered by the loads.
+        if (std.mem.findScalarPos(u8, hay, @min(i + o1, hay.len), 0)) |z| return self.beforeNul(hay, i, z);
+        const m = self.findAnchor(hay, i) orelse return null;
+        return .{ .pos = m, .nul = false };
+    }
+
+    /// A NUL sits at `z`; [from, z) is NUL-free. An occurrence that starts
+    /// in [from, z) and ends before z comes first, else the NUL.
+    fn beforeNul(self: *const Searcher, hay: []const u8, from: usize, z: usize) Hit {
+        if (from < z) {
+            if (self.findMemchr(hay[0..z], from)) |m| return .{ .pos = m, .nul = false };
+        }
+        return .{ .pos = z, .nul = true };
     }
 
     /// Single rarest-byte anchor (`findScalarPos`) plus a full compare.
@@ -1156,9 +1251,66 @@ test "retunedFor: the anchor pair follows the buffer's real byte frequencies" {
     }
     try std.testing.expectEqual(t.find(buf, pos), null);
     try std.testing.expectEqual(hits.len, found);
-    // Small buffers, -i, regex: untouched.
+    // Small buffers: untouched.
     try std.testing.expect(s.retunedFor(buf[0 .. Searcher.retune_min_bytes - 1]) == null);
-    var ci = s;
-    ci.icase = true;
-    try std.testing.expect(ci.retunedFor(buf) == null);
+
+    // -i: one anchor, chosen by both cases together ("kamikaze" has none of
+    // h/i/t... except the i: so h or t).
+    const ci = try build(pa, &.{"HIT KAMIKAZE"}, .{ .fixed = true, .icase = true });
+    try std.testing.expectEqual(Kind.literal, ci.kind);
+    const cit = ci.retunedFor(buf).?;
+    try std.testing.expect(cit.rarest_byte == 'h' or cit.rarest_byte == 't');
+    // Regex: through its literal prefilter.
+    const rx = try build(pa, &.{"HIT kamikaze[0-9]*"}, .{});
+    try std.testing.expect(rx.prefilter != null);
+    var pf_store: Searcher = undefined;
+    const rxt = rx.retunedRegex(buf, &pf_store).?;
+    try std.testing.expect(rxt.prefilter.? == &pf_store);
+    for ([_]u8{ pf_store.rarest_byte, pf_store.rare2_byte }) |b| try std.testing.expect(b == 'H' or b == 'I' or b == 'T');
+    // Every variant finds exactly the same lines as its untuned twin.
+    const pairs = [_][2]*const Searcher{ .{ &ci, &cit }, .{ &rx, &rxt } };
+    for (pairs) |pr| {
+        var p2: usize = 0;
+        var hits_found: usize = 0;
+        while (pr[0].find(buf, p2)) |m| {
+            try std.testing.expectEqual(@as(?usize, m), pr[1].find(buf, p2));
+            hits_found += 1;
+            p2 = (std.mem.findScalarPos(u8, buf, m, '\n') orelse buf.len) + 1;
+        }
+        try std.testing.expectEqual(@as(?usize, null), pr[1].find(buf, p2));
+        try std.testing.expectEqual(hits.len, hits_found);
+    }
+}
+
+test "findOrNul: the first occurrence or the first NUL, against a naive scan" {
+    var prng = std.Random.DefaultPrng.init(0x0b17_2026_1112);
+    const rnd = prng.random();
+    var buf: [600]u8 = undefined;
+    const needles = [_][]const u8{ "ab", "abc", "HIT kamikaze", "zz", "a\x01b" };
+    var iter: usize = 0;
+    while (iter < 4000) : (iter += 1) {
+        const len = rnd.uintLessThan(usize, buf.len);
+        for (buf[0..len]) |*c| c.* = "abcHIT kmzez\n\x01"[rnd.uintLessThan(usize, 14)];
+        const nnul = rnd.uintLessThan(usize, 3);
+        for (0..nnul) |_| {
+            if (len > 0) buf[rnd.uintLessThan(usize, len)] = 0;
+        }
+        const hay = buf[0..len];
+        for (needles) |nd| {
+            const s = Searcher.init(nd, .memchr);
+            try std.testing.expect(s.supportsFindOrNul());
+            const start = if (len == 0) 0 else rnd.uintLessThan(usize, len + 1);
+            // Naive: the first NUL at or after start; the first occurrence
+            // that ends before it.
+            const z = std.mem.findScalarPos(u8, hay, start, 0);
+            const lim = z orelse hay.len;
+            const m = if (start <= lim) std.mem.find(u8, hay[start..lim], nd) else null;
+            const want: ?Searcher.Hit = if (m) |k| .{ .pos = start + k, .nul = false } else if (z) |zz| .{ .pos = zz, .nul = true } else null;
+            const got = s.findOrNul(hay, start);
+            if (!std.meta.eql(want, got)) {
+                std.debug.print("\nfindOrNul nd={s} start={d} want={any} got={any}\n", .{ nd, start, want, got });
+                return error.TestExpectedEqual;
+            }
+        }
+    }
 }

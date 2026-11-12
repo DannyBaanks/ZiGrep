@@ -52,6 +52,11 @@ pub const BinaryReport = enum {
 };
 
 pub const ScanConfig = struct {
+    /// Set by `searchBytes` only: the binary rule's late-NUL check, fused
+    /// into the fast line loop of `scanBuffer` from this offset on (see
+    /// `BufferResult.nul_handled`). null: no check (the default for every
+    /// other caller).
+    late_nul_from: ?usize = null,
     invert: bool = false,
     max_count: ?usize = null,
     /// Lines of context before/after a selected line (`-A` / `-B` / `-C`).
@@ -190,6 +195,10 @@ pub const FileScan = struct {
 };
 
 pub const BufferResult = struct {
+    /// `late_nul_from` was honoured (the fast loop ran): the scan already
+    /// stopped at the line of the first late NUL, `nul_cut` says where.
+    nul_handled: bool = false,
+    nul_cut: ?usize = null,
     matched: bool = false,
     lines: usize = 0,
     /// Matches, not lines: only filled when `--count-matches` is on.
@@ -753,6 +762,23 @@ fn scanBufferLines(
 /// against known ground truth without touching the filesystem.
 /// True when `scanBuffer` decides with one `searcher.find(data, 0)` and stops
 /// (-l / -L / -q without -m, on the fast path).
+/// Index of the first '\n' or NUL at or after `from`, or `data.len`.
+fn lineEndOrNul(data: []const u8, from: usize) usize {
+    const V = @Vector(32, u8);
+    const nl: V = @splat('\n');
+    const zero: V = @splat(0);
+    var i = from;
+    while (i + 32 <= data.len) : (i += 32) {
+        const v: V = data[i..][0..32].*;
+        const mask: u32 = @bitCast((v == nl) | (v == zero));
+        if (mask != 0) return i + @ctz(mask);
+    }
+    while (i < data.len) : (i += 1) {
+        if (data[i] == '\n' or data[i] == 0) return i;
+    }
+    return data.len;
+}
+
 fn usesEarlyExit(mode: Mode, config: ScanConfig) bool {
     if (config.invert or config.before_context > 0 or config.after_context > 0 or config.needs_spans() or config.null_data or config.multiline or config.json or config.stop_on_nonmatch) return false;
     return config.max_count == null and (mode == .quiet or mode == .files or mode == .files_without_match);
@@ -875,7 +901,12 @@ pub fn searchBytes(
     }
 
     const start = out.items.len;
-    const br = try scanBuffer(gpa, data, searcher, path, show_path, mode, config, out);
+    // Where the kernel supports it, the late-NUL check runs inside the search
+    // (`scanBuffer`, `late_nul_from`); otherwise the second pass below.
+    var cfg = config;
+    if (nul_is_binary and data.len > probe) cfg.late_nul_from = probe;
+    const br = try scanBuffer(gpa, data, searcher, path, show_path, mode, cfg, out);
+    if (br.nul_handled) return .{ .br = br, .searched = br.nul_cut orelse data.len };
     if (!nul_is_binary or !br.matched or data.len <= probe) return .{ .br = br, .searched = data.len };
 
     // Only the bytes the search had to read can hide a NUL that matters: the
@@ -966,7 +997,9 @@ pub fn scanBuffer(
     var res: BufferResult = .{};
     // Large buffers: the literal's SIMD anchor pair is re-chosen from this
     // buffer's own byte frequencies (once per buffer, ~64 KiB sampled).
-    const tuned: ?Searcher = base_searcher.retunedFor(data);
+    // A regex gets the same through its literal prefilter.
+    var pf_tuned: Searcher = undefined;
+    const tuned: ?Searcher = base_searcher.retunedFor(data) orelse base_searcher.retunedRegex(data, &pf_tuned);
     const searcher: *const Searcher = if (tuned) |*t| t else base_searcher;
 
     if (data.len == 0) {
@@ -1000,10 +1033,27 @@ pub fn scanBuffer(
     var pos: usize = 0;
     var heading_out = false;
 
+    // The binary rule's late-NUL check, fused (`late_nul_from`): the
+    // literal kernel compares its 32-byte loads with 0 too (`findOrNul`),
+    // so the file is read once. A NUL ends the text at the start of its
+    // line. It used to be a second pass over the whole file after the
+    // search (~5-8 ms of 21-38 on 254 MB with 20 000 matches; 2026-11-12).
+    // A first attempt checked 256 KiB segments right before searching them:
+    // same cost, the pass was compute-bound, not memory-bound.
+    const fused = config.late_nul_from != null and searcher.supportsFindOrNul();
+    res.nul_handled = fused;
+
     // `pos < data.len` (rather than `true`) is what stops an empty pattern
     // from inventing a phantom line after a trailing newline.
     while (pos < data.len) {
-        const m = searcher.find(data, pos) orelse break;
+        const m = if (fused) blk: {
+            const h = searcher.findOrNul(data, pos) orelse break;
+            if (h.nul) {
+                res.nul_cut = if (std.mem.findScalarLast(u8, data[0..h.pos], '\n')) |nl| nl + 1 else 0;
+                break;
+            }
+            break :blk h.pos;
+        } else searcher.find(data, pos) orelse break;
         // Advance the line cursor to the line that contains the match. One
         // backward search finds where that line starts; the separators in
         // between are only COUNTED (vectorised countScalar) when the number
@@ -1021,7 +1071,17 @@ pub fn scanBuffer(
         // The cursor must advance with the RAW end: advancing with the visible
         // one lands ON the '\n', so every CRLF line after the first was
         // counted twice (lines 1, 3, 5... instead of 1, 2, 3...).
-        const raw_end = std.mem.findScalarPos(u8, data, m, recordSep(config)) orelse data.len;
+        // Fused late-NUL check: one SIMD walk finds the end of the line OR a
+        // NUL in its rest (`findOrNul` vouched for every byte before `m`).
+        // A NUL drops the line and ends the text.
+        const raw_end = if (fused) blk: {
+            const e = lineEndOrNul(data, m);
+            if (e < data.len and data[e] == 0) {
+                res.nul_cut = line_start;
+                break;
+            }
+            break :blk e;
+        } else std.mem.findScalarPos(u8, data, m, recordSep(config)) orelse data.len;
         const line_end = if (config.crlf and raw_end > m and data[raw_end - 1] == '\r')
             raw_end - 1
         else
