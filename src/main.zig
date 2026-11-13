@@ -285,6 +285,9 @@ fn printBinaryStats() void {
 
 pub const Options = struct {
     mode: Mode = .lines,
+    /// `-q` / `--quiet` / `--silent`. Kept apart from `mode` because it must
+    /// WIN over every mode that prints, whatever the order of the flags.
+    quiet: bool = false,
     algo: Algo = .auto,
     threads: usize = 0, // 0 = auto (use the CPU count)
     show_path: ?bool = null,
@@ -486,7 +489,8 @@ const Ctx = struct {
     /// `--pre=CMD` (rg): search the command's stdout instead of the file.
     pre_cmd: []const u8 = "",
     /// `--pre-glob=GLOB`: only --pre the files matching GLOB.
-    pre_glob: []const u8 = "",
+    /// Null when the option was not given: then EVERY file goes through --pre.
+    pre_glob: ?[]const u8 = null,
     /// arena for the argv of --pre/--exec.
     arena: Allocator = undefined,
     /// `--exec` runs with the quiet mode (no output) but must NOT stop the
@@ -839,8 +843,18 @@ fn runPre(gpa: Allocator, io: std.Io, allocator: Allocator, template: []const u8
 
 /// `--pre-glob` decides whether a file goes through --pre. rg uses its glob
 /// syntax; zgrep reuses the filter engine's.
+///
+/// No `--pre-glob` means EVERY file goes through --pre. That has to be
+/// spelled out: `globMatch(text, "")` is false (an empty pattern only matches
+/// an empty text), so an empty glob used to make `preApplies` say "no" for
+/// every file and the `--pre` command was silently ignored: zgrep searched
+/// the FILE instead of the command's output, with no error and no warning
+/// (measured 2026-11-12 on Windows: `zgrep --pre "cmd /c echo needle X" needle
+/// f.txt` printed f.txt's own lines). The bug was on every platform, not just
+/// Windows: it was the empty glob, not the OS.
 fn preApplies(glob: ?[]const u8, path: []const u8) bool {
     const g = glob orelse return true;
+    if (g.len == 0) return true;
     const name = std.fs.path.basename(path);
     return filter.globMatch(name, g) or filter.globMatch(path, g);
 }
@@ -1094,7 +1108,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
             } else if (std.mem.eql(u8, body, "count")) {
                 opts.mode = .count;
             } else if (std.mem.eql(u8, body, "quiet") or std.mem.eql(u8, body, "silent")) {
-                opts.mode = .quiet;
+                opts.quiet = true;
             } else if (std.mem.startsWith(u8, body, "max-count=")) {
                 const v = body["max-count=".len..];
                 opts.max_count = parseCount(v) orelse {
@@ -1719,7 +1733,7 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
                 'c' => opts.mode = .count,
                 'l' => opts.mode = .files,
                 'L' => opts.mode = .files_without_match,
-                'q' => opts.mode = .quiet,
+                'q' => opts.quiet = true,
                 'H' => opts.show_path = true,
                 'h' => opts.show_path = false,
                 'a' => opts.binary = true,
@@ -1827,6 +1841,16 @@ pub fn parseArgs(allocator: Allocator, args: []const [:0]const u8, opts: *Option
     // rg: `--column` implies `--line-number`; a column alone ("6:beta") is
     // indistinguishable from a line number for a machine reader.
     if (opts.column and !opts.no_line_number_explicit) opts.show_line_no = true;
+    // `-q` always wins over the modes that PRINT (`-c`, `-l`, `-L`,
+    // `--count-matches`), whatever the order on the command line: GNU grep and
+    // ripgrep both print NOTHING with `-q -c` / `-q -l` and only answer with
+    // the exit status. zgrep used to keep the LAST mode, so `zgrep -q -c pat
+    // f` printed the counts and `zgrep -c -q pat f` printed nothing: the same
+    // search, two answers, depending on the order. Found by the tri-way
+    // differential fuzzer on Windows (2026-11-12, knob 6: 5 cases where
+    // ripgrep and GNU grep agreed on an empty output and zgrep printed 21
+    // count rows).
+    if (opts.quiet) opts.mode = .quiet;
     // `--json` promises stdout carries ONLY zgrep/1 events. `--exec` hands the
     // child our stdout, so the two cannot be honoured together: refuse instead
     // of mixing free text into the event stream (contract.md §8).
@@ -1929,6 +1953,34 @@ pub fn main(init: std.process.Init) !void {
     std.process.exit(try runCli(init, arena, args));
 }
 
+/// The user's home directory.
+///
+/// On Windows the home is `%USERPROFILE%`: PowerShell and cmd do NOT define
+/// `HOME` (only Git Bash and MSYS do), so reading only `HOME` sent every
+/// path built from it to the CURRENT DIRECTORY. `--cache` then listed
+/// `<cwd>/.cache/zig` as if it were the global Zig cache and offered to
+/// delete it, and `--spill` wrote into `<cwd>/.cache/zgrep/spill`.
+///
+/// `HOME` still wins when it is set (that is what a POSIX shell and the
+/// MSYS environments expect), and `USERPROFILE` is the fallback. When
+/// neither exists the caller decides what to do.
+fn pickHome(home: ?[]const u8, userprofile: ?[]const u8) ?[]const u8 {
+    if (home) |h| {
+        if (h.len > 0) return h;
+    }
+    if (userprofile) |u| {
+        if (u.len > 0) return u;
+    }
+    return null;
+}
+
+fn homeDir(init: std.process.Init) ?[]const u8 {
+    return pickHome(
+        init.environ_map.get("HOME"),
+        init.environ_map.get("USERPROFILE"),
+    );
+}
+
 /// M8: where the spill of this call goes. `--spill=DIR` or
 /// `$XDG_CACHE_HOME/zgrep/spill` (else `~/.cache/zgrep/spill`); the name is
 /// unique per call (wall-clock ns + pid), created exclusive and 0600.
@@ -1936,7 +1988,10 @@ fn configureSpill(init: std.process.Init, arena: Allocator, opts: *const Options
     if (!opts.spill) return;
     const dir: []const u8 = opts.spill_dir orelse blk: {
         if (init.environ_map.get("XDG_CACHE_HOME")) |x| if (x.len > 0) break :blk try std.fmt.allocPrint(arena, "{s}/zgrep/spill", .{x});
-        const home = init.environ_map.get("HOME") orelse ".";
+        const home = homeDir(init) orelse {
+            std.debug.print("zgrep: --spill: neither HOME nor USERPROFILE is set; use --spill=DIR\n", .{});
+            return error.HomeNotFound;
+        };
         break :blk try std.fmt.allocPrint(arena, "{s}/.cache/zgrep/spill", .{home});
     };
     const ns = std.Io.Clock.now(.real, init.io).nanoseconds;
@@ -2193,7 +2248,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
 
     // `--setup` is an action too: plan, ask, apply (setup.zig).
     if (opts.setup) {
-        const home = init.environ_map.get("HOME") orelse init.environ_map.get("USERPROFILE") orelse {
+        const home = homeDir(init) orelse {
             std.debug.print("zgrep: --setup: neither HOME nor USERPROFILE is set\n", .{});
             return 2;
         };
@@ -2227,7 +2282,14 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
     if (opts.cache) {
         var roots: [16][:0]const u8 = undefined;
         var nroots: usize = 0;
-        const home_path: []const u8 = init.environ_map.get("HOME") orelse ".";
+        // Same resolution as --spill and --setup: on Windows the home is
+        // %USERPROFILE%, and without this the roots would point at the
+        // current directory and the global cache would be looked for in
+        // `<cwd>/.cache/zig`.
+        const home_path: []const u8 = homeDir(init) orelse {
+            std.debug.print("zgrep: --cache: neither HOME nor USERPROFILE is set; use --cache-root=PATH\n", .{});
+            return 2;
+        };
         if (opts.cache_roots_count > 0) {
             for (opts.cache_roots[0..opts.cache_roots_count]) |r| {
                 if (nroots >= roots.len) break;
@@ -2770,7 +2832,7 @@ pub fn runSearch(init: std.process.Init, arena: Allocator, args: []const [:0]con
         .window = window,
         .exec_mode = opts.exec_cmd != null,
         .pre_cmd = opts.pre_cmd orelse "",
-        .pre_glob = opts.pre_glob orelse "",
+        .pre_glob = opts.pre_glob,
         .arena = arena,
     };
 
@@ -3830,4 +3892,82 @@ test "headingOn follows show_path, not the operand count" {
     try std.testing.expect(headingOn(true, true)); // one DIRECTORY operand
     try std.testing.expect(headingOn(true, true)); // -H with one file
     try std.testing.expect(!headingOn(true, false)); // one file, no -H
+}
+
+test "pickHome: HOME wins, USERPROFILE is the Windows fallback" {
+    // A POSIX shell (or Git Bash on Windows) sets HOME.
+    try std.testing.expectEqualStrings(
+        "/home/danny",
+        pickHome("/home/danny", "C:\\Users\\danny").?,
+    );
+    // A plain PowerShell or cmd session sets only USERPROFILE. Without this
+    // fallback every path built from the home landed in the CURRENT
+    // DIRECTORY: --cache offered to delete <cwd>/.cache/zig thinking it was
+    // the global Zig cache, and --spill wrote into <cwd>/.cache/zgrep/spill.
+    try std.testing.expectEqualStrings(
+        "C:\\Users\\danny",
+        pickHome(null, "C:\\Users\\danny").?,
+    );
+    // An empty HOME is not a home: fall through to USERPROFILE.
+    try std.testing.expectEqualStrings(
+        "C:\\Users\\danny",
+        pickHome("", "C:\\Users\\danny").?,
+    );
+    // Neither set: the caller decides (it reports the error, it does not
+    // silently use ".").
+    try std.testing.expect(pickHome(null, null) == null);
+    try std.testing.expect(pickHome("", "") == null);
+}
+
+test "preApplies: without --pre-glob every file goes through --pre" {
+    // No --pre-glob at all: every file is pre-processed.
+    try std.testing.expect(preApplies(null, "a.txt"));
+    // An explicitly empty --pre-glob means the same thing (and NOT "nothing
+    // matches": `globMatch(text, "")` is false, and that made --pre dead code
+    // on every platform).
+    try std.testing.expect(preApplies("", "a.txt"));
+    // With a glob, only the matching files are pre-processed.
+    try std.testing.expect(preApplies("*.txt", "a.txt"));
+    try std.testing.expect(!preApplies("*.md", "a.txt"));
+    try std.testing.expect(!preApplies("*.md", "dir/a.txt"));
+}
+
+test "parseArgs: -q wins over -c / -l / -L in any order" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // GNU grep and ripgrep print NOTHING with `-q -c`; zgrep used to keep the
+    // last mode, so the answer depended on the order of the flags.
+    {
+        var opts: Options = .{};
+        const args = [_][:0]const u8{ "zgrep", "-q", "-c", "pat", "f" };
+        _ = try parseArgs(alloc, &args, &opts);
+        try std.testing.expectEqual(Mode.quiet, opts.mode);
+    }
+    {
+        var opts: Options = .{};
+        const args = [_][:0]const u8{ "zgrep", "-c", "-q", "pat", "f" };
+        _ = try parseArgs(alloc, &args, &opts);
+        try std.testing.expectEqual(Mode.quiet, opts.mode);
+    }
+    {
+        var opts: Options = .{};
+        const args = [_][:0]const u8{ "zgrep", "-q", "-l", "pat", "f" };
+        _ = try parseArgs(alloc, &args, &opts);
+        try std.testing.expectEqual(Mode.quiet, opts.mode);
+    }
+    {
+        var opts: Options = .{};
+        const args = [_][:0]const u8{ "zgrep", "-L", "--quiet", "pat", "f" };
+        _ = try parseArgs(alloc, &args, &opts);
+        try std.testing.expectEqual(Mode.quiet, opts.mode);
+    }
+    // Without -q the counting mode is untouched.
+    {
+        var opts: Options = .{};
+        const args = [_][:0]const u8{ "zgrep", "-c", "pat", "f" };
+        _ = try parseArgs(alloc, &args, &opts);
+        try std.testing.expectEqual(Mode.count, opts.mode);
+    }
 }
