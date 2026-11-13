@@ -3,34 +3,45 @@
 Guía operativa para una persona o agente que usa `zigrep` a mano. El detalle técnico y
 la evidencia están en `README.md` y `evidence/REPORT.md`.
 
-## Release 0.3.2 (Linux verificado; Windows hereda la 0.3.1)
+## Release 0.3.3 (verificada en Windows nativo)
 
-La 0.3.2 es la **0.3.1 + `--cache`**: mergea la re-auditoría de Windows
-(ocho bugs corregidos, §4h/§4i) y añade el limpiador de caches de Zig (§4j).
-El binario de Windows no cambia: nada de lo que toca la 0.3.2 es específico
-de Windows (`clean.zig` está guardado por `builtin.os.tag`, y el cross-build
-`x86_64-windows` compila).
+La 0.3.3 es la **0.3.2 + los cinco bugs** que salieron al re-auditar en
+Windows nativo los 66 commits nuevos de upstream (§4u). Tres son del motor
+(`HOME` sin `USERPROFILE`, `--pre` muerto, `-q` que no siempre ganaba) y
+dos del fuzzer diferencial.
 
-Evidencia de esta release, ejecutada en Linux sobre el commit tageado:
+Esta release se midió **en Windows**, no en Linux. Evidencia de la release
+publicada `v0.3.3`, ejecutada en Windows nativo (Xeon E5-2678 v3, **sin**
+AVX-512), sobre el commit tageado `05f126b`:
 
 | qué | resultado |
 |---|---|
-| `zig build test` | 99 pass / 1 skip |
-| oráculo diferencial (grep + rg) | 30/30 |
-| conformance grep (40 casos) | 40/40 |
-| paridad rg (25 casos) | 25/25 |
-| BRE (15) · `\b` (12) | 15/15 · 12/12 |
-| fuzzer entrópico | 100.001 permutaciones, 0 anomalías |
+| build baseline `x86_64-windows` (ReleaseFast) | 13/13 pasos |
+| tests unitarios | 167 pass / 1 skip (`io_uring`, solo Linux) |
+| oráculo diferencial (GNU grep 3.0 + ripgrep 15.0.0) | 31/31 |
+| fuzzer adversarial | 100.001 permutaciones, 0 anomalías |
 | cell-fuzz | 1.000 coordenadas, 0 anomalías |
-| fuzzer diferencial | `python3 scripts/diff_fuzz_run.py N`: el matcher contra una referencia independiente, juez `LC_ALL=C grep`; encontró y cerró 6 bugs el 2026-11-12 (`evidence/diff-fuzz/`) |
-| cross-build Windows | compila (`x86_64-windows`, ReleaseFast) |
+| fuzzer diferencial tri-way (knobs 1-6, 250 casos cada uno) | los 6 knobs terminan; knob 1 = `agree_all=250/250` |
+| divergencias del tri-way clasificadas (1.250 casos) | 0 en la clase sospechosa (zgrep solo) |
+| cross-build `x86_64-linux` y `aarch64-linux` | 13/13 en ambos |
+| `.exe` publicado desensamblado | 208.398 instrucciones, **0** `zmm`, **0** máscaras, **0** EVEX |
+| instalador publicado (`irm ... \| iex`) | exit 0, 0 errores, hash publicado, máquina restaurada (§"Salida real del instalador publicado (v0.3.3)") |
+| CI del PR #3 | Linux y Windows, los dos jobs en verde |
+
+**NOT_DEMONSTRATED** en esta release (las etiquetas son honestas):
+
+* Las **cifras de Linux** son las del CI: esta release se midió en Windows.
+* El **rendimiento en Windows** no se midió: esta release es de corrección,
+  no de benchmark.
+* `pwsh` (Core), Windows ARM64 e `install.sh` (POSIX): sin ejecutar.
+* El binding de Python, más allá de sus propios tests.
 
 ## El comando de Windows
 
 **Instalar (una sola vez, sin permisos de administrador):**
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.3/install.ps1 | iex
 ```
 
 > La URL con `main` (`.../main/install.ps1`) empieza a funcionar cuando el
@@ -43,7 +54,7 @@ leído antes. El instalador verifica el SHA-256 del `.zip` descargado contra el
 coincide. Si prefieres revisarlo antes, descárgalo y léelo:
 
 ```powershell
-irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 -OutFile install.ps1
+irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.3/install.ps1 -OutFile install.ps1
 Get-Content install.ps1
 .\install.ps1
 ```
@@ -214,6 +225,102 @@ Lo importante de esa transcripción:
 * `exit=0` y `ZiGrep is ready.`.
 * El `checksum matches` es el hash **publicado** de la release (0dae279f…),
   no uno inventado.
+* El bloque 6 es el escenario que **abortaba** en la 0.3.0 (§4i): ahora
+  instala sin errores y **no toca** el `$InstallDir` del usuario.
+* Al final la máquina queda como estaba (sin el directorio de ZiGrep y sin su
+  entrada en el `PATH`): la prueba no deja rastro.
+
+### Salida real del instalador publicado (v0.3.3)
+
+Ejecutado de verdad contra la release publicada (no un simulacro), desde cero,
+con la one-liner tal cual la escribe el usuario. La máquina queda restaurada
+al final.
+
+```text
+=== 0. estado inicial ===
+  install dir existe : False
+  ya esta en el PATH  : False
+  install dir existe ahora : False
+=== 1. descargar el instalador (irm) ===
+  descargado: 12753 caracteres
+  primera linea: <#
+=== 2. ejecutar el instalador real (irm | iex) ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (9337d5ff723f2957f70995d4cc2a889054a4875a60aac436080b75d76d99b91e)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.3
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  exit=0
+  errores en la consola: 0
+=== 3. verificacion ===
+  zigrep.exe instalado : True
+  zgrep.exe  instalado : True
+  install.ps1 copiado  : True
+  version reportada    : zgrep 0.3.3
+  install dir en PATH   : True
+=== 4. uso real del binario instalado ===
+  busqueda: 2:needle
+=== 4b. los bugs de esta ronda, en el binario INSTALADO ===
+  -q -c imprime : '' (debe estar vacio)
+  --pre imprime : 'needle DESDE-PRE C:\Users\progr\AppData\Local\Temp\zigrep_irm_pre.txt' (debe decir DESDE-PRE)
+=== 5. hash publicado vs asset real ===
+  SHA256SUMS.txt publicado:
+    5cff7d1cc11c489f34cc0e9b8be3471ccce217d0a5a3b0e9c22ee1e37c220da4  zigrep-linux-x86_64.tar.gz
+    cc4a2914a4cc405b3ee93591b9fa37a3be05594981d3dfd060b97b07848e43bd  zigrep-linux-aarch64.tar.gz
+    9337d5ff723f2957f70995d4cc2a889054a4875a60aac436080b75d76d99b91e  zigrep-windows-x86_64.zip
+=== 5b. el binario responde por stdout (no stderr) ===
+  stdout : 'zgrep 0.3.3'
+  stderr : ''
+  exit   : 0
+=== 6. el escenario que abortaba en la 0.3.0 ===
+  ZiGrep - native Windows installer
+  (Windows-native build; no WSL, no C runtime needed)
+==> Architecture: x86_64
+==> Install directory: C:\Users\progr\AppData\Local\Programs\ZiGrep
+==> Downloading zigrep-windows-x86_64.zip
+==> Verifying SHA-256
+OK  checksum matches (9337d5ff723f2957f70995d4cc2a889054a4875a60aac436080b75d76d99b91e)
+==> Extracting
+OK  installed 2 executable(s) into C:\Users\progr\AppData\Local\Programs\ZiGrep
+OK  added C:\Users\progr\AppData\Local\Programs\ZiGrep to the user PATH
+  Restart your terminal (or open a new one) so the PATH change applies.
+  Version check:
+    zgrep 0.3.3
+  Try it:
+    zigrep --help
+    zigrep -n TODO src
+  ZiGrep is ready.
+  errores en la consola: 0
+  instalado : True
+  version   : zgrep 0.3.3
+  el $InstallDir del usuario sigue siendo: 'C:\predefinido'
+=== 7. estado de la maquina restaurado ===
+  install dir sigue en el PATH: False
+  install dir existe          : False
+=== fin ===
+```
+
+Lo importante de esa transcripción:
+
+* `errores en la consola: 0` — **ni un `RemoteException`**: el instalador no aborta.
+* `exit=0` y `ZiGrep is ready.`.
+* El `checksum matches` es el hash **publicado** de la release (9337d5f…),
+  no uno inventado.
+* El bloque 4b comprueba los **bugs de esta ronda** en el binario ya
+  instalado: `-q -c` no imprime nada (en la 0.3.2 contaba) y `--pre` imprime
+  la salida del comando (en la 0.3.2 buscaba el fichero).
 * El bloque 6 es el escenario que **abortaba** en la 0.3.0 (§4i): ahora
   instala sin errores y **no toca** el `$InstallDir` del usuario.
 * Al final la máquina queda como estaba (sin el directorio de ZiGrep y sin su
@@ -1184,7 +1291,7 @@ Comprobarlo (Windows PowerShell 5.1):
 # Escenario que fallaba: variable con el mismo nombre en un ámbito padre
 $InstallDir = "C:\predefinido"
 & {
-    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex
+    irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.3/install.ps1 | iex
 }
 # 0.3.0: "No puede sobrescribirse la variable InstallDir porque se optimiza"
 # 0.3.1: instala, y tu $InstallDir sigue siendo "C:\predefinido"
@@ -1192,6 +1299,115 @@ $InstallDir = "C:\predefinido"
 
 **Trampa:** si ves ese error, no es tu máquina: es una versión del
 instalador anterior a la 0.3.1. Reinstala con la línea de arriba.
+
+---
+
+## 4u. Los cinco bugs que salieron al re-auditar la 0.3.2 en Windows (2026-11-12)
+
+Todos están corregidos en la **0.3.3**. Estos son los que te van a morder
+si usas la 0.3.2 o anterior en Windows.
+
+### 4u.1. `--cache` y `--spill` apuntaban al directorio actual
+
+**Síntoma:** `zigrep --cache` (el limpiador de caches de Zig) te ofrece
+borrar una carpeta `.cache\zig` que **no** es la cache global, y
+`zigrep --spill` deja su fichero dentro del directorio en el que estás.
+
+**Por qué:** PowerShell y cmd **no definen `HOME`** (solo Git Bash y MSYS lo
+hacen). El código pedía `HOME` y, si no estaba, usaba `"."`.
+
+**Qué hace ahora:** un único resolvedor: `HOME` si existe, `%USERPROFILE%`
+si no. Si no hay ninguno, avisa en vez de inventar un sitio.
+
+```powershell
+# sin HOME en el entorno (una sesion normal de PowerShell)
+zigrep --cache --dry-run
+# 0.3.2:  1   4.1K  segura     .\.cache\zig          <-- el cwd
+# 0.3.3:  1     0B  segura     C:\Users\progr\.cache\zig
+```
+
+**Trampa:** si tienes `HOME` exportado a algo raro (por ejemplo `HOME=/`),
+gana `HOME` sobre `USERPROFILE`. Es lo que espera un shell POSIX, pero en
+Windows lo raro es exportar `HOME`.
+
+### 4u.2. `--pre` no hacía nada (buscaba el fichero, no el comando)
+
+**Síntoma:** `zigrep --pre "cmd /c tipo" needle archivo.txt` devuelve las
+líneas **del archivo**, no las del comando. Sin error, sin aviso.
+
+**Por qué:** sin `--pre-glob`, el glob vacío no casa con nada, así que zgrep
+se saltaba el pre-procesado de todos los ficheros.
+
+**Qué hace ahora:** sin `--pre-glob`, **todos** los ficheros pasan por el
+comando.
+
+```powershell
+zigrep --pre "cmd /c echo needle DESDE-PRE" needle pre.txt
+# 0.3.2: PRE needle here        <-- las lineas del fichero
+# 0.3.3: needle DESDE-PRE pre.txt   <-- la salida del comando
+```
+
+**Ojo con el orden:** el comando va **antes** del patrón y del fichero:
+`zigrep --pre CMD PATTERN PATH`. Si te saltas el `PATTERN`, zgrep busca en
+la entrada estándar y dice "no hay coincidencias" (código 1), que parece un
+fallo pero es el comportamiento correcto.
+
+### 4u.3. `-q` no siempre ganaba
+
+**Síntoma:** `zigrep -q -c patron fichero` **cuenta** y lo imprime; en GNU
+grep y en ripgrep, `-q` manda siempre y no se imprime nada.
+
+**Qué hace ahora:** `-q` es una opción pegajosa: gana sobre `-c`, `-l`,
+`-L` y `--count-matches`, en cualquier orden.
+
+```powershell
+zigrep -q -c needle a.txt    # 0.3.2: "1"   |  0.3.3: (nada)
+zigrep -c -q needle a.txt    # 0.3.2: (nada) | 0.3.3: (nada)
+```
+
+### 4u.4 y 4u.5. Los bugs estaban en el fuzzer, no en el binario
+
+Si te fías del "oráculo" del fuzzer diferencial (`scripts/tri_fuzz.py`),
+sabotea su veredicto:
+
+* Escribía el informe **sin `encoding="utf-8"`**: con los patrones de bytes
+  crudos (knob 6) reventaba con `UnicodeEncodeError` y **se perdía la
+  corrida entera**.
+* Comparaba zgrep **sin `-n`** contra ripgrep y GNU grep **con `-n`**: las
+  claves nunca se cruzaban (`path:<fragmento de texto>` contra
+  `path:<número de línea>`), así que **todo** salía "difiere". Medido: el
+  knob 1 daba `all_differ=239/250`; con el arreglo, los mismos 250 casos dan
+  `agree_all=250/250`.
+
+Con el comparador arreglado, las divergencias que quedan **no son bugs de
+zgrep**. Clasificadas sobre 1.250 casos: 230 coinciden con ripgrep y
+discrepan de GNU grep, 60 coinciden con GNU grep y discrepan de ripgrep, 87
+con los tres distintos (dialecto de regex), 47 solo en el código de salida,
+28 donde las dos referencias **abortar** con un patrón que zgrep acepta, y
+**0** en la clase sospechosa (zgrep solo, con las dos referencias de
+acuerdo en el mismo conjunto).
+
+### 4u.6. Trampa: los acentos "roto" en la consola no son un bug
+
+```text
+Configurar ZiGrep en los agentes de IA de esta m├maqu├¡na (comando: zigrep)
+```
+
+Eso **no** es un binario roto: los bytes que escribe son **UTF-8 válido**
+(comprobado byte a byte). La consola de Windows está en la página de
+códigos **850** por defecto y decodifica el UTF-8 como si fuera cp850.
+
+**Arreglo:** `chcp 65001` en esa terminal, o usa la salida por tubería
+(una tubería no decodifica: los bytes siguen siendo UTF-8).
+
+```powershell
+chcp 65001
+zigrep --setup --dry-run
+# Configurar ZiGrep en los agentes de IA de esta máquina (comando: zigrep)
+```
+
+**Trampa de la trampa:** contar bytes `0x62` para detectar AVX-512 **no**
+vale (§"el binario que no arrancaba"). Desensambla y busca `zmm`.
 
 ---
 

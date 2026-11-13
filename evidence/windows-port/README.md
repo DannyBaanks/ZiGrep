@@ -979,3 +979,191 @@ machine was left as it was found.
 | fuzz swarm (12 campaigns x 200,001 ops) | 0 anomalies, 0 crashes, 0 invalid exit codes, 0 invariant violations, 0 hangs |
 | cell fuzzer (exhaustive 373,248 cells) | 10.28 s, 36,300 cells/sec, 0 anomalies, 0 invariant violations, 0 crashes |
 
+## Re-audit of the 66 new upstream commits on native Windows (2026-11-12)
+
+`v0.3.2` was published upstream with the 66 new commits already in it. This
+campaign re-audited that new code **on Windows**, by running it, not by
+reading the diff. Five bugs were found, fixed and pinned by tests; the
+release that carries the fixes is `v0.3.3` (tagged commit `05f126b`).
+
+### Environment
+
+| | |
+|---|---|
+| Host | Windows 11 build 26200, x86_64, **Xeon E5-2678 v3 (no AVX-512)** |
+| Toolchain | Zig 0.16.0 (`zig-x86_64-windows-0.16.0`) |
+| Target | `x86_64-windows` (baseline, SSE2), `ReleaseFast` |
+| References | GNU grep 3.0 (Git for Windows), ripgrep 15.0.0 |
+
+### Bug 1 — `--cache` / `--spill` read `HOME` with no `USERPROFILE` fallback
+
+`src/main.zig` resolved the home with `init.environ_map.get("HOME") orelse "."`.
+PowerShell and cmd do **not** define `HOME` (only Git Bash and MSYS do), so
+on a plain Windows session:
+
+* `--cache` listed `<cwd>/.cache/zig` as if it were the global Zig cache, and
+  offered to **delete** it;
+* `--spill` wrote its spill file into the current directory.
+
+Measured before the fix (HOME removed from the environment):
+
+```
+   #  tamano  estado      ruta
+   1   4.1K  segura     .\.cache\zig
+```
+
+After the fix (one resolver: `HOME` wins, `USERPROFILE` is the fallback):
+
+```
+   1     0B  segura     C:\Users\progr\AppData\Local\Temp\...\profile\.cache\zig
+```
+
+and `--spill` writes under `USERPROFILE`, with 0 files left in the cwd.
+Fix: `pickHome()` / `homeDir()` + the unit test
+`pickHome: HOME wins, USERPROFILE is the Windows fallback`.
+
+### Bug 2 — `--pre` was dead code on every platform
+
+`preApplies()` received an empty glob when `--pre-glob` was absent, and
+`globMatch(text, "")` is `false` (an empty pattern only matches an empty
+text). Every file was therefore excluded from the pre-processing and zgrep
+searched the **file** instead of the command's output, with no error and no
+warning.
+
+Proof with a marker that can only come from the command's stdout:
+
+```
+$ zgrep --pre "cmd /c echo needle DESDE-PRE" needle pre.txt
+PRE needle here          <-- before: the file's own lines
+needle two
+
+$ zgrep --pre "cmd /c echo needle DESDE-PRE" needle pre.txt
+needle DESDE-PRE pre.txt <-- after: the command's output
+```
+
+Fix: an absent or empty `--pre-glob` means "every file" + the unit test
+`preApplies: without --pre-glob every file goes through --pre`.
+
+### Bug 3 — `-q` did not always win
+
+zgrep kept the **last** mode, so the answer depended on the order of the
+flags. GNU grep and ripgrep print nothing with `-q -c` / `-q -l` whatever the
+order.
+
+```
+$ zgrep -q -c needle a.txt     ->  1        (before)      -> (nothing) (after)
+$ zgrep -c -q needle a.txt     ->  (nothing) (before)     -> (nothing) (after)
+$ zgrep -q -l needle a.txt     ->  a.txt    (before)      -> (nothing) (after)
+```
+
+Fix: `-q` is a sticky flag that wins over every mode that prints + the unit
+test `parseArgs: -q wins over -c / -l / -L in any order`.
+
+### Bugs 4 and 5 — the differential fuzzer's verdict was meaningless
+
+Both in `scripts/tri_fuzz.py`:
+
+* the report was written without `encoding="utf-8"`, so the raw-byte
+  patterns of knob 6 raised `UnicodeEncodeError` and **the whole run was
+  lost**;
+* zgrep was run **without** `-n` while ripgrep and GNU grep were run **with**
+  `-n`. `keys()` extracts `path:line`, so zgrep's key was
+  `path:<first fragment of the text>` and the references' key was
+  `path:<line number>`: two key spaces that never intersect.
+
+Measured on Windows, the **same** 250 knob-1 cases:
+
+```
+before:  all_differ=239  agree_all=11
+after:   agree_all=250
+```
+
+The path separator is now normalized too (`\` -> `/`), because on Windows
+zgrep and ripgrep print `src\file.zig` while Git-for-Windows' grep prints
+`src/file.zig`.
+
+### The divergences that remain are not zgrep bugs
+
+With the comparator fixed, knobs 2-6 still differ from the references. Every
+divergence over 1,250 cases was classified:
+
+| Cause | Cases |
+|---|---|
+| zgrep agrees with ripgrep, GNU grep differs | 230 |
+| all three different (regex dialect) | 87 |
+| zgrep agrees with GNU grep, ripgrep differs | 60 |
+| exit code differs | 47 |
+| both references abort (rc=2) on a pattern zgrep accepts | 28 |
+| **zgrep alone, with both references agreeing on the same set** | **0** |
+
+### Gates on the tagged commit `05f126b` (native Windows, baseline target)
+
+| Gate | Result |
+|---|---|
+| `zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast` | 13/13 steps succeeded |
+| `zig build test` | 167 pass / 1 skip (`io_uring`, Linux-only) |
+| `zig run scripts/oracle.zig` (GNU grep 3.0 + ripgrep 15.0.0) | 31 PASSED, 0 FAILED |
+| `zig build fuzz` | 100,001 ops, **0 anomalies** |
+| `zig build cell-fuzz` | 1,000 cells, **0 anomalies** |
+| `scripts/tri_fuzz.py` knobs 1-6, 250 cases each | all six knobs exit 0; knob 1 = `agree_all=250/250` |
+| `zig build -Dtarget=x86_64-linux` | 13/13 steps succeeded |
+| `zig build -Dtarget=aarch64-linux` | 13/13 steps succeeded |
+| CI (PR #3, run `43374008421`) | Linux and Windows jobs, both green |
+
+### The published `v0.3.3` assets
+
+```
+5cff7d1cc11c489f34cc0e9b8be3471ccce217d0a5a3b0e9c22ee1e37c220da4  zigrep-linux-x86_64.tar.gz
+cc4a2914a4cc405b3ee93591b9fa37a3be05594981d3dfd060b97b07848e43bd  zigrep-linux-aarch64.tar.gz
+9337d5ff723f2957f70995d4cc2a889054a4875a60aac436080b75d76d99b91e  zigrep-windows-x86_64.zip
+```
+
+3/3 assets re-downloaded and verified byte for byte against the published
+`SHA256SUMS.txt`.
+
+The Windows `.exe` was disassembled with `objdump -d`:
+
+| | |
+|---|---|
+| Instructions | 208,398 |
+| `zmm` registers (AVX-512) | **0** |
+| Mask registers `%k0`-`%k7` | **0** |
+| EVEX-prefixed `v*` instructions | **0** |
+
+It starts and answers on this AVX2-only host: `zgrep 0.3.3` (exit 0).
+
+The published installer was then run **for real**, with the one-liner the
+user types, against the published release. The full transcript is in
+[`GUIA.md`](../../GUIA.md#salida-real-del-instalador-publicado-v033); the
+essentials: `exit=0`, `errores en la consola: 0` (no `RemoteException`),
+`OK checksum matches (9337d5f…)` (the published hash), 2 executables plus
+`install.ps1` installed, `--version` on stdout with an empty stderr, the
+`-q -c` and `--pre` fixes confirmed **in the installed binary**, the
+scenario that aborted in 0.3.0 (a pre-existing `$InstallDir`) installing
+cleanly and leaving the user's variable untouched, and the machine restored
+afterwards (no install dir, no `PATH` entry).
+
+### NOT_DEMONSTRATED (this round)
+
+* **Linux numbers**: not measured here; this campaign ran on Windows. The
+  Linux figures are the CI's.
+* **Windows performance**: not measured. This release is a fix release, not
+  a benchmark release; `benchmark.json` in this folder is from the earlier
+  campaign and is not re-measured.
+* **`pwsh` (PowerShell Core), Windows ARM64 and `install.sh` (POSIX)**: not
+  executed.
+* **The Python binding** beyond its own test suite.
+
+### Two false alarms that were NOT bugs (kept, so they are not re-investigated)
+
+* `--exec` and `--pre` appeared to "do nothing" in the first harness of this
+  round. The harness was wrong: the command line was missing the `PATTERN`.
+  The correct order is `zgrep --exec CMD PATTERN PATH`; without the pattern,
+  the file became the pattern and zgrep searched stdin, answering "no match"
+  with exit code 1 — the correct behaviour for an empty stdin. With the
+  right order, 11/11 `--exec`/`--pre` checks pass.
+* The mojibake in `--setup` / `--cache` output (`m├maqu├¡na`) is **not** a
+  binary bug: the bytes are valid UTF-8 (checked byte by byte). The Windows
+  console defaults to code page 850 and decodes UTF-8 as cp850. `chcp 65001`
+  fixes the display; a pipe is unaffected. Documented in `GUIA.md`.
+

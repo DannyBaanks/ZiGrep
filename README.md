@@ -16,7 +16,7 @@ JSON output designed for programmatic consumers such as coding agents.
   Correctness is checked in CI against GNU grep and ripgrep. The benchmarks below
   are Linux-only and make no claim about Windows performance.
 
-The latest release is `v0.3.2`. The `main` branch is `0.4.0-dev`.
+The latest release is `v0.3.3`. The `main` branch is `0.4.0-dev`.
 
 ```sh
 zigrep "Searcher" src/                  # literal search over a tree
@@ -56,8 +56,8 @@ irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/main/install.ps1 | iex
 - The Windows release targets baseline `x86_64-windows` (SSE2), so it runs on any
   x86_64 CPU.
 - To pin a version, run
-  `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.2/install.ps1 | iex`,
-  or `install.ps1 -Version 0.3.2`. The URL on `main` installs whatever `main`
+  `irm https://raw.githubusercontent.com/DannyBaanks/ZiGrep/v0.3.3/install.ps1 | iex`,
+  or `install.ps1 -Version 0.3.3`. The URL on `main` installs whatever `main`
   contains at that moment.
 
 ### Release artifacts
@@ -362,6 +362,37 @@ There are three fuzzers:
 
 The history of past verification campaigns, the bugs they found and the Windows
 release notes are in [`VERIFICATION.md`](VERIFICATION.md).
+
+### The five bugs of the `v0.3.3` Windows re-audit
+
+`v0.3.3` is the `v0.3.2` plus five bugs found by re-auditing the 66 new
+upstream commits **on native Windows** (not by reading the diff). All five
+are fixed and pinned by tests:
+
+1. **`--cache` and `--spill` read `HOME` with no `USERPROFILE` fallback.** PowerShell and cmd do not define `HOME` (only Git Bash and MSYS do), so the home resolved to `"."`: `--cache` listed `<cwd>/.cache/zig` as if it were the global Zig cache and offered to delete it, and `--spill` wrote into the current directory. One resolver now (`HOME` wins, `USERPROFILE` is the fallback).
+2. **`--pre` was dead code on every platform.** Without `--pre-glob`, the empty glob matched nothing, so zgrep searched the **file** instead of the command's output, with no error and no warning.
+3. **`-q` did not always win.** zgrep kept the *last* mode, so `-q -c` counted and `-c -q` printed nothing. GNU grep and ripgrep print nothing with `-q -c` / `-q -l` whatever the order.
+4. **The tri-way differential fuzzer wrote its report without `encoding="utf-8"`**, so the raw-byte patterns of knob 6 raised `UnicodeEncodeError` and the whole run was lost.
+5. **The same fuzzer compared zgrep without `-n` against ripgrep and GNU grep with `-n`**, so it compared `path:<text fragment>` with `path:<line number>`: two key spaces that never intersect. The verdict was structurally meaningless (knob 1: `all_differ=239/250`); with `-n` on all three, the same 250 cases are `agree_all=250/250`.
+
+Measured on native Windows (Xeon E5-2678 v3, **without** AVX-512) on the
+tagged commit `05f126b`: build 13/13, unit tests 167/168 (1 skip,
+`io_uring` is Linux-only), differential oracle 31/31 against GNU grep 3.0
+and ripgrep 15.0.0, adversarial fuzzer 100,001 permutations with 0
+anomalies, cell fuzzer 1,000 cells with 0 anomalies, and the tri-way
+fuzzer's six knobs all completing. The published `.exe` disassembles to
+**0 AVX-512 instructions out of 208,398** (`zmm` registers: 0, mask
+registers: 0, EVEX: 0) and the published installer was run end to end
+(`irm ... | iex`: exit 0, no `RemoteException`, checksum matched, the
+machine restored afterwards). Details and the raw transcript:
+[`GUIA.md`](GUIA.md#salida-real-del-instalador-publicado-v033).
+
+The remaining tri-way divergences are **not** zgrep bugs: over 1,250
+differential cases, 230 agree with ripgrep and differ from GNU grep, 60
+agree with GNU grep and differ from ripgrep, 87 have all three different
+(regex dialect), 47 differ only in the exit code, 28 are cases where both
+reference engines abort on a pattern zgrep accepts, and **0** are cases
+where zgrep alone differs while both references agree on the same set.
 
 ## License
 
