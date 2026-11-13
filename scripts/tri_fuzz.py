@@ -108,7 +108,9 @@ def keys(out, flags):
     for ln in out.decode("latin-1").split("\n"):
         p = ln.split(":", 2)
         if len(p) >= 2:
-            ks.add(p[0] + ":" + p[1])
+            # The path is normalized to "/" so Windows ("src\\file.zig") and
+            # the GNU grep of Git-for-Windows ("src/file.zig") compare equal.
+            ks.add(p[0].replace("\\", "/") + ":" + p[1])
     return tuple(sorted(ks))
 
 
@@ -122,7 +124,13 @@ def one(args):
     pat, flags = gen(rnd, knob)
     fx = [f for f in flags if f != "-F"]
     # -e guards patterns that start with '-'
-    zg = [ZIGREP] + flags + ["-e", pat, "src"]
+    # ALL THREE engines get -n: keys() compares "path:line", so without it
+    # on zgrep its key was "path:<first fragment of the text>" while rg's and
+    # grep's was "path:<line number>". The two key spaces never intersect and
+    # EVERY case with a match was classified "all_differ": measured on Windows
+    # (2026-11-12), knob 1 gave all_differ=239/250 while the same 250 cases
+    # with the fix are agree_all=250/250.
+    zg = [ZIGREP, "-n"] + flags + ["-e", pat, "src"]
     rg = [RIPGREP, "-n", "-H", "--no-heading"] + flags + ["-e", pat, "src"]
     gr = [GNU_GREP, "-rnI" + ("F" if "-F" in flags else "E")] + fx + ["-e", pat, "src"]
     # grep has no -a-equivalent semantics problem; keep as is
@@ -177,7 +185,13 @@ def main():
                "secs": round(dt, 1), "counts": counts, "samples": samples}
     if out:
         Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_text(json.dumps(summary, indent=1, ensure_ascii=False))
+        # The report MUST be UTF-8: the samples carry raw patterns, and knob 6
+        # ("apocalypse") generates bytes that are not valid in the Windows
+        # console code page (cp850). With the platform default encoding this
+        # raised UnicodeEncodeError and the whole fuzz run was lost.
+        Path(out).write_text(
+            json.dumps(summary, indent=1, ensure_ascii=False), encoding="utf-8"
+        )
     line = " ".join(f"{k}={v}" for k, v in sorted(counts.items()))
     print(f"knob={knob} seed={seed} iters={iters} {dt:.0f}s | {line}")
 
