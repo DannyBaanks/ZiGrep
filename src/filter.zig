@@ -461,6 +461,10 @@ pub const FilterEngine = struct {
         dataignore: bool = false,
         gitignore: bool = false,
         ignore: bool = false,
+        /// Directory holds a PEP 405 Python virtualenv (`pyvenv.cfg`) or
+        /// freedesktop cache tag (`CACHEDIR.TAG`); skipped below root depth
+        /// unless `--no-ignore` / `--no-default-ignore` disables defaults.
+        venv_or_cache: bool = false,
 
         pub const all: IgnoreFiles = .{ .dataignore = true, .gitignore = true, .ignore = true };
         pub const none: IgnoreFiles = .{};
@@ -469,12 +473,24 @@ pub const FilterEngine = struct {
             return self.dataignore or self.gitignore or self.ignore;
         }
 
-        /// Marks `name` if it is one of the ignore files.
+        /// Marks `name` if it is one of the ignore files or a venv/cache tag.
         pub fn note(self: *IgnoreFiles, name: []const u8) void {
+            if (name.len == 10 and std.mem.eql(u8, name, "pyvenv.cfg")) {
+                self.venv_or_cache = true;
+                return;
+            }
+            if (name.len == 12 and std.mem.eql(u8, name, "CACHEDIR.TAG")) {
+                self.venv_or_cache = true;
+                return;
+            }
             if (name.len < 7 or name[0] != '.') return;
             if (std.mem.eql(u8, name, ".gitignore")) self.gitignore = true else if (std.mem.eql(u8, name, ".ignore")) self.ignore = true else if (std.mem.eql(u8, name, ".dataignore")) self.dataignore = true;
         }
     };
+
+    pub fn shouldPruneMarkedDir(self: *const FilterEngine, present: IgnoreFiles, depth: usize) bool {
+        return self.use_defaults and depth > 0 and present.venv_or_cache;
+    }
 
     pub const RootNode = struct { root: []const u8, node: ?*const IgnoreNode };
 
@@ -918,4 +934,23 @@ test "FilterEngine: path globs use the path relative to the search root" {
     try std.testing.expect(ex.isFileExcludedIn("src", "app.min.js"));
     // A root-level file: the relative path is just the name.
     try std.testing.expect(!ex.isFileExcludedIn("src", "main.zig"));
+}
+
+test "FilterEngine: IgnoreFiles notes pyvenv.cfg and CACHEDIR.TAG and prunes below depth 0" {
+    var engine = FilterEngine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    var p_venv: FilterEngine.IgnoreFiles = .none;
+    p_venv.note("pyvenv.cfg");
+    try std.testing.expect(p_venv.venv_or_cache);
+    try std.testing.expect(!p_venv.any()); // no ignore files to open
+    try std.testing.expect(!engine.shouldPruneMarkedDir(p_venv, 0));
+    try std.testing.expect(engine.shouldPruneMarkedDir(p_venv, 1));
+
+    var p_cache: FilterEngine.IgnoreFiles = .none;
+    p_cache.note("CACHEDIR.TAG");
+    try std.testing.expect(engine.shouldPruneMarkedDir(p_cache, 2));
+
+    engine.use_defaults = false;
+    try std.testing.expect(!engine.shouldPruneMarkedDir(p_venv, 1));
 }

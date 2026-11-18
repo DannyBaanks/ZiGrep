@@ -80,6 +80,7 @@ fn walkOne(
 
     var items: std.ArrayList(Item) = .empty;
     defer items.deinit(gpa);
+    var present: FilterEngine.IgnoreFiles = .none;
 
     const scan_files = if (nav_plan) |np| np.shouldScanFiles(depth) else true;
     const recurse_subdirs = if (nav_plan) |np| np.shouldRecurseSubdirs(depth) else true;
@@ -101,6 +102,7 @@ fn walkOne(
                 if (fe.isDirExcludedAt(ign, dir, entry.name)) continue;
             }
         } else if (kind == .file) {
+            present.note(entry.name);
             if (!scan_files) continue;
             if (filter_engine) |fe| {
                 if (fe.isFileExcludedAt(ign, dir, entry.name)) continue;
@@ -119,6 +121,13 @@ fn walkOne(
 
         const child = try vfs.joinPathSentinel(gpa, dir, entry.name);
         try items.append(gpa, .{ .path = child, .kind = kind });
+    }
+
+    if (filter_engine) |fe| {
+        if (fe.shouldPruneMarkedDir(present, depth)) {
+            for (items.items) |it| gpa.free(it.path);
+            return;
+        }
     }
 
     // Keep directory traversal deterministic; Befunge '<' reverses siblings.
