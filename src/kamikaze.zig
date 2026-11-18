@@ -369,6 +369,13 @@ fn scoutDirConcurrent(
     }
 
     // Pass 2. A root's chain already holds its own ignore files.
+    if (ctx.filter.shouldPruneMarkedDir(present, depth)) {
+        for (files.items) |f| ctx.gpa.free(f);
+        files.deinit(ctx.gpa);
+        try ctx.pool.pushScoutResults(null, &.{}, depth, parent_ign);
+        subdirs.deinit(ctx.gpa);
+        return;
+    }
     const ign = if (depth == 0) parent_ign else ctx.filter.enterDirWith(ctx.io, parent_ign, dir, present);
     for (cand_dirs.items) |name| {
         if (FilterEngine.ignoredByRules(ign, dir, name, true)) continue;
@@ -723,6 +730,9 @@ fn tryQuickTreeScan(
             entries.append(arena, .{ .name = name, .kind = kind, .size = size }) catch return null;
         }
 
+        if (filter_engine.shouldPruneMarkedDir(present, task.depth)) {
+            continue;
+        }
         const ign = if (task.depth == 0) task.ign else filter_engine.enterDirWith(io, task.ign, task.path, present);
         for (entries.items) |e| {
             switch (e.kind) {
